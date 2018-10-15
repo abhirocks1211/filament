@@ -364,7 +364,6 @@ bool MeshAssimp::setFromFile(const Path& file,
         const float bias = 1.0f / 32767.0f;
         const float factor = (float) (sqrt(1.0 - (double) bias * (double) bias));
 
-        // TODO: Remove mGltfMaterial from header?
         mGltfMaterial = Material::Builder()
                 .package((void*) GLTF2_PACKAGE, sizeof(GLTF2_PACKAGE))
                 .build(mEngine);
@@ -427,7 +426,6 @@ bool MeshAssimp::setFromFile(const Path& file,
 
                     // TODO: Add support for non-image path values and binary gltf
 
-                    // TODO: change texture types and indices to use defined values in glTF2Asset.h
                     TextureSampler sampler(TextureSampler::MinFilter::LINEAR_MIPMAP_LINEAR,
                                            TextureSampler::MagFilter::LINEAR, TextureSampler::WrapMode::REPEAT);
                     sampler.setAnisotropy(8.0f);
@@ -435,8 +433,6 @@ bool MeshAssimp::setFromFile(const Path& file,
                     std::string dirName = file.getParent();
                     std::cout << "directory: " << dirName << std::endl;
 
-
-                    // TODO: deallocate all textures created in this section
                     if (outMaterials.find(materialName) == outMaterials.end()) {
 
                         outMaterials[materialName] = mGltfMaterial->createInstance();

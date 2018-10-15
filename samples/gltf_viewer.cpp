@@ -175,188 +175,9 @@ static void cleanup(Engine* engine, View* view, Scene* scene) {
     em.destroy(g_light);
 }
 
-void loadTexture(Engine* engine, const std::string& filePath, Texture** map, bool sRGB = true) {
-    if (!filePath.empty()) {
-        Path path(filePath);
-        if (path.exists()) {
-            int w, h, n;
-            unsigned char* data = stbi_load(path.getAbsolutePath().c_str(), &w, &h, &n, 3);
-
-            if (data != nullptr) {
-                std::cout << filePath << std::endl;
-                std::cout << "w: " << w << ", h: " << h << ", n: " << n << std::endl;
-                std::cout << (int) data[0] << "," << (int) data[1] << "," << (int) data[2] << std::endl;
-                *map = Texture::Builder()
-                        .width(uint32_t(w))
-                        .height(uint32_t(h))
-                        .levels(0xff)
-                        .format(sRGB ? driver::TextureFormat::SRGB8 : driver::TextureFormat::RGB8)
-                        .build(*engine);
-                Texture::PixelBufferDescriptor buffer(data, size_t(w * h * 3),
-                                                      Texture::Format::RGB, Texture::Type::UBYTE
-                                                      ,(driver::BufferDescriptor::Callback) &stbi_image_free);
-                (*map)->setImage(*engine, 0, std::move(buffer));
-                (*map)->generateMipmaps(*engine);
-            } else {
-                std::cout << "The texture " << path << " could not be loaded" << std::endl;
-            }
-        } else {
-            std::cout << "The texture " << path << " does not exist" << std::endl;
-        }
-    }
-}
-
 static void setup(Engine* engine, View* view, Scene* scene) {
     Path path(g_pbrConfig.materialDir);
     std::string name(path.getName());
-
-//    loadTexture(engine, "../../../whiteSquare.png", &g_baseColorMap);
-//    loadTexture(engine, path.concat(name + "_Metallic.png"), &g_metallicMap, false);
-//    loadTexture(engine, path.concat(name + "_Roughness.png"), &g_roughnessMap, false);
-//    loadTexture(engine, path.concat(name + "_AO.png"), &g_aoMap, false);
-//    loadTexture(engine, path.concat("../../../WaterBottle/glTF-pbrSpecularGlossiness/WaterBottle_normal.png"), &g_normalMap, false);
-
-    bool hasBaseColorMap = g_baseColorMap != nullptr;
-    bool hasMetallicMap = g_metallicMap != nullptr;
-    bool hasRoughnessMap = g_roughnessMap != nullptr;
-    bool hasAOMap = g_aoMap != nullptr;
-    bool hasNormalMap = g_normalMap != nullptr;
-
-    std::string shader = R"SHADER(
-        void material(inout MaterialInputs material) {
-    )SHADER";
-
-    if (hasNormalMap) {
-        shader += R"SHADER(
-            material.normal = texture(materialParams_normalMap, getUV0()).xyz * 2.0 - 1.0;
-            material.normal.y *= -1.0;
-        )SHADER";
-    }
-
-    shader += R"SHADER(
-        prepareMaterial(material);
-    )SHADER";
-
-    if (hasBaseColorMap) {
-        shader += R"SHADER(
-            material.baseColor.rgb = texture(materialParams_baseColorMap, getUV0()).rgb;
-        )SHADER";
-    } else {
-        shader += R"SHADER(
-            material.baseColor.rgb = float3(1.0, 0.75, 0.94);
-        )SHADER";
-    }
-    if (hasMetallicMap) {
-        shader += R"SHADER(
-            material.metallic = texture(materialParams_metallicMap, getUV0()).r;
-        )SHADER";
-    } else {
-        shader += R"SHADER(
-            material.metallic = 0.0;
-        )SHADER";
-    }
-    if (hasRoughnessMap) {
-        shader += R"SHADER(
-            material.roughness = texture(materialParams_roughnessMap, getUV0()).r;
-        )SHADER";
-    } else {
-        shader += R"SHADER(
-            material.roughness = 1.0;
-        )SHADER";
-    }
-    if (hasAOMap) {
-        shader += R"SHADER(
-            material.ambientOcclusion = texture(materialParams_aoMap, getUV0()).r;
-        )SHADER";
-    } else {
-        shader += R"SHADER(
-            material.ambientOcclusion = 1.0;
-        )SHADER";
-    }
-
-    if (g_pbrConfig.clearCoat) {
-        shader += R"SHADER(
-            material.clearCoat = 1.0;
-        )SHADER";
-    }
-    if (g_pbrConfig.anisotropy) {
-        shader += R"SHADER(
-            material.anisotropy = 0.7;
-        )SHADER";
-    }
-    shader += "}\n";
-
-    MaterialBuilder builder = MaterialBuilder()
-            .name("DefaultMaterial")
-            .set(Property::BASE_COLOR)
-            .set(Property::METALLIC)
-            .set(Property::ROUGHNESS)
-            .set(Property::AMBIENT_OCCLUSION)
-            .material(shader.c_str())
-            .shading(Shading::LIT);
-
-    if (g_pbrConfig.clearCoat) {
-        builder.set(Property::CLEAR_COAT);
-    }
-    if (g_pbrConfig.anisotropy) {
-        builder.set(Property::ANISOTROPY);
-    }
-    if (hasBaseColorMap) {
-        builder
-                .require(VertexAttribute::UV0)
-                .parameter(MaterialBuilder::SamplerType::SAMPLER_2D, "baseColorMap");
-    }
-    if (hasMetallicMap) {
-        builder
-                .require(VertexAttribute::UV0)
-                .parameter(MaterialBuilder::SamplerType::SAMPLER_2D, "metallicMap");
-    }
-    if (hasRoughnessMap) {
-        builder
-                .require(VertexAttribute::UV0)
-                .parameter(MaterialBuilder::SamplerType::SAMPLER_2D, "roughnessMap");
-    }
-    if (hasAOMap) {
-        builder
-                .require(VertexAttribute::UV0)
-                .parameter(MaterialBuilder::SamplerType::SAMPLER_2D, "aoMap");
-    }
-    if (hasNormalMap) {
-        builder
-                .set(Property::NORMAL)
-                .require(VertexAttribute::UV0)
-                .parameter(MaterialBuilder::SamplerType::SAMPLER_2D, "normalMap");
-    }
-
-    Package pkg = builder.build();
-
-    g_material = Material::Builder().package(pkg.getData(), pkg.getSize()).build(*engine);
-    g_materialInstances["DefaultMaterial"] = g_material->createInstance();
-
-    TextureSampler sampler(TextureSampler::MinFilter::LINEAR_MIPMAP_LINEAR,
-                           TextureSampler::MagFilter::LINEAR, TextureSampler::WrapMode::REPEAT);
-    sampler.setAnisotropy(8.0f);
-
-    if (hasBaseColorMap) {
-        g_materialInstances["DefaultMaterial"]->setParameter(
-                "baseColorMap", g_baseColorMap, sampler);
-    }
-    if (hasMetallicMap) {
-        g_materialInstances["DefaultMaterial"]->setParameter(
-                "metallicMap", g_metallicMap, sampler);
-    }
-    if (hasRoughnessMap) {
-        g_materialInstances["DefaultMaterial"]->setParameter(
-                "roughnessMap", g_roughnessMap, sampler);
-    }
-    if (hasAOMap) {
-        g_materialInstances["DefaultMaterial"]->setParameter(
-                "aoMap", g_aoMap, sampler);
-    }
-    if (hasNormalMap) {
-        g_materialInstances["DefaultMaterial"]->setParameter(
-                "normalMap", g_normalMap, sampler);
-    }
 
     g_meshSet = std::make_unique<MeshAssimp>(*engine);
     for (auto& filename : g_filenames) {
@@ -381,8 +202,6 @@ static void setup(Engine* engine, View* view, Scene* scene) {
             .direction({0.6, -1, -0.8})
             .build(*engine, g_light);
     scene->addEntity(g_light);
-
-//    FilamentApp::get().getIBL()->getIndirectLight()->setIntensity(100000);
 }
 
 int main(int argc, char* argv[]) {
@@ -402,7 +221,7 @@ int main(int argc, char* argv[]) {
         g_filenames.push_back(filename);
     }
 
-    g_config.title = "PBR";
+    g_config.title = "gltf_viewer";
     FilamentApp& filamentApp = FilamentApp::get();
     filamentApp.run(g_config, setup, cleanup);
 

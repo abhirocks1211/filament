@@ -29,6 +29,8 @@
 #include <filament/TransformManager.h>
 
 #include <math/norm.h>
+#include <math/vec3.h>
+#include <math/TVecHelpers.h>
 
 #include <assimp/Importer.hpp>
 #include <assimp/postprocess.h>
@@ -306,7 +308,9 @@ bool MeshAssimp::setFromFile(const Path& file,
     aiScene const* scene = importer.ReadFile(file,
             // normals and tangents
             aiProcess_GenSmoothNormals |
-            aiProcess_CalcTangentSpace |
+//            aiProcess_CalcTangentSpace |
+            // UV Coordinates
+            aiProcess_GenUVCoords |
             // topology optimization
             aiProcess_FindInstances |
             aiProcess_OptimizeMeshes |
@@ -316,6 +320,10 @@ bool MeshAssimp::setFromFile(const Path& file,
             aiProcess_SortByPType |
             // we only support triangles
             aiProcess_Triangulate);
+
+    scene = importer.ApplyPostProcessing(aiProcess_CalcTangentSpace);
+
+
 
     if (!scene){
         std::cout << "no scene" << std::endl;
@@ -386,10 +394,24 @@ bool MeshAssimp::setFromFile(const Path& file,
                 if (numFaces > 0) {
                     size_t indicesOffset = outPositions.size();
 
-                    for (size_t j = 0; j < numVertices; j++) {
-                        quatf q = mat3f::packTangentFrame({tangents[j], bitangents[j], normals[j]});
+                    for (size_t j = 0; j < numVertices; j++){
+                        float3 normal = normals[j];
+                        float3 texCoord = (texCoords) ? texCoords[j] : float3{0.0};
+                        float3 tangent;
+                        float3 bitangent;
+
+                        //If the tangent and bitangent don't exist, make arbitrary ones
+                        if (!tangents) {
+                            bitangent = norm(cross(normal, float3{1.0, 0.0, 0.0}));
+                            tangent = norm(cross(normal, bitangent));
+                        } else {
+                            tangent = tangents[j];
+                            bitangent = bitangents[j];
+                        }
+
+                        quatf q = mat3f::packTangentFrame({tangent, bitangent, normal});
                         outTangents.push_back(packSnorm16(q.xyzw));
-                        outTexCoords.emplace_back(texCoords[j].xy);
+                        outTexCoords.emplace_back(texCoord.xy);
                         outPositions.emplace_back(positions[j], 1.0_h);
                     }
 

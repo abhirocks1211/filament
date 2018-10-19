@@ -33,6 +33,8 @@
 #include "details/View.h"
 #include "driver/Program.h"
 
+#include "driver/metal/MetalDriver.h"
+
 #include "PrecompiledMaterials.h"
 
 #include <filament/Exposure.h>
@@ -376,7 +378,8 @@ int FEngine::loop() {
                << (mBackend == driver::Backend::VULKAN ? "Vulkan" : "OpenGL") << io::endl;
 #endif
     }
-    mDriver = platform->createDriver(mSharedGLContext);
+    // mDriver = platform->createDriver(mSharedGLContext);
+    mDriver = MetalDriver::create();
     mDriverBarrier.latch();
     if (UTILS_UNLIKELY(!mDriver)) {
         // if we get here, it's because the driver couldn't be initialized and the problem has

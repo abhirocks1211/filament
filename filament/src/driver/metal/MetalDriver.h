@@ -26,13 +26,20 @@
 namespace filament {
 
 class MetalDriver final : public DriverBase {
-    MetalDriver() noexcept;
+    MetalDriver(driver::MetalPlatform* const platform) noexcept;
     virtual ~MetalDriver() noexcept;
 
 public:
-    static Driver* create();
+    static Driver* create(driver::MetalPlatform* platform);
 
 private:
+
+    driver::MetalPlatform& mPlatform;
+
+#ifndef NDEBUG
+    void debugCommand(const char* methodName) override;
+#endif
+
     virtual ShaderModel getShaderModel() const noexcept override final { return ShaderModel::GL_CORE_41; }
 
     /*

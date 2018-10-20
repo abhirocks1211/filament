@@ -374,12 +374,28 @@ int FEngine::loop() {
         platform = Platform::create(&mBackend);
         mPlatform = platform;
 #if !defined(NDEBUG)
-        slog.d << "FEngine resolved backend: "
-               << (mBackend == driver::Backend::VULKAN ? "Vulkan" : "OpenGL") << io::endl;
+        slog.d << "FEngine resolved backend: ";
+        switch (mBackend) {
+            case driver::Backend::OPENGL:
+                slog.d << "OpenGL";
+                break;
+
+            case driver::Backend::VULKAN:
+                slog.d << "Vulkan";
+                break;
+
+            case driver::Backend::METAL:
+                slog.d << "Metal";
+                break;
+
+            default:
+                slog.d << "Unknown";
+                break;
+        }
+        slog.d << io::endl;
 #endif
     }
-    // mDriver = platform->createDriver(mSharedGLContext);
-    mDriver = MetalDriver::create();
+    mDriver = platform->createDriver(mSharedGLContext);
     mDriverBarrier.latch();
     if (UTILS_UNLIKELY(!mDriver)) {
         // if we get here, it's because the driver couldn't be initialized and the problem has

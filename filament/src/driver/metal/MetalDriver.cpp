@@ -17,17 +17,25 @@
 #include "driver/metal/MetalDriver.h"
 #include "driver/CommandStream.h"
 
+#include <utils/Log.h>
+
 namespace filament {
 
-Driver* MetalDriver::create() {
-    return new MetalDriver();
+Driver* MetalDriver::create(driver::MetalPlatform* const platform) {
+    assert(platform);
+    return new MetalDriver(platform);
 }
 
-MetalDriver::MetalDriver() noexcept
-        : DriverBase(new ConcreteDispatcher<MetalDriver>(this)) {
+MetalDriver::MetalDriver(driver::MetalPlatform* platform) noexcept
+        : DriverBase(new ConcreteDispatcher<MetalDriver>(this)),
+        mPlatform(*platform) {
 }
 
 MetalDriver::~MetalDriver() noexcept = default;
+
+void MetalDriver::debugCommand(const char *methodName) {
+    utils::slog.d << methodName << utils::io::endl;
+}
 
 void MetalDriver::beginFrame(int64_t monotonic_clock_ns, uint32_t frameId) {
 

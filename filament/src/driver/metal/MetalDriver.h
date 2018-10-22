@@ -65,6 +65,63 @@ private:
 
 #include "driver/DriverAPI.inc"
 
+    /*
+     * Memory management
+     */
+
+    // Copied from VulkanDriver.h
+
+    // For now we're not bothering to store handles in pools, just simple on-demand allocation.
+    // We have a little map from integer handles to "blobs" which get replaced with the Hw objects.
+    using Blob = std::vector<uint8_t>;
+    using HandleMap = std::unordered_map<HandleBase::HandleId, Blob>;
+    HandleMap mHandleMap;
+    HandleBase::HandleId mNextId = 1;
+
+    template<typename Dp, typename B>
+    Handle<B> alloc_handle() {
+        mHandleMap[mNextId] = Blob(sizeof(Dp));
+        return Handle<B>(mNextId++);
+    }
+
+    template<typename Dp, typename B>
+    Dp* handle_cast(HandleMap& handleMap, Handle<B>& handle) noexcept {
+        assert(handle);
+        auto iter = handleMap.find(handle.getId());
+        assert(iter != handleMap.end());
+        Blob& blob = iter->second;
+        assert(blob.size() == sizeof(Dp));
+        return reinterpret_cast<Dp*>(blob.data());
+    }
+
+    template<typename Dp, typename B>
+    const Dp* handle_const_cast(HandleMap& handleMap, const Handle<B>& handle) noexcept {
+        assert(handle);
+        auto iter = handleMap.find(handle.getId());
+        assert(iter != handleMap.end());
+        Blob& blob = iter->second;
+        assert(blob.size() == sizeof(Dp));
+        return reinterpret_cast<const Dp*>(blob.data());
+    }
+
+    template<typename Dp, typename B, typename ... ARGS>
+    Dp* construct_handle(HandleMap& handleMap, Handle<B>& handle, ARGS&& ... args) noexcept {
+        auto iter = handleMap.find(handle.getId());
+        assert(iter != handleMap.end());
+        Blob& blob = iter->second;
+        assert(blob.size() == sizeof(Dp));
+        Dp* addr = reinterpret_cast<Dp*>(blob.data());
+        new(addr) Dp(std::forward<ARGS>(args)...);
+        return addr;
+    }
+
+    template<typename Dp, typename B>
+    void destruct_handle(HandleMap& handleMap, Handle<B>& handle) noexcept {
+        // Call the destructor, remove the blob, don't bother reclaiming the integer id.
+        handle_cast<Dp>(handleMap, handle)->~Dp();
+        handleMap.erase(handle.getId());
+    }
+
     };
 
 } // namespace filament

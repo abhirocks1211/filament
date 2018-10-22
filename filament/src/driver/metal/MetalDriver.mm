@@ -22,14 +22,27 @@
 #include <QuartzCore/QuartzCore.h>
 
 #include <utils/Log.h>
+#include <utils/Panic.h>
 
 namespace filament {
 
 struct MetalDriverImpl {
     id<MTLDevice> mDevice;
     id<MTLCommandQueue> mCommandQueue;
-    CAMetalLayer* mLayer;
+
+    // Single use, re-created each frame.
+    id<MTLCommandBuffer> mCurrentCommandBuffer;
+
+    id<CAMetalDrawable> mCurrentDrawable = nullptr;
 };
+
+// todo: move into Headers file
+
+struct MetalSwapChain : public HwSwapChain {
+    CAMetalLayer* layer;
+};
+
+//
 
 Driver* MetalDriver::create(driver::MetalPlatform* const platform) {
     assert(platform);
@@ -54,7 +67,7 @@ void MetalDriver::debugCommand(const char *methodName) {
 }
 
 void MetalDriver::beginFrame(int64_t monotonic_clock_ns, uint32_t frameId) {
-
+    pImpl->mCurrentCommandBuffer = [pImpl->mCommandQueue commandBuffer];
 }
 
 void MetalDriver::setPresentationTime(int64_t monotonic_clock_ns) {
@@ -118,14 +131,14 @@ void MetalDriver::createFence(Driver::FenceHandle, int dummy) {
 
 }
 
-void MetalDriver::createSwapChain(Driver::SwapChainHandle, void* nativeWindow, uint64_t flags) {
+void MetalDriver::createSwapChain(Driver::SwapChainHandle sch, void* nativeWindow, uint64_t flags) {
+    auto* swapChain = construct_handle<MetalSwapChain>(mHandleMap, sch);
+
     // Obtain the CAMetalLayer-backed view.
+    // todo: move this into Platform.
     NSView* nsview = (NSView*) nativeWindow;
     nsview = [nsview viewWithTag:255];
-    CAMetalLayer* mlayer = (CAMetalLayer*) nsview.layer;
-
-    // todo: HACK
-    pImpl->mLayer = mlayer;
+    swapChain->layer = (CAMetalLayer*) nsview.layer;
 }
 
 void MetalDriver::createStreamFromTextureId(Driver::StreamHandle, intptr_t externalTextureId,
@@ -174,7 +187,7 @@ Driver::FenceHandle MetalDriver::createFenceSynchronous() noexcept {
 }
 
 Driver::SwapChainHandle MetalDriver::createSwapChainSynchronous() noexcept {
-    return {};
+    return alloc_handle<MetalSwapChain, HwSwapChain>();
 }
 
 Driver::StreamHandle MetalDriver::createStreamFromTextureIdSynchronous() noexcept {
@@ -307,22 +320,17 @@ void MetalDriver::updateSamplerBuffer(Driver::SamplerBufferHandle ubh,
 
 void MetalDriver::beginRenderPass(Driver::RenderTargetHandle rth,
         const Driver::RenderPassParams& params) {
-    id<CAMetalDrawable> drawable = [pImpl->mLayer nextDrawable];
-
+    ASSERT_PRECONDITION(pImpl->mCurrentDrawable != nullptr, "mCurrentDrawable is null.");
     MTLRenderPassDescriptor* descriptor = [MTLRenderPassDescriptor renderPassDescriptor];
-    descriptor.colorAttachments[0].texture = drawable.texture;
+    descriptor.colorAttachments[0].texture = pImpl->mCurrentDrawable.texture;
     descriptor.colorAttachments[0].loadAction = MTLLoadActionClear;
     descriptor.colorAttachments[0].clearColor = MTLClearColorMake(
             params.clearColor.r, params.clearColor.g, params.clearColor.b, params.clearColor.a
     );
 
-    id<MTLCommandBuffer> buffer = [pImpl->mCommandQueue commandBuffer];
-
-    id<MTLRenderCommandEncoder> encoder = [buffer renderCommandEncoderWithDescriptor:descriptor];
+    id<MTLRenderCommandEncoder> encoder =
+            [pImpl->mCurrentCommandBuffer renderCommandEncoderWithDescriptor:descriptor];
     [encoder endEncoding];
-
-    [buffer presentDrawable:drawable];
-    [buffer commit];
 }
 
 void MetalDriver::endRenderPass(int dummy) {
@@ -357,11 +365,15 @@ void MetalDriver::setViewportScissor(int32_t left, int32_t bottom, uint32_t widt
 }
 
 void MetalDriver::makeCurrent(Driver::SwapChainHandle schDraw, Driver::SwapChainHandle schRead) {
-
+    ASSERT_PRECONDITION_NON_FATAL(schDraw == schRead,
+                                  "Metal driver does not support distinct draw/read swap chains.");
+    auto* swapChain = handle_cast<MetalSwapChain>(mHandleMap, schDraw);
+    pImpl->mCurrentDrawable = [swapChain->layer nextDrawable];
 }
 
 void MetalDriver::commit(Driver::SwapChainHandle sch) {
-
+    [pImpl->mCurrentCommandBuffer presentDrawable:pImpl->mCurrentDrawable];
+    [pImpl->mCurrentCommandBuffer commit];
 }
 
 void MetalDriver::viewport(ssize_t left, ssize_t bottom, size_t width, size_t height) {

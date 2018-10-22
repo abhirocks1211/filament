@@ -28,7 +28,7 @@ using namespace filament;
 int main(int argc, char** argv) {
     Config config;
     config.title = "strobecolor";
-    config.backend = Engine::Backend::VULKAN;
+    config.backend = Engine::Backend::METAL;
 
     auto setup = [](Engine*, View* view, Scene*) {
         view->setClearColor({0.0, 0.25, 0.5, 1.0});

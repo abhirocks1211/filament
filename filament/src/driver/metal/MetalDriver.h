@@ -25,6 +25,8 @@
 
 namespace filament {
 
+struct MetalDriverImpl;
+
 class MetalDriver final : public DriverBase {
     MetalDriver(driver::MetalPlatform* const platform) noexcept;
     virtual ~MetalDriver() noexcept;
@@ -35,6 +37,8 @@ public:
 private:
 
     driver::MetalPlatform& mPlatform;
+
+    MetalDriverImpl* pImpl;
 
 #ifndef NDEBUG
     void debugCommand(const char* methodName) override;

@@ -17,9 +17,19 @@
 #include "driver/metal/MetalDriver.h"
 #include "driver/CommandStream.h"
 
+#include <AppKit/AppKit.h>
+#include <Metal/Metal.h>
+#include <QuartzCore/QuartzCore.h>
+
 #include <utils/Log.h>
 
 namespace filament {
+
+struct MetalDriverImpl {
+    id<MTLDevice> mDevice;
+    id<MTLCommandQueue> mCommandQueue;
+    CAMetalLayer* mLayer;
+};
 
 Driver* MetalDriver::create(driver::MetalPlatform* const platform) {
     assert(platform);
@@ -28,10 +38,16 @@ Driver* MetalDriver::create(driver::MetalPlatform* const platform) {
 
 MetalDriver::MetalDriver(driver::MetalPlatform* platform) noexcept
         : DriverBase(new ConcreteDispatcher<MetalDriver>(this)),
-        mPlatform(*platform) {
+        mPlatform(*platform),
+        pImpl(new MetalDriverImpl) {
+
+    pImpl->mDevice = MTLCreateSystemDefaultDevice();
+    pImpl->mCommandQueue = [pImpl->mDevice newCommandQueue];
 }
 
-MetalDriver::~MetalDriver() noexcept = default;
+MetalDriver::~MetalDriver() noexcept {
+    delete pImpl;
+}
 
 void MetalDriver::debugCommand(const char *methodName) {
     utils::slog.d << methodName << utils::io::endl;
@@ -103,7 +119,13 @@ void MetalDriver::createFence(Driver::FenceHandle, int dummy) {
 }
 
 void MetalDriver::createSwapChain(Driver::SwapChainHandle, void* nativeWindow, uint64_t flags) {
+    // Obtain the CAMetalLayer-backed view.
+    NSView* nsview = (NSView*) nativeWindow;
+    nsview = [nsview viewWithTag:255];
+    CAMetalLayer* mlayer = (CAMetalLayer*) nsview.layer;
 
+    // todo: HACK
+    pImpl->mLayer = mlayer;
 }
 
 void MetalDriver::createStreamFromTextureId(Driver::StreamHandle, intptr_t externalTextureId,
@@ -285,7 +307,22 @@ void MetalDriver::updateSamplerBuffer(Driver::SamplerBufferHandle ubh,
 
 void MetalDriver::beginRenderPass(Driver::RenderTargetHandle rth,
         const Driver::RenderPassParams& params) {
+    id<CAMetalDrawable> drawable = [pImpl->mLayer nextDrawable];
 
+    MTLRenderPassDescriptor* descriptor = [MTLRenderPassDescriptor renderPassDescriptor];
+    descriptor.colorAttachments[0].texture = drawable.texture;
+    descriptor.colorAttachments[0].loadAction = MTLLoadActionClear;
+    descriptor.colorAttachments[0].clearColor = MTLClearColorMake(
+            params.clearColor.r, params.clearColor.g, params.clearColor.b, params.clearColor.a
+    );
+
+    id<MTLCommandBuffer> buffer = [pImpl->mCommandQueue commandBuffer];
+
+    id<MTLRenderCommandEncoder> encoder = [buffer renderCommandEncoderWithDescriptor:descriptor];
+    [encoder endEncoding];
+
+    [buffer presentDrawable:drawable];
+    [buffer commit];
 }
 
 void MetalDriver::endRenderPass(int dummy) {

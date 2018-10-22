@@ -39,6 +39,8 @@
 
 #include <stb_image.h>
 
+#include <stdlib.h>
+
 
 using namespace filament;
 using namespace filamat;
@@ -118,6 +120,66 @@ void loadTex(Engine* engine, const std::string& filePath, Texture** map, bool sR
             std::cout << "The texture " << path << " does not exist" << std::endl;
         }
     }
+}
+
+void loadEmbeddedTex(Engine* engine, aiTexture *embeddedTex, Texture** map, bool sRGB = true){
+    int w, h, n;
+    unsigned char *data = stbi_load_from_memory((unsigned char *) embeddedTex->pcData, embeddedTex->mWidth, &w, &h, &n, 3);
+    *map = Texture::Builder()
+            .width(uint32_t(w))
+            .height(uint32_t(h))
+            .levels(0xff)
+            .format(sRGB ? driver::TextureFormat::SRGB8 : driver::TextureFormat::RGB8)
+            .build(*engine);
+
+    Texture::PixelBufferDescriptor defaultBuffer(data, size_t(w * h * 3),
+                                                 Texture::Format::RGB, Texture::Type::UBYTE
+            ,(driver::BufferDescriptor::Callback) &free);
+    (*map)->setImage(*engine, 0, std::move(defaultBuffer));
+    (*map)->generateMipmaps(*engine);
+}
+
+// Takes a texture filename and returns the index of the embedded texture, -1 if the texture is not embedded
+int getEmbeddedTexId(aiString path){
+    const char *pathStr = path.C_Str();
+    if (path.length >= 2 && pathStr[0] == '*'){
+        for (int i; i < path.length; i++){
+            if (!isdigit(pathStr[i]))
+                return -1;
+        }
+        return std::atoi(pathStr + 1);
+    }
+    return -1;
+}
+
+// TODO: Change this to a member function (requires some alteration of cmakelsts.txt)
+void setTextureFromPath(const aiScene *scene,
+                        Engine *engine,
+                        std::vector<filament::Texture*> textures,
+                        const aiString &texFile,
+                        const std::string &materialName,
+                        const std::string &texDir,
+                        std::map<std::string, MaterialInstance *> &outMaterials,
+                        filament::TextureSampler sampler,
+                        char *parameterName){
+
+    Texture* baseColorMap = nullptr;
+    int embeddedId = getEmbeddedTexId(texFile);
+
+    if (embeddedId != -1){
+        std::cout << "embedded texture " << embeddedId << std::endl;
+        loadEmbeddedTex(engine, scene->mTextures[embeddedId], &baseColorMap);
+    } else {
+        loadTex(engine, texDir + texFile.C_Str(), &baseColorMap);
+    }
+
+    textures.push_back(baseColorMap);
+
+    if (baseColorMap != nullptr) {
+        outMaterials[materialName]->setParameter(
+                parameterName, baseColorMap, sampler);
+    }
+    std::cout << texDir + texFile.C_Str() << std::endl;
 }
 
 void MeshAssimp::addFromFile(const Path& path,
@@ -476,32 +538,16 @@ bool MeshAssimp::setFromFile(const Path& file,
 //                        }
 
                         // Load texture images for gltf files
+                        // TODO: lots of repeated code here...
                         if (material->GetTexture(aiTextureType_DIFFUSE, 1, &baseColorPath) == AI_SUCCESS) {
-                            Texture* baseColorMap = nullptr;
-                            loadTex(&mEngine, dirName + baseColorPath.C_Str(), &baseColorMap);
-                            mTextures.push_back(baseColorMap);
-                            if (baseColorMap != nullptr) {
-                                outMaterials[materialName]->setParameter(
-                                        "baseColorMap", baseColorMap, sampler);
-                            }
-                            std::cout << dirName + baseColorPath.C_Str() << std::endl;
+                            setTextureFromPath(scene, &mEngine, mTextures, baseColorPath, materialName, dirName, outMaterials, sampler, "baseColorMap");
                         } else {
-                            if (mDefaultMap == nullptr){
-                                std::cout << "default mat is null" << std::endl;
-                            }
                             outMaterials[materialName]->setParameter("baseColorMap", mDefaultMap, sampler);
                         }
 
                         if (material->GetTexture(aiTextureType_UNKNOWN, 0, &MRPath) == AI_SUCCESS) {
-                            Texture* metallicRoughnessMap = nullptr;
-                            loadTex(&mEngine, dirName + MRPath.C_Str(), &metallicRoughnessMap, false);
-                            mTextures.push_back(metallicRoughnessMap);
+                            setTextureFromPath(scene, &mEngine, mTextures, MRPath, materialName, dirName, outMaterials, sampler, "metallicRoughnessMap");
 
-                            if (metallicRoughnessMap != nullptr) {
-                                outMaterials[materialName]->setParameter(
-                                        "metallicRoughnessMap", metallicRoughnessMap, sampler);
-                            }
-                            std::cout << dirName + MRPath.C_Str() << std::endl;
                         } else {
                             outMaterials[materialName]->setParameter("metallicRoughnessMap", mDefaultMap, sampler);
                             outMaterials[materialName]->setParameter("metallicFactor", mDefaultMetallic);
@@ -509,43 +555,21 @@ bool MeshAssimp::setFromFile(const Path& file,
                         }
 
                         if (material->GetTexture(aiTextureType_LIGHTMAP, 0, &AOPath) == AI_SUCCESS) {
-                            Texture* aoMap = nullptr;
-                            loadTex(&mEngine, dirName + AOPath.C_Str(), &aoMap, false);
-                            mTextures.push_back(aoMap);
+                            setTextureFromPath(scene, &mEngine, mTextures, AOPath, materialName, dirName, outMaterials, sampler, "aoMap");
 
-                            if (aoMap != nullptr) {
-                                outMaterials[materialName]->setParameter(
-                                        "aoMap", aoMap, sampler);
-                            }
-                            std::cout << dirName + AOPath.C_Str() << std::endl;
                         } else {
                             outMaterials[materialName]->setParameter("aoMap", mDefaultMap, sampler);
                         }
 
                         if (material->GetTexture(aiTextureType_NORMALS, 0, &normalPath) == AI_SUCCESS) {
-                            Texture* normalMap = nullptr;
-                            loadTex(&mEngine, dirName + normalPath.C_Str(), &normalMap, false);
-                            mTextures.push_back(normalMap);
-
-                            if (normalMap != nullptr) {
-                                outMaterials[materialName]->setParameter(
-                                        "normalMap", normalMap, sampler);
-                            }
-                            std::cout << dirName + normalPath.C_Str() << std::endl;
+                            setTextureFromPath(scene, &mEngine, mTextures, normalPath, materialName, dirName, outMaterials, sampler, "normalMap");
                         } else {
                             outMaterials[materialName]->setParameter("normalMap", mDefaultNormalMap, sampler);
                         }
 
                         if (material->GetTexture(aiTextureType_EMISSIVE, 0, &emissivePath) == AI_SUCCESS) {
-                            Texture* emissiveMap = nullptr;
-                            loadTex(&mEngine, dirName + emissivePath.C_Str(), &emissiveMap, false);
-                            mTextures.push_back(emissiveMap);
+                            setTextureFromPath(scene, &mEngine, mTextures, emissivePath, materialName, dirName, outMaterials, sampler, "emissiveMap");
 
-                            if (emissiveMap != nullptr) {
-                                outMaterials[materialName]->setParameter(
-                                        "emissiveMap", emissiveMap, sampler);
-                            }
-                            std::cout << dirName + emissivePath.C_Str() << std::endl;
                         }  else {
                             outMaterials[materialName]->setParameter("emissiveMap", mDefaultMap, sampler);
                             outMaterials[materialName]->setParameter("emissiveFactor", mDefaultEmissive);
@@ -661,3 +685,5 @@ bool MeshAssimp::setFromFile(const Path& file,
 
     return false;
 }
+
+

@@ -40,6 +40,10 @@ namespace filament {
 #include <filament/Color.h>
 #include <filament/Box.h>
 #include <filament/Texture.h>
+#include <filament/TextureSampler.h>
+
+//#include <assimp/Importer.hpp>
+
 
 class MeshAssimp {
 public:
@@ -107,6 +111,14 @@ private:
     std::vector<utils::Entity> mRenderables;
 
     std::vector<filament::Texture*> mTextures;
+
+//    void MeshAssimp::setTextureFromPath(const aiScene *scene,
+//                                        const aiString &texFile,
+//                                        const std::string &materialName,
+//                                        const std::string &texDir,
+//                                        std::map<std::string, filament::MaterialInstance *> &outMaterials,
+//                                        filament::TextureSampler sampler,
+//                                        char *parameterName);
 };
 
 #endif // TNT_FILAMENT_SAMPLE_MESH_ASSIMP_H

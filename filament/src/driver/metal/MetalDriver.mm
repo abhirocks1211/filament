@@ -106,14 +106,14 @@ MetalDriver::MetalDriver(driver::MetalPlatform* platform) noexcept
                         "using namespace metal;"
                         ""
                         "typedef struct {"
-                        "    packed_float2 position;"
-                        "    int32_t color;"
+                        "    float2 position [[attribute(0)]];"
+                        "    int32_t color [[attribute(1)]];"
                         "} FVertex;"
                         ""
                         "vertex float4 basic_vertex("
-                        "    uint vertexID [[vertex_id]],"
-                        "    constant FVertex* vertices [[buffer(0)]]) {"
-                        "    return float4(vertices[vertexID].position, 0.0, 1.0);"
+                        "    FVertex in [[stage_in]]"
+                        ") {"
+                        "    return float4(in.position, 0.0, 1.0);"
                         "}"
                         ""
                         "fragment float4 basic_fragment() {"
@@ -121,17 +121,36 @@ MetalDriver::MetalDriver(driver::MetalPlatform* platform) noexcept
                         "}";
 
 
-    NSError* error;
+    NSError* error = nullptr;
     pImpl->mLibrary = [pImpl->mDevice newLibraryWithSource:source options:nil error:&error];
+    if (error) {
+        utils::slog.w << [error.userInfo[@"NSLocalizedDescription"] cString]<< utils::io::endl;
+    }
     assert(error == nullptr);
 
-    MTLRenderPipelineDescriptor* descriptor = [[MTLRenderPipelineDescriptor alloc] init];
-    descriptor.label = @"Simple pipeline";
-    descriptor.vertexFunction = [pImpl->mLibrary newFunctionWithName:@"basic_vertex"];
-    descriptor.fragmentFunction = [pImpl->mLibrary newFunctionWithName:@"basic_fragment"];
-    descriptor.colorAttachments[0].pixelFormat = MTLPixelFormatBGRA8Unorm;
+    MTLRenderPipelineDescriptor* pipeline = [[MTLRenderPipelineDescriptor alloc] init];
+    pipeline.label = @"Simple pipeline";
 
-    pImpl->mPipelineState = [pImpl->mDevice newRenderPipelineStateWithDescriptor:descriptor
+    // Vertex program
+    pipeline.vertexFunction = [pImpl->mLibrary newFunctionWithName:@"basic_vertex"];
+    MTLVertexDescriptor* vertex = [MTLVertexDescriptor vertexDescriptor];
+    vertex.attributes[0].format = MTLVertexFormatFloat2;
+    vertex.attributes[0].bufferIndex = 0;
+    vertex.attributes[0].offset = 0;
+
+    vertex.attributes[1].format = MTLVertexFormatChar4Normalized;
+    vertex.attributes[1].bufferIndex = 0;
+    vertex.attributes[1].offset = sizeof(float) * 2;
+
+    vertex.layouts[0].stride = sizeof(float) * 2 + sizeof(int32_t);
+    vertex.layouts[0].stepFunction = MTLVertexStepFunctionPerVertex;
+
+    pipeline.vertexDescriptor = vertex;
+
+    pipeline.fragmentFunction = [pImpl->mLibrary newFunctionWithName:@"basic_fragment"];
+    pipeline.colorAttachments[0].pixelFormat = MTLPixelFormatBGRA8Unorm;
+
+    pImpl->mPipelineState = [pImpl->mDevice newRenderPipelineStateWithDescriptor:pipeline
                                                                            error:&error];
     assert(error == nullptr);
 }

@@ -29,6 +29,7 @@ namespace filament {
 #include <map>
 #include <vector>
 
+#include <math/mat3.h>
 #include <math/mat4.h>
 #include <math/quat.h>
 #include <math/vec3.h>
@@ -62,6 +63,14 @@ public:
         return mRenderables;
     }
 
+    //For use with normalizing coordinates
+    //TODO: change to use float3?
+    math::float3 minBound = math::float3(1.0f);
+    math::float3 maxBound = math::float3(-1.0f);
+    float minX = 1, maxX = -1;
+    float minY = 1, maxY = -1;
+    float minZ = 1, maxZ = -1;
+
 private:
     struct Part {
         size_t offset;
@@ -91,7 +100,6 @@ private:
             std::vector<int>&      outParents,
             std::map<std::string, filament::MaterialInstance*>& outMaterials
             );
-
 
     filament::Engine& mEngine;
     filament::VertexBuffer* mVertexBuffer = nullptr;

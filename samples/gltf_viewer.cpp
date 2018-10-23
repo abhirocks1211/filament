@@ -186,10 +186,39 @@ static void setup(Engine* engine, View* view, Scene* scene) {
 
     auto& rcm = engine->getRenderableManager();
     auto& tcm = engine->getTransformManager();
+
+    // Get global bounding box to scale and tranform model to normal coordinates
+//    g_meshSet->getRenderables()[0].
+//    float minX = 1, maxX = -1;
+//    float minY = 1, maxY = -1;
+//    float minZ = 1, maxZ = -1;
+//    for (auto renderable : g_meshSet->getRenderables()) {
+//        if (rcm.hasComponent(renderable)) {
+//            rcm.getAxisAlignedBoundingBox()
+//        }
+//    }
+
+    //Calculate normalize scale so that bounding box is [-1, 1]
+    float maxBound = 0;
+    maxBound = fmax(g_meshSet->maxBound.x - g_meshSet->minBound.x, g_meshSet->maxBound.y - g_meshSet->minBound.y);
+    maxBound = fmax(maxBound, g_meshSet->maxBound.z - g_meshSet->minBound.z);
+
+    float3 center = (g_meshSet->maxBound + g_meshSet->minBound) / 2.0f;
+
+    mat4f translation = mat4f();
+
+    std::cout << g_meshSet->maxBound << std::endl;
+    std::cout << g_meshSet->minBound << std::endl;
+
+    translation[3][0] = -center.x;
+    translation[3][1] = -center.y;
+    translation[3][2] = -center.z;
+
+    std::cout << translation << std::endl;
     for (auto renderable : g_meshSet->getRenderables()) {
         if (rcm.hasComponent(renderable)) {
             auto ti = tcm.getInstance(renderable);
-            tcm.setTransform(ti, mat4f{ mat3f(g_config.scale), float3(0.0f, 0.0f, -4.0f) } *
+            tcm.setTransform(ti, mat4f{ mat3f(2.0 / maxBound), float3(0.0f, 0.0f, -4.0f) } * translation *
                                  tcm.getWorldTransform(ti));
             scene->addEntity(renderable);
         }

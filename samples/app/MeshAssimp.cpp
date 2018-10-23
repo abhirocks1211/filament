@@ -301,6 +301,9 @@ void MeshAssimp::addFromFile(const Path& path,
     for (auto& mesh : meshes) {
         RenderableManager::Builder builder(mesh.parts.size());
         builder.boundingBox(mesh.aabb);
+        std::cout << mesh.aabb.center.x << "," << mesh.aabb.center.y << "," << mesh.aabb.center.z << std::endl;
+        std::cout << mesh.aabb.halfExtent.x << "," << mesh.aabb.halfExtent.y << "," << mesh.aabb.halfExtent.z << std::endl;
+
 
         size_t partIndex = 0;
         for (auto& part : mesh.parts) {
@@ -672,12 +675,40 @@ bool MeshAssimp::setFromFile(const Path& file,
 
         std::cout << "Hierarchy depth = " << depth << std::endl;
 
-        // compute the aabb
+        // compute the aabb and find bounding box of entire model
         for (auto& mesh : outMeshes) {
             mesh.aabb = RenderableManager::computeAABB(
                     outPositions.data(),
                     outIndices.data() + mesh.offset,
                     mesh.count);
+
+            float3 aabbMin = mesh.aabb.getMin();
+            float3 aabbMax = mesh.aabb.getMax();
+
+
+            if (minBound.x > maxBound.x){
+                minBound.x = aabbMin.x;
+                maxBound.x = aabbMax.x;
+            } else {
+                minBound.x = fmin(minBound.x, aabbMin.x);
+                maxBound.x = fmax(maxBound.x, aabbMax.x);
+            }
+
+            if (minBound.y > maxBound.y){
+                minBound.y = aabbMin.y;
+                maxBound.y = aabbMax.y;
+            } else {
+                minBound.y = fmin(minBound.y, aabbMin.y);
+                maxBound.y = fmax(maxBound.y, aabbMax.y);
+            }
+
+            if (minBound.z > maxBound.z){
+                minBound.z = aabbMin.z;
+                maxBound.z = aabbMax.z;
+            } else {
+                minBound.z = fmin(minBound.z, aabbMin.z);
+                maxBound.z = fmax(maxBound.z, aabbMax.z);
+            }
         }
 
         return true;

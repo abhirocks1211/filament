@@ -272,6 +272,7 @@ bool MaterialParser::getRequiredAttributes(AttributeBitset* value) const noexcep
 bool MaterialParser::getShader(
         filament::driver::ShaderModel shaderModel, uint8_t variant, filament::driver::ShaderType st,
         ShaderBuilder& shader) noexcept {
+    // HERE is where the backend chooses the correct shader type.
     return (mImpl->mBackend == filament::driver::Backend::VULKAN) ?
            mImpl->getVkShader(shaderModel, variant, st, shader) :
            mImpl->getGlShader(shaderModel, variant, st, shader);

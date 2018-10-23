@@ -24,6 +24,8 @@
 #include <utils/Log.h>
 #include <utils/Panic.h>
 
+#include <fstream>
+
 namespace filament {
 
 struct MetalDriverImpl {
@@ -39,6 +41,10 @@ struct MetalDriverImpl {
     id<MTLLibrary> mLibrary;
     id<MTLRenderPipelineState> mPipelineState;
 };
+
+// A hack, for now. Put all vertex data into buffer 10 so that it does not conflict with uniform
+// buffers.
+constexpr uint8_t VERTEX_BUFFER_BINDING = 10;
 
 // todo: move into Headers file
 
@@ -76,6 +82,15 @@ struct MetalIndexBuffer : public HwIndexBuffer {
             : HwIndexBuffer(elementSize, indexCount) {
         buffer = [device newBufferWithLength:(elementSize * indexCount)
                                      options:MTLResourceStorageModeShared];
+    }
+
+    id<MTLBuffer> buffer;
+};
+
+struct MetalUniformBuffer : public HwUniformBuffer {
+    MetalUniformBuffer(id<MTLDevice> device, size_t size) : HwUniformBuffer(size) {
+        buffer = [device newBufferWithLength:size
+                                      options:MTLResourceStorageModeShared];
     }
 
     id<MTLBuffer> buffer;
@@ -135,15 +150,15 @@ MetalDriver::MetalDriver(driver::MetalPlatform* platform) noexcept
     pipeline.vertexFunction = [pImpl->mLibrary newFunctionWithName:@"basic_vertex"];
     MTLVertexDescriptor* vertex = [MTLVertexDescriptor vertexDescriptor];
     vertex.attributes[0].format = MTLVertexFormatFloat2;
-    vertex.attributes[0].bufferIndex = 0;
+    vertex.attributes[0].bufferIndex = VERTEX_BUFFER_BINDING;
     vertex.attributes[0].offset = 0;
 
     vertex.attributes[1].format = MTLVertexFormatChar4Normalized;
-    vertex.attributes[1].bufferIndex = 0;
+    vertex.attributes[1].bufferIndex = VERTEX_BUFFER_BINDING;
     vertex.attributes[1].offset = sizeof(float) * 2;
 
-    vertex.layouts[0].stride = sizeof(float) * 2 + sizeof(int32_t);
-    vertex.layouts[0].stepFunction = MTLVertexStepFunctionPerVertex;
+    vertex.layouts[VERTEX_BUFFER_BINDING].stride = sizeof(float) * 2 + sizeof(int32_t);
+    vertex.layouts[VERTEX_BUFFER_BINDING].stepFunction = MTLVertexStepFunctionPerVertex;
 
     pipeline.vertexDescriptor = vertex;
 
@@ -203,9 +218,9 @@ void MetalDriver::createSamplerBuffer(Driver::SamplerBufferHandle, size_t size) 
 
 }
 
-void MetalDriver::createUniformBuffer(Driver::UniformBufferHandle, size_t size,
+void MetalDriver::createUniformBuffer(Driver::UniformBufferHandle ubh, size_t size,
         Driver::BufferUsage usage) {
-
+    construct_handle<MetalUniformBuffer>(mHandleMap, ubh, pImpl->mDevice, size);
 }
 
 void MetalDriver::createRenderPrimitive(Driver::RenderPrimitiveHandle rph, int dummy) {
@@ -213,7 +228,35 @@ void MetalDriver::createRenderPrimitive(Driver::RenderPrimitiveHandle rph, int d
 }
 
 void MetalDriver::createProgram(Driver::ProgramHandle, Program&& program) {
+    const auto& shadersSource = program.getShadersSource();
 
+    using Shader = Program::Shader;
+
+    for (size_t i = 0; i < Program::NUM_SHADER_TYPES; i++) {
+        const char* shaderType;
+        Shader type = (Shader)i;
+        switch (type) {
+            case Shader::VERTEX:
+                shaderType = "vertex";
+                break;
+            case Shader::FRAGMENT:
+                shaderType = "fragment";
+                break;
+        }
+
+        if (shadersSource[i].length()) {
+            char outputName[1000];
+            sprintf(outputName, "/Users/bendoherty/code/filament-gh/shaderoutput/%s_%s.txt",
+                    program.getName().c_str(), shaderType);
+
+            std::ofstream file;
+            file.open(outputName, std::ios_base::binary);
+            assert(file.is_open());
+
+            file.write(shadersSource[i].c_str(), shadersSource[i].size());
+            file.close();
+        }
+    }
 }
 
 void MetalDriver::createDefaultRenderTarget(Driver::RenderTargetHandle, int dummy) {
@@ -263,7 +306,7 @@ Driver::SamplerBufferHandle MetalDriver::createSamplerBufferSynchronous() noexce
 }
 
 Driver::UniformBufferHandle MetalDriver::createUniformBufferSynchronous() noexcept {
-    return {};
+    return alloc_handle<MetalUniformBuffer, HwUniformBuffer>();
 }
 
 Driver::RenderPrimitiveHandle MetalDriver::createRenderPrimitiveSynchronous() noexcept {
@@ -410,8 +453,9 @@ void MetalDriver::generateMipmaps(Driver::TextureHandle th) {
 }
 
 void MetalDriver::updateUniformBuffer(Driver::UniformBufferHandle ubh,
-        Driver::BufferDescriptor&& buffer) {
-
+        Driver::BufferDescriptor&& data) {
+    auto buffer = handle_cast<MetalUniformBuffer>(mHandleMap, ubh);
+    memcpy(buffer->buffer.contents, data.buffer, data.size);
 }
 
 void MetalDriver::updateSamplerBuffer(Driver::SamplerBufferHandle ubh,
@@ -489,12 +533,18 @@ void MetalDriver::viewport(ssize_t left, ssize_t bottom, size_t width, size_t he
 }
 
 void MetalDriver::bindUniformBuffer(size_t index, Driver::UniformBufferHandle ubh) {
-
+    utils::slog.d << "bindUniformBuffer(" << utils::io::endl
+                  << "    index  = " << index << utils::io::endl
+                  << ");" << utils::io::endl;
 }
 
 void MetalDriver::bindUniformBufferRange(size_t index, Driver::UniformBufferHandle ubh,
         size_t offset, size_t size) {
-
+    utils::slog.d << "bindUniformBufferRange(" << utils::io::endl
+                  << "    index  = " << index << utils::io::endl
+                  << "    offset = " << offset << utils::io::endl
+                  << "    size   = " << size << utils::io::endl
+                  << ");" << utils::io::endl;
 }
 
 void MetalDriver::bindSamplers(size_t index, Driver::SamplerBufferHandle sbh) {
@@ -536,7 +586,7 @@ void MetalDriver::draw(Driver::ProgramHandle ph, Driver::RasterState rs,
     [pImpl->mCurrentCommandEncoder setRenderPipelineState:pImpl->mPipelineState];
     [pImpl->mCurrentCommandEncoder setVertexBuffer:primitive->vertexBuffer->buffer
                                             offset:0
-                                           atIndex:0];
+                                           atIndex:VERTEX_BUFFER_BINDING];
     [pImpl->mCurrentCommandEncoder drawIndexedPrimitives:MTLPrimitiveTypeTriangle
                                               indexCount:3
                                                indexType:MTLIndexTypeUInt16

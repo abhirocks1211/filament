@@ -32,14 +32,58 @@ struct MetalDriverImpl {
 
     // Single use, re-created each frame.
     id<MTLCommandBuffer> mCurrentCommandBuffer;
+    id<MTLRenderCommandEncoder> mCurrentCommandEncoder;
 
     id<CAMetalDrawable> mCurrentDrawable = nullptr;
+
+    id<MTLLibrary> mLibrary;
+    id<MTLRenderPipelineState> mPipelineState;
 };
 
 // todo: move into Headers file
 
 struct MetalSwapChain : public HwSwapChain {
-    CAMetalLayer* layer;
+    CAMetalLayer* layer = nullptr;
+};
+
+struct MetalVertexBuffer : public HwVertexBuffer {
+    MetalVertexBuffer(id<MTLDevice> device, uint8_t bufferCount, uint8_t attributeCount,
+            uint32_t vertexCount, Driver::AttributeArray const& attributes)
+            : HwVertexBuffer(bufferCount, attributeCount, vertexCount, attributes) {
+        // todo: handle more than 1 buffer
+
+        // Calculate buffer size.
+        uint8_t bufferIndex = 0;
+        uint32_t size = 0;
+        for (auto const& item : attributes) {
+            if (item.buffer == bufferIndex) {
+                uint32_t end = item.offset + vertexCount * item.stride;
+                size = std::max(size, end);
+            }
+        }
+
+        buffer = [device newBufferWithLength:size
+                                     options:MTLResourceStorageModeShared];
+        bufferSize = size;
+    }
+
+    id<MTLBuffer> buffer;
+    uint32_t bufferSize;
+};
+
+struct MetalIndexBuffer : public HwIndexBuffer {
+    MetalIndexBuffer(id<MTLDevice> device, uint8_t elementSize, uint32_t indexCount)
+            : HwIndexBuffer(elementSize, indexCount) {
+        buffer = [device newBufferWithLength:(elementSize * indexCount)
+                                     options:MTLResourceStorageModeShared];
+    }
+
+    id<MTLBuffer> buffer;
+};
+
+struct MetalRenderPrimitive : public HwRenderPrimitive {
+    MetalVertexBuffer* vertexBuffer = nullptr;
+    MetalIndexBuffer* indexBuffer = nullptr;
 };
 
 //
@@ -56,6 +100,40 @@ MetalDriver::MetalDriver(driver::MetalPlatform* platform) noexcept
 
     pImpl->mDevice = MTLCreateSystemDefaultDevice();
     pImpl->mCommandQueue = [pImpl->mDevice newCommandQueue];
+
+    // todo: handle shader programs correctly
+    NSString* source = @"#include <metal_stdlib>\n"
+                        "using namespace metal;"
+                        ""
+                        "typedef struct {"
+                        "    packed_float2 position;"
+                        "    int32_t color;"
+                        "} FVertex;"
+                        ""
+                        "vertex float4 basic_vertex("
+                        "    uint vertexID [[vertex_id]],"
+                        "    constant FVertex* vertices [[buffer(0)]]) {"
+                        "    return float4(vertices[vertexID].position, 0.0, 1.0);"
+                        "}"
+                        ""
+                        "fragment float4 basic_fragment() {"
+                        "    return float4(1.0, 0, 1.0, 1.0);"
+                        "}";
+
+
+    NSError* error;
+    pImpl->mLibrary = [pImpl->mDevice newLibraryWithSource:source options:nil error:&error];
+    assert(error == nullptr);
+
+    MTLRenderPipelineDescriptor* descriptor = [[MTLRenderPipelineDescriptor alloc] init];
+    descriptor.label = @"Simple pipeline";
+    descriptor.vertexFunction = [pImpl->mLibrary newFunctionWithName:@"basic_vertex"];
+    descriptor.fragmentFunction = [pImpl->mLibrary newFunctionWithName:@"basic_fragment"];
+    descriptor.colorAttachments[0].pixelFormat = MTLPixelFormatBGRA8Unorm;
+
+    pImpl->mPipelineState = [pImpl->mDevice newRenderPipelineStateWithDescriptor:descriptor
+                                                                           error:&error];
+    assert(error == nullptr);
 }
 
 MetalDriver::~MetalDriver() noexcept {
@@ -82,15 +160,18 @@ void MetalDriver::flush(int dummy) {
 
 }
 
-void MetalDriver::createVertexBuffer(Driver::VertexBufferHandle, uint8_t bufferCount,
+void MetalDriver::createVertexBuffer(Driver::VertexBufferHandle vbh, uint8_t bufferCount,
         uint8_t attributeCount, uint32_t vertexCount, Driver::AttributeArray attributes,
         Driver::BufferUsage usage) {
-
+    // todo: make use of usage
+    construct_handle<MetalVertexBuffer>(mHandleMap, vbh, pImpl->mDevice, bufferCount,
+            attributeCount, vertexCount, attributes);
 }
 
-void MetalDriver::createIndexBuffer(Driver::IndexBufferHandle, Driver::ElementType elementType,
+void MetalDriver::createIndexBuffer(Driver::IndexBufferHandle ibh, Driver::ElementType elementType,
         uint32_t indexCount, Driver::BufferUsage usage) {
-
+    auto elementSize = (uint8_t) getElementTypeSize(elementType);
+    construct_handle<MetalIndexBuffer>(mHandleMap, ibh, pImpl->mDevice, elementSize, indexCount);
 }
 
 void MetalDriver::createTexture(Driver::TextureHandle, Driver::SamplerType target, uint8_t levels,
@@ -108,8 +189,8 @@ void MetalDriver::createUniformBuffer(Driver::UniformBufferHandle, size_t size,
 
 }
 
-void MetalDriver::createRenderPrimitive(Driver::RenderPrimitiveHandle, int dummy) {
-
+void MetalDriver::createRenderPrimitive(Driver::RenderPrimitiveHandle rph, int dummy) {
+    construct_handle<MetalRenderPrimitive>(mHandleMap, rph);
 }
 
 void MetalDriver::createProgram(Driver::ProgramHandle, Program&& program) {
@@ -147,11 +228,11 @@ void MetalDriver::createStreamFromTextureId(Driver::StreamHandle, intptr_t exter
 }
 
 Driver::VertexBufferHandle MetalDriver::createVertexBufferSynchronous() noexcept {
-    return {};
+    return alloc_handle<MetalVertexBuffer, HwVertexBuffer>();
 }
 
 Driver::IndexBufferHandle MetalDriver::createIndexBufferSynchronous() noexcept {
-    return {};
+    return alloc_handle<MetalIndexBuffer, HwIndexBuffer>();
 }
 
 Driver::TextureHandle MetalDriver::createTextureSynchronous() noexcept {
@@ -167,7 +248,7 @@ Driver::UniformBufferHandle MetalDriver::createUniformBufferSynchronous() noexce
 }
 
 Driver::RenderPrimitiveHandle MetalDriver::createRenderPrimitiveSynchronous() noexcept {
-    return {};
+    return alloc_handle<MetalRenderPrimitive, HwRenderPrimitive>();
 }
 
 Driver::ProgramHandle MetalDriver::createProgramSynchronous() noexcept {
@@ -277,12 +358,14 @@ bool MetalDriver::isFrameTimeSupported() {
 
 void MetalDriver::loadVertexBuffer(Driver::VertexBufferHandle vbh, size_t index,
         Driver::BufferDescriptor&& data, uint32_t byteOffset, uint32_t byteSize) {
-
+    auto* vb = handle_cast<MetalVertexBuffer>(mHandleMap, vbh);
+    memcpy(vb->buffer.contents, data.buffer, data.size);
 }
 
 void MetalDriver::loadIndexBuffer(Driver::IndexBufferHandle ibh, Driver::BufferDescriptor&& data,
         uint32_t byteOffset, uint32_t byteSize) {
-
+    auto* ib = handle_cast<MetalIndexBuffer>(mHandleMap, ibh);
+    memcpy(ib->buffer.contents, data.buffer, data.size);
 }
 
 void MetalDriver::load2DImage(Driver::TextureHandle th, uint32_t level, uint32_t xoffset,
@@ -328,13 +411,12 @@ void MetalDriver::beginRenderPass(Driver::RenderTargetHandle rth,
             params.clearColor.r, params.clearColor.g, params.clearColor.b, params.clearColor.a
     );
 
-    id<MTLRenderCommandEncoder> encoder =
+    pImpl->mCurrentCommandEncoder =
             [pImpl->mCurrentCommandBuffer renderCommandEncoderWithDescriptor:descriptor];
-    [encoder endEncoding];
 }
 
 void MetalDriver::endRenderPass(int dummy) {
-
+    [pImpl->mCurrentCommandEncoder endEncoding];
 }
 
 void MetalDriver::discardSubRenderTargetBuffers(Driver::RenderTargetHandle rth,
@@ -350,13 +432,20 @@ void MetalDriver::resizeRenderTarget(Driver::RenderTargetHandle rth, uint32_t wi
 
 void MetalDriver::setRenderPrimitiveBuffer(Driver::RenderPrimitiveHandle rph,
         Driver::VertexBufferHandle vbh, Driver::IndexBufferHandle ibh, uint32_t enabledAttributes) {
-
+    auto primitive = handle_cast<MetalRenderPrimitive>(mHandleMap, rph);
+    primitive->vertexBuffer = handle_cast<MetalVertexBuffer>(mHandleMap, vbh);
+    primitive->indexBuffer = handle_cast<MetalIndexBuffer>(mHandleMap, ibh);
 }
 
 void MetalDriver::setRenderPrimitiveRange(Driver::RenderPrimitiveHandle rph,
         Driver::PrimitiveType pt, uint32_t offset, uint32_t minIndex, uint32_t maxIndex,
         uint32_t count) {
-
+    auto primitive = handle_cast<MetalRenderPrimitive>(mHandleMap, rph);
+    // primitive->setPrimitiveType(pt);
+    primitive->offset = offset * primitive->indexBuffer->elementSize;
+    primitive->count = count;
+    primitive->minIndex = minIndex;
+    primitive->maxIndex = maxIndex > minIndex ? maxIndex : primitive->maxVertexCount - 1;
 }
 
 void MetalDriver::setViewportScissor(int32_t left, int32_t bottom, uint32_t width,
@@ -424,7 +513,16 @@ void MetalDriver::blit(Driver::TargetBufferFlags buffers, Driver::RenderTargetHa
 
 void MetalDriver::draw(Driver::ProgramHandle ph, Driver::RasterState rs,
         Driver::RenderPrimitiveHandle rph) {
-
+    auto primitive = handle_cast<MetalRenderPrimitive>(mHandleMap, rph);
+    [pImpl->mCurrentCommandEncoder setRenderPipelineState:pImpl->mPipelineState];
+    [pImpl->mCurrentCommandEncoder setVertexBuffer:primitive->vertexBuffer->buffer
+                                            offset:0
+                                           atIndex:0];
+    [pImpl->mCurrentCommandEncoder drawIndexedPrimitives:MTLPrimitiveTypeTriangle
+                                              indexCount:3
+                                               indexType:MTLIndexTypeUInt16
+                                             indexBuffer:primitive->indexBuffer->buffer
+                                       indexBufferOffset:0];
 }
 
 // explicit instantiation of the Dispatcher

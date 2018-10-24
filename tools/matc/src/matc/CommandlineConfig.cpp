@@ -56,7 +56,7 @@ static void usage(char* name) {
             "   --preprocessor-only, -E\n"
             "       Optimize by running only the preprocessor\n\n"
             "   --api, -a\n"
-            "       Specify the target API: opengl (default), vulkan or all\n\n"
+            "       Specify the target API: opengl (default), vulkan, metal, or all\n\n"
             "   --reflect, -r\n"
             "       Reflect the specified metadata as JSON: parameters\n\n"
             "   --variant-filter=<filter>, -v <filter>\n"
@@ -177,8 +177,10 @@ bool CommandlineConfig::parse() {
                     mTargetApi = TargetApi::VULKAN;
                 } else if (arg == "all") {
                     mTargetApi = TargetApi::ALL;
+                } else if (arg == "metal") {
+                    mTargetApi = TargetApi::METAL;
                 } else {
-                    std::cerr << "Unrecognized target API. Must be 'opengl'|'vulkan'|'all'."
+                    std::cerr << "Unrecognized target API. Must be 'opengl'|'vulkan'|'metal'|'all'."
                             << std::endl;
                     return false;
                 }

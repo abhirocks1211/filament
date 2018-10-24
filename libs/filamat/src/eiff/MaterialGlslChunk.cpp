@@ -19,8 +19,9 @@
 namespace filamat {
 
 MaterialGlslChunk::MaterialGlslChunk(const std::vector<GlslEntry> &entries,
-                                     LineDictionary &dictionary) :
-    GlslChunk(ChunkType::MaterialGlsl, entries, dictionary) {
+                                     LineDictionary &dictionary,
+                                     ChunkType chunkType) :
+    GlslChunk(chunkType, entries, dictionary) {
 }
 
 void MaterialGlslChunk::writeEntryAttributes(size_t entryIndex, Flattener& f) {

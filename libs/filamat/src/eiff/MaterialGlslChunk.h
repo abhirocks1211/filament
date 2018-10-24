@@ -28,7 +28,8 @@ namespace filamat {
 
 class MaterialGlslChunk final : public GlslChunk<GlslEntry> {
 public:
-    MaterialGlslChunk(const std::vector<GlslEntry> &entries, LineDictionary &dictionary);
+    MaterialGlslChunk(const std::vector<GlslEntry> &entries,
+            LineDictionary &dictionary, ChunkType chunkType = ChunkType::MaterialGlsl);
     ~MaterialGlslChunk() = default;
 protected:
     virtual const char* getShaderText(size_t entryIndex) const override;

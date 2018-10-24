@@ -42,7 +42,7 @@ bool PostprocessMaterialCompiler::run(const Config& config) {
 
     // Install postprocessor (to clean GLSL from comments and dead code).
     GLSLPostProcessor postProcessor(config);
-    builder.postProcessor(std::bind(&GLSLPostProcessor::process, postProcessor, _1, _2, _3, _4, _5));
+    builder.postProcessor(std::bind(&GLSLPostProcessor::process, postProcessor, _1, _2, _3, _4, _5, _6));
 
     Package package = builder.build();
     if (!package.isValid()) {

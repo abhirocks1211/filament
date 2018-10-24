@@ -51,6 +51,7 @@ Package PostprocessMaterialBuilder::build() {
     LineDictionary glslDictionary;
     BlobDictionary spirvDictionary;
     std::vector<uint32_t> spirv;
+    std::string msl;
 
     // Populate a SamplerBindingMap for the sole purpose of finding where the post-process bindings
     // live within the global namespace of samplers.
@@ -82,7 +83,7 @@ Package PostprocessMaterialBuilder::build() {
 
             if (mPostprocessorCallback != nullptr) {
                 bool ok = mPostprocessorCallback(vs, filament::driver::ShaderType::VERTEX,
-                        shaderModel, &vs, pSpirv);
+                        shaderModel, &vs, pSpirv, &msl);
                 if (!ok) {
                     // An error occured while postProcessing, aborting.
                     errorOccured = true;
@@ -111,7 +112,7 @@ Package PostprocessMaterialBuilder::build() {
                     filament::PostProcessStage(k), firstSampler);
             if (mPostprocessorCallback != nullptr) {
                 bool ok = mPostprocessorCallback(fs, filament::driver::ShaderType::FRAGMENT,
-                        shaderModel, &fs, pSpirv);
+                        shaderModel, &fs, pSpirv, &msl);
                 if (!ok) {
                     // An error occured while postProcessing, aborting.
                     errorOccured = true;
@@ -150,6 +151,8 @@ Package PostprocessMaterialBuilder::build() {
         container.addChild(&dicSpirvChunk);
         container.addChild(&spirvChunk);
     }
+
+    // todo
 
     // Flatten all chunks in the container into a Package.
     size_t packageSize = container.getSize();

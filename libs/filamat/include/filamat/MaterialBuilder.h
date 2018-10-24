@@ -43,7 +43,8 @@ using PostProcessCallBack = std::function<bool(
         filament::driver::ShaderType,
         filament::driver::ShaderModel,
         std::string* /* outputGlsl */,
-        std::vector<uint32_t>* /* outputSpirv */ )>;
+        std::vector<uint32_t>* /* outputSpirv */,
+        std::string* /* outputMsl */ )>;
 
 struct MaterialInfo;
 
@@ -61,6 +62,7 @@ public:
         ALL,
         OPENGL,
         VULKAN,
+        METAL
     };
 
 protected:

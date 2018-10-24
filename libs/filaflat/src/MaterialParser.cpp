@@ -123,7 +123,7 @@ bool MaterialParser::isShadingMaterial() const noexcept {
            cc.hasChunk(MaterialVersion) &&
            cc.hasChunk(MaterialUib) &&
            cc.hasChunk(MaterialSib) &&
-           (cc.hasChunk(MaterialGlsl) || cc.hasChunk(MaterialSpirv)) &&
+           (cc.hasChunk(MaterialGlsl) || cc.hasChunk(MaterialSpirv) || cc.hasChunk(MaterialMetal)) &&
            cc.hasChunk(MaterialShaderModels);
 }
 
@@ -131,7 +131,8 @@ bool MaterialParser::isPostProcessMaterial() const noexcept {
     ChunkContainer const& cc = getChunkContainer();
     return cc.hasChunk(PostProcessVersion) &&
            ((cc.hasChunk(MaterialSpirv) && cc.hasChunk(DictionarySpirv)) ||
-            (cc.hasChunk(MaterialGlsl) && cc.hasChunk(DictionaryGlsl)));
+            (cc.hasChunk(MaterialGlsl) && cc.hasChunk(DictionaryGlsl)) ||
+            (cc.hasChunk(MaterialMetal) && cc.hasChunk(DictionaryMetal)));
 }
 
 // Accessors
@@ -273,9 +274,15 @@ bool MaterialParser::getShader(
         filament::driver::ShaderModel shaderModel, uint8_t variant, filament::driver::ShaderType st,
         ShaderBuilder& shader) noexcept {
     // HERE is where the backend chooses the correct shader type.
-    return (mImpl->mBackend == filament::driver::Backend::VULKAN) ?
-           mImpl->getVkShader(shaderModel, variant, st, shader) :
-           mImpl->getGlShader(shaderModel, variant, st, shader);
+    if (mImpl->mBackend == filament::driver::Backend::VULKAN) {
+        return mImpl->getVkShader(shaderModel, variant, st, shader);
+    }
+    if (mImpl->mBackend == filament::driver::Backend::OPENGL) {
+        return mImpl->getGlShader(shaderModel, variant, st, shader);
+    }
+    if (mImpl->mBackend == filament::driver::Backend::METAL) {
+        return mImpl->getGlShader(shaderModel, variant, st, shader);
+    }
 }
 
 bool MaterialParserDetails::getVkShader(filament::driver::ShaderModel shaderModel, uint8_t variant,
@@ -301,10 +308,12 @@ bool MaterialParserDetails::getGlShader(filament::driver::ShaderModel shaderMode
         filament::driver::ShaderType st, ShaderBuilder& shader) noexcept {
 
     ChunkContainer const& container = mChunkContainer;
+    /*
     if (!container.hasChunk(ChunkType::MaterialGlsl) ||
         !container.hasChunk(ChunkType::DictionaryGlsl)) {
         return false;
     }
+     */
 
     // Read the dictionary only if it has not been read yet.
     if (UTILS_UNLIKELY(mBlobDictionary.isEmpty())) {
@@ -313,7 +322,8 @@ bool MaterialParserDetails::getGlShader(filament::driver::ShaderModel shaderMode
         }
     }
 
-    Unflattener unflattener(container, ChunkType::MaterialGlsl);
+    // Unflattener unflattener(container, ChunkType::MaterialGlsl);
+    Unflattener unflattener(container, ChunkType::MaterialMetal);
     return mMaterialChunk.getTextShader(unflattener, mBlobDictionary, shader, shaderModel, variant, st);
 }
 

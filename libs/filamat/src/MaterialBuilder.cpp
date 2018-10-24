@@ -34,10 +34,12 @@
 #include "eiff/MaterialInterfaceBlockChunk.h"
 #include "eiff/MaterialGlslChunk.h"
 #include "eiff/MaterialSpirvChunk.h"
+#include "eiff/MaterialMetalChunk.h"
 #include "eiff/ChunkContainer.h"
 #include "eiff/SimpleFieldChunk.h"
 #include "eiff/DictionaryGlslChunk.h"
 #include "eiff/DictionarySpirvChunk.h"
+#include "eiff/DictionaryMetalChunk.h"
 
 using namespace utils;
 
@@ -71,12 +73,15 @@ void MaterialBuilderBase::prepare() {
             case TargetApi::ALL:
                 mCodeGenPermutations.push_back({i, TargetApi::OPENGL, glCodeGenTargetApi});
                 mCodeGenPermutations.push_back({i, TargetApi::VULKAN, TargetApi::VULKAN});
+                mCodeGenPermutations.push_back({i, TargetApi::METAL, TargetApi::VULKAN});
                 break;
             case TargetApi::OPENGL:
                 mCodeGenPermutations.push_back({i, TargetApi::OPENGL, glCodeGenTargetApi});
                 break;
             case TargetApi::VULKAN:
                 mCodeGenPermutations.push_back({i, TargetApi::VULKAN, TargetApi::VULKAN});
+            case TargetApi::METAL:
+                mCodeGenPermutations.push_back({i, TargetApi::METAL, TargetApi::VULKAN});
                 break;
         }
     }
@@ -424,9 +429,12 @@ Package MaterialBuilder::build() noexcept {
     // Generate all shaders.
     std::vector<GlslEntry> glslEntries;
     std::vector<SpirvEntry> spirvEntries;
+    std::vector<GlslEntry> metalEntries;
     LineDictionary glslDictionary;
     BlobDictionary spirvDictionary;
+    LineDictionary metalDictionary;
     std::vector<uint32_t> spirv;
+    std::string msl;
 
     ShaderGenerator sg(mProperties, mVariables,
             mMaterialCode, mMaterialLineOffset, mMaterialVertexCode, mMaterialVertexLineOffset);
@@ -442,13 +450,21 @@ Package MaterialBuilder::build() noexcept {
         const ShaderModel shaderModel = ShaderModel(params.shaderModel);
         const TargetApi targetApi = params.targetApi;
         const TargetApi codeGenTargetApi = params.codeGenTargetApi;
-        std::vector<uint32_t>* pSpirv = (targetApi == TargetApi::VULKAN) ? &spirv : nullptr;
+
+        // Metal Shading Language is cross-compiled from Vulkan.
+        const bool targetApiNeedsSpirv =
+                (targetApi == TargetApi::VULKAN || targetApi == TargetApi::METAL);
+        const bool targetApiNeedsMsl = targetApi == TargetApi::METAL;
+        std::vector<uint32_t>* pSpirv = targetApiNeedsSpirv ? &spirv : nullptr;
+        std::string* pMsl = targetApiNeedsMsl ? &msl : nullptr;
 
         GlslEntry glslEntry;
         SpirvEntry spirvEntry;
+        GlslEntry metalEntry;
 
         glslEntry.shaderModel = static_cast<uint8_t>(params.shaderModel);
         spirvEntry.shaderModel = static_cast<uint8_t>(params.shaderModel);
+        metalEntry.shaderModel = static_cast<uint8_t>(params.shaderModel);
 
         // apply custom variants filters
         uint8_t variantMask = ~mVariantFilter;
@@ -461,6 +477,7 @@ Package MaterialBuilder::build() noexcept {
 
             glslEntry.variant = k;
             spirvEntry.variant = k;
+            metalEntry.variant = k;
 
             // Remove variants for unlit materials
             uint8_t v = filament::Variant::filterVariant(k & variantMask, isLit() || mShadowMultiplier);
@@ -472,7 +489,7 @@ Package MaterialBuilder::build() noexcept {
                         mInterpolation, mVertexDomain);
                 if (mPostprocessorCallback != nullptr) {
                     bool ok = mPostprocessorCallback(vs, filament::driver::ShaderType::VERTEX,
-                            shaderModel, &vs, pSpirv);
+                            shaderModel, &vs, pSpirv, pMsl);
                     if (!ok) {
                         showErrorMessage(mMaterialName.c_str_safe(), k, targetApi,
                                 filament::driver::ShaderType::VERTEX, vs);
@@ -495,6 +512,18 @@ Package MaterialBuilder::build() noexcept {
                     spirv.clear();
                     spirvEntries.push_back(spirvEntry);
                 }
+                if (targetApi == TargetApi::METAL) {
+                    assert(spirv.size() > 0);
+                    assert(msl.length() > 0);
+                    metalEntry.stage = filament::driver::ShaderType::VERTEX;
+                    metalEntry.shaderSize = msl.length();
+                    metalEntry.shader = (char*)malloc(metalEntry.shaderSize + 1);
+                    strcpy(metalEntry.shader, msl.c_str());
+                    spirv.clear();
+                    msl.clear();
+                    metalDictionary.addText(metalEntry.shader);
+                    metalEntries.push_back(metalEntry);
+                }
             }
 
             if (filament::Variant::filterVariantFragment(v) == k) {
@@ -503,7 +532,7 @@ Package MaterialBuilder::build() noexcept {
                         shaderModel, targetApi, codeGenTargetApi, info, k, mInterpolation);
                 if (mPostprocessorCallback != nullptr) {
                     bool ok = mPostprocessorCallback(fs, filament::driver::ShaderType::FRAGMENT,
-                            shaderModel, &fs, pSpirv);
+                            shaderModel, &fs, pSpirv, pMsl);
                     if (!ok) {
                         showErrorMessage(mMaterialName.c_str_safe(), k, targetApi,
                                 filament::driver::ShaderType::FRAGMENT, fs);
@@ -526,6 +555,18 @@ Package MaterialBuilder::build() noexcept {
                     spirv.clear();
                     spirvEntries.push_back(spirvEntry);
                 }
+                if (targetApi == TargetApi::METAL) {
+                    assert(spirv.size() > 0);
+                    assert(msl.length() > 0);
+                    metalEntry.stage = filament::driver::ShaderType::FRAGMENT;
+                    metalEntry.shaderSize = msl.length();
+                    metalEntry.shader = (char*)malloc(metalEntry.shaderSize + 1);
+                    strcpy(metalEntry.shader, msl.c_str());
+                    spirv.clear();
+                    msl.clear();
+                    metalDictionary.addText(metalEntry.shader);
+                    metalEntries.push_back(metalEntry);
+                }
             }
         }
     }
@@ -546,6 +587,14 @@ Package MaterialBuilder::build() noexcept {
         container.addChild(&spirvChunk);
     }
 
+    // Emit Metal chunks (MetalDictionaryReader and MaterialMetalChunk).
+    filamat::DictionaryGlslChunk dicMetalChunk(metalDictionary, ChunkType::DictionaryMetal);
+    MaterialGlslChunk metalChunk(metalEntries, metalDictionary, ChunkType::MaterialMetal);
+    if (!metalEntries.empty()) {
+        container.addChild(&dicMetalChunk);
+        container.addChild(&metalChunk);
+    }
+
     // Flatten all chunks in the container into a Package.
     size_t packageSize = container.getSize();
     Package package(packageSize);
@@ -555,6 +604,9 @@ Package MaterialBuilder::build() noexcept {
 
     // Free all shaders that were created earlier.
     for (GlslEntry entry : glslEntries) {
+        free(entry.shader);
+    }
+    for (GlslEntry entry : metalEntries) {
         free(entry.shader);
     }
     return package;

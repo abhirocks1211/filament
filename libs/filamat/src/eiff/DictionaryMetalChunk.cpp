@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2017 The Android Open Source Project
+ * Copyright (C) 2018 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,28 +14,22 @@
  * limitations under the License.
  */
 
-#ifndef TNT_FILAMAT_DIC_GLSL_CHUNK_H
-#define TNT_FILAMAT_DIC_GLSL_CHUNK_H
-
-#include <stdint.h>
-#include <vector>
-
-#include "Chunk.h"
-#include "Flattener.h"
-#include "LineDictionary.h"
+#include "DictionaryMetalChunk.h"
 
 namespace filamat {
 
-class DictionaryGlslChunk : public Chunk {
-public:
-    DictionaryGlslChunk(LineDictionary& dictionary,
-            ChunkType chunkType = ChunkType::DictionaryGlsl);
-    ~DictionaryGlslChunk() = default;
-    virtual void flatten(Flattener& f);
-private:
-    LineDictionary& mDictionary;
-};
+DictionaryMetalChunk::DictionaryMetalChunk(LineDictionary& dictionary) :
+        Chunk(ChunkType::DictionaryMetal), mDictionary(dictionary){
+}
 
-} // namespace filamat
+void DictionaryMetalChunk::flatten(Flattener& f) {
+    // NumStrings
+    f.writeUint32(mDictionary.getLineCount());
 
-#endif // TNT_FILAMAT_DIC_GLSL_CHUNK_H
+    // Strings
+    for (size_t i = 0 ; i < mDictionary.getLineCount() ; i++) {
+        f.writeString(mDictionary.getString(i).c_str());
+    }
+}
+
+} // namespace filaflat

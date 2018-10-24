@@ -1,6 +1,6 @@
 /*
- * Copyright (C) 2017 The Android Open Source Project
- *
+ * Copyright (C) 2018 The Android Open Source Project
+ *DictionaryGlsl
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -14,22 +14,15 @@
  * limitations under the License.
  */
 
-#include "DictionaryGlslChunk.h"
+#include "MaterialMetalChunk.h"
 
 namespace filamat {
 
-DictionaryGlslChunk::DictionaryGlslChunk(LineDictionary& dictionary, ChunkType chunkType) :
-        Chunk(chunkType), mDictionary(dictionary) {
+MaterialMetalChunk::MaterialMetalChunk() :
+        Chunk(ChunkType::MaterialMetal) {}
+
+void MaterialMetalChunk::flatten(Flattener &f) {
+    f.writeString("Hello, world!");
 }
 
-void DictionaryGlslChunk::flatten(Flattener& f) {
-    // NumStrings
-    f.writeUint32(mDictionary.getLineCount());
-
-    // Strings
-    for (size_t i = 0 ; i < mDictionary.getLineCount() ; i++) {
-        f.writeString(mDictionary.getString(i).c_str());
-    }
-}
-
-} // namespace filaflat
+}  // namespace filamat

@@ -49,6 +49,7 @@ void LineDictionary::addText(const char* s) noexcept {
     while (s[cur] != '\0') {
         pos = cur;
         len = 0;
+        // Bug here if the shader does not contain a newline.
         while (s[cur] != '\n') {
             cur++;
             len++;

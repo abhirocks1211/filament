@@ -32,7 +32,8 @@ struct TextDictionaryReader {
     bool unflatten(Unflattener& unflattener, BlobDictionary& dictionary);
 
     static bool unflatten(ChunkContainer const& container, BlobDictionary& blobDictionary) {
-        Unflattener dictionaryUnflattener(container, filamat::ChunkType::DictionaryGlsl);
+        // Unflattener dictionaryUnflattener(container, filamat::ChunkType::DictionaryGlsl);
+        Unflattener dictionaryUnflattener(container, filamat::ChunkType::DictionaryMetal);
         TextDictionaryReader dictionary;
         return dictionary.unflatten(dictionaryUnflattener, blobDictionary);
     }

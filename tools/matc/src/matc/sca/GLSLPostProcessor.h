@@ -30,19 +30,20 @@
 
 namespace matc {
 
+using SpirvBlob = std::vector<uint32_t>;
+
 class GLSLPostProcessor {
 public:
     GLSLPostProcessor(const Config& config);
 
     ~GLSLPostProcessor();
 
-    using SpirvBlob = std::vector<uint32_t>;
-
     bool process(const std::string& inputShader, filament::driver::ShaderType shaderType,
             filament::driver::ShaderModel shaderModel, std::string* outputGlsl,
-            SpirvBlob* outputSpirv);
+            SpirvBlob* outputSpirv, std::string* outputMsl);
 
 private:
+
     void fullOptimization(const glslang::TShader& tShader,
             const filament::driver::ShaderModel shaderModel) const;
     void preprocessOptimization(glslang::TShader& tShader,
@@ -54,6 +55,7 @@ private:
     const Config& mConfig;
     std::string* mGlslOutput = nullptr;
     SpirvBlob* mSpirvOutput = nullptr;
+    std::string* mMslOutput = nullptr;
     EShLanguage mShLang = EShLangFragment;
     int mLangVersion = 0;
 };

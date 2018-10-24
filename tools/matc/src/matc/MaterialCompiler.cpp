@@ -301,7 +301,7 @@ bool MaterialCompiler::run(const Config& config) {
     // Install postprocessor (to optimize/strip GLSL).
     GLSLPostProcessor postProcessor(config);
 
-    builder.postProcessor(std::bind(&GLSLPostProcessor::process, postProcessor, _1, _2, _3, _4, _5));
+    builder.postProcessor(std::bind(&GLSLPostProcessor::process, postProcessor, _1, _2, _3, _4, _5, _6));
 
     // Write builder.build() to output.
     Package package = builder.build();

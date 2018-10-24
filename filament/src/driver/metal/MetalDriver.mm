@@ -24,6 +24,8 @@
 #include <utils/Log.h>
 #include <utils/Panic.h>
 
+#include <unordered_map>
+
 #include <fstream>
 
 namespace filament {
@@ -34,12 +36,13 @@ struct MetalDriverImpl {
 
     // Single use, re-created each frame.
     id<MTLCommandBuffer> mCurrentCommandBuffer;
-    id<MTLRenderCommandEncoder> mCurrentCommandEncoder;
+    id<MTLRenderCommandEncoder> mCurrentCommandEncoder = nullptr;
 
     id<CAMetalDrawable> mCurrentDrawable = nullptr;
 
-    id<MTLLibrary> mLibrary;
     id<MTLRenderPipelineState> mPipelineState;
+
+    std::unordered_map<size_t, Driver::UniformBufferHandle> mBoundUniforms;
 };
 
 // A hack, for now. Put all vertex data into buffer 10 so that it does not conflict with uniform
@@ -116,55 +119,54 @@ MetalDriver::MetalDriver(driver::MetalPlatform* platform) noexcept
     pImpl->mDevice = MTLCreateSystemDefaultDevice();
     pImpl->mCommandQueue = [pImpl->mDevice newCommandQueue];
 
-    // todo: handle shader programs correctly
-    NSString* source = @"#include <metal_stdlib>\n"
-                        "using namespace metal;"
-                        ""
-                        "typedef struct {"
-                        "    float2 position [[attribute(0)]];"
-                        "    int32_t color [[attribute(1)]];"
-                        "} FVertex;"
-                        ""
-                        "vertex float4 basic_vertex("
-                        "    FVertex in [[stage_in]]"
-                        ") {"
-                        "    return float4(in.position, 0.0, 1.0);"
-                        "}"
-                        ""
-                        "fragment float4 basic_fragment() {"
-                        "    return float4(1.0, 0, 1.0, 1.0);"
-                        "}";
-
-
-    NSError* error = nullptr;
-    pImpl->mLibrary = [pImpl->mDevice newLibraryWithSource:source options:nil error:&error];
-    if (error) {
-        utils::slog.w << [error.userInfo[@"NSLocalizedDescription"] cString]<< utils::io::endl;
+    id<MTLLibrary> vertexLibrary;
+    id<MTLLibrary> fragmentLibrary;
+    {
+        NSError* error = nullptr;
+        NSString* content = [NSString stringWithContentsOfFile:@"/Users/bendoherty/code/filament-gh/shaderoutput/bakedColor.vert.metal"];
+        vertexLibrary = [pImpl->mDevice newLibraryWithSource:content
+                                                     options:nil
+                                                       error:&error];
+        if (error) {
+            utils::slog.w << [error.userInfo[@"NSLocalizedDescription"] cStringUsingEncoding:NSUTF8StringEncoding] << utils::io::endl;
+        }
+        assert(error == nullptr);
     }
-    assert(error == nullptr);
+    {
+        NSError *error = nullptr;
+        NSString* content = [NSString stringWithContentsOfFile:@"/Users/bendoherty/code/filament-gh/shaderoutput/bakedColor.frag.metal"];
+        fragmentLibrary = [pImpl->mDevice newLibraryWithSource:content
+                                                       options:nil
+                                                         error:&error];
+        if (error) {
+            utils::slog.w << [error.userInfo[@"NSLocalizedDescription"] cStringUsingEncoding:NSUTF8StringEncoding] << utils::io::endl;
+        }
+        assert(error == nullptr);
+    }
 
     MTLRenderPipelineDescriptor* pipeline = [[MTLRenderPipelineDescriptor alloc] init];
     pipeline.label = @"Simple pipeline";
 
     // Vertex program
-    pipeline.vertexFunction = [pImpl->mLibrary newFunctionWithName:@"basic_vertex"];
+    pipeline.vertexFunction = [vertexLibrary newFunctionWithName:@"main0"];
     MTLVertexDescriptor* vertex = [MTLVertexDescriptor vertexDescriptor];
     vertex.attributes[0].format = MTLVertexFormatFloat2;
     vertex.attributes[0].bufferIndex = VERTEX_BUFFER_BINDING;
     vertex.attributes[0].offset = 0;
 
-    vertex.attributes[1].format = MTLVertexFormatChar4Normalized;
-    vertex.attributes[1].bufferIndex = VERTEX_BUFFER_BINDING;
-    vertex.attributes[1].offset = sizeof(float) * 2;
+    vertex.attributes[2].format = MTLVertexFormatUChar4Normalized;
+    vertex.attributes[2].bufferIndex = VERTEX_BUFFER_BINDING;
+    vertex.attributes[2].offset = sizeof(float) * 2;
 
     vertex.layouts[VERTEX_BUFFER_BINDING].stride = sizeof(float) * 2 + sizeof(int32_t);
     vertex.layouts[VERTEX_BUFFER_BINDING].stepFunction = MTLVertexStepFunctionPerVertex;
 
     pipeline.vertexDescriptor = vertex;
 
-    pipeline.fragmentFunction = [pImpl->mLibrary newFunctionWithName:@"basic_fragment"];
+    pipeline.fragmentFunction = [fragmentLibrary newFunctionWithName:@"main0"];
     pipeline.colorAttachments[0].pixelFormat = MTLPixelFormatBGRA8Unorm;
 
+    NSError* error = nullptr;
     pImpl->mPipelineState = [pImpl->mDevice newRenderPipelineStateWithDescriptor:pipeline
                                                                            error:&error];
     assert(error == nullptr);
@@ -463,7 +465,6 @@ void MetalDriver::updateSamplerBuffer(Driver::SamplerBufferHandle ubh,
 
 }
 
-
 void MetalDriver::beginRenderPass(Driver::RenderTargetHandle rth,
         const Driver::RenderPassParams& params) {
     ASSERT_PRECONDITION(pImpl->mCurrentDrawable != nullptr, "mCurrentDrawable is null.");
@@ -480,6 +481,9 @@ void MetalDriver::beginRenderPass(Driver::RenderTargetHandle rth,
 
 void MetalDriver::endRenderPass(int dummy) {
     [pImpl->mCurrentCommandEncoder endEncoding];
+
+    // Command encoders are one time use. Set it to nullptr so we don't accidentally use it again..
+    pImpl->mCurrentCommandEncoder = nullptr;
 }
 
 void MetalDriver::discardSubRenderTargetBuffers(Driver::RenderTargetHandle rth,
@@ -536,6 +540,7 @@ void MetalDriver::bindUniformBuffer(size_t index, Driver::UniformBufferHandle ub
     utils::slog.d << "bindUniformBuffer(" << utils::io::endl
                   << "    index  = " << index << utils::io::endl
                   << ");" << utils::io::endl;
+    pImpl->mBoundUniforms[index] = ubh;
 }
 
 void MetalDriver::bindUniformBufferRange(size_t index, Driver::UniformBufferHandle ubh,
@@ -545,6 +550,7 @@ void MetalDriver::bindUniformBufferRange(size_t index, Driver::UniformBufferHand
                   << "    offset = " << offset << utils::io::endl
                   << "    size   = " << size << utils::io::endl
                   << ");" << utils::io::endl;
+    pImpl->mBoundUniforms[index] = ubh;
 }
 
 void MetalDriver::bindSamplers(size_t index, Driver::SamplerBufferHandle sbh) {
@@ -582,11 +588,33 @@ void MetalDriver::blit(Driver::TargetBufferFlags buffers, Driver::RenderTargetHa
 
 void MetalDriver::draw(Driver::ProgramHandle ph, Driver::RasterState rs,
         Driver::RenderPrimitiveHandle rph) {
+    ASSERT_PRECONDITION(pImpl->mCurrentCommandEncoder != nullptr,
+            "Attempted to draw without a valid command encoder.");
     auto primitive = handle_cast<MetalRenderPrimitive>(mHandleMap, rph);
     [pImpl->mCurrentCommandEncoder setRenderPipelineState:pImpl->mPipelineState];
+
+    // Bind all the uniform buffers.
+    for (const auto& entry : pImpl->mBoundUniforms) {
+        const auto bufferIndex = entry.first;
+        const auto ubh = entry.second;
+        auto* buffer = handle_const_cast<MetalUniformBuffer>(mHandleMap, ubh);
+
+        // We have no way of knowing which uniform buffers will be used by which shader stage so for
+        // now, bind the uniform buffer to both the vertex and fragment stages.
+        [pImpl->mCurrentCommandEncoder setVertexBuffer:buffer->buffer
+                                                offset:0
+                                               atIndex:bufferIndex];
+
+        [pImpl->mCurrentCommandEncoder setFragmentBuffer:buffer->buffer
+                                                  offset:0
+                                                 atIndex:bufferIndex];
+    }
+
+    // Bind the vertex buffer.
     [pImpl->mCurrentCommandEncoder setVertexBuffer:primitive->vertexBuffer->buffer
                                             offset:0
                                            atIndex:VERTEX_BUFFER_BINDING];
+
     [pImpl->mCurrentCommandEncoder drawIndexedPrimitives:MTLPrimitiveTypeTriangle
                                               indexCount:3
                                                indexType:MTLIndexTypeUInt16

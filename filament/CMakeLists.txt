@@ -49,6 +49,7 @@ set(SRCS
         src/driver/opengl/OpenGLDriver.cpp
         src/driver/opengl/OpenGLProgram.cpp
         src/driver/metal/MetalDriver.mm
+        src/driver/metal/MetalBinder.cpp
         src/driver/CommandStream.cpp
         src/driver/CommandBufferQueue.cpp
         src/driver/CircularBuffer.cpp

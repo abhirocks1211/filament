@@ -24,6 +24,7 @@
 #include <utils/Log.h>
 
 namespace filament {
+namespace driver {
 
 struct MetalDriverImpl;
 
@@ -51,7 +52,7 @@ private:
      */
 
     template<typename T>
-    friend class ConcreteDispatcher;
+    friend class ::filament::ConcreteDispatcher;
 
 #define DECL_DRIVER_API(methodName, paramsDecl, params) \
     UTILS_ALWAYS_INLINE void methodName(paramsDecl);
@@ -124,6 +125,7 @@ private:
 
     };
 
+} // namespace driver
 } // namespace filament
 
 #endif // TNT_FILAMENT_DRIVER_METALDRIVER_H

@@ -17,6 +17,8 @@
 #include "driver/metal/MetalDriver.h"
 #include "driver/CommandStream.h"
 
+#include "MetalBinder.h"
+
 #include <AppKit/AppKit.h>
 #include <Metal/Metal.h>
 #include <QuartzCore/QuartzCore.h>
@@ -26,9 +28,8 @@
 
 #include <unordered_map>
 
-#include <fstream>
-
 namespace filament {
+namespace driver {
 
 struct MetalDriverImpl {
     id<MTLDevice> mDevice;
@@ -43,6 +44,8 @@ struct MetalDriverImpl {
     id<MTLRenderPipelineState> mPipelineState;
 
     std::unordered_map<size_t, Driver::UniformBufferHandle> mBoundUniforms;
+
+    MetalBinder mBinder;
 };
 
 // A hack, for now. Put all vertex data into buffer 10 so that it does not conflict with uniform
@@ -137,7 +140,7 @@ struct MetalProgram : public HwProgram {
 
 //
 
-Driver* MetalDriver::create(driver::MetalPlatform* const platform) {
+Driver* MetalDriver::create(MetalPlatform* const platform) {
     assert(platform);
     return new MetalDriver(platform);
 }
@@ -625,7 +628,9 @@ void MetalDriver::draw(Driver::ProgramHandle ph, Driver::RasterState rs,
                                        indexBufferOffset:0];
 }
 
+} // namespace driver
+
 // explicit instantiation of the Dispatcher
-template class ConcreteDispatcher<MetalDriver>;
+template class ConcreteDispatcher<driver::MetalDriver>;
 
 } // namespace filament

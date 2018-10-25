@@ -41,8 +41,6 @@ struct MetalDriverImpl {
 
     id<CAMetalDrawable> mCurrentDrawable = nullptr;
 
-    id<MTLRenderPipelineState> mPipelineState;
-
     std::unordered_map<size_t, Driver::UniformBufferHandle> mBoundUniforms;
 
     MetalBinder mBinder;
@@ -152,58 +150,7 @@ MetalDriver::MetalDriver(driver::MetalPlatform* platform) noexcept
 
     pImpl->mDevice = MTLCreateSystemDefaultDevice();
     pImpl->mCommandQueue = [pImpl->mDevice newCommandQueue];
-
-    id<MTLLibrary> vertexLibrary;
-    id<MTLLibrary> fragmentLibrary;
-    {
-        NSError* error = nullptr;
-        NSString* content = [NSString stringWithContentsOfFile:@"/Users/bendoherty/code/filament-gh/shaderoutput/bakedColor.vert.metal"];
-        vertexLibrary = [pImpl->mDevice newLibraryWithSource:content
-                                                     options:nil
-                                                       error:&error];
-        if (error) {
-            utils::slog.w << [error.userInfo[@"NSLocalizedDescription"] cStringUsingEncoding:NSUTF8StringEncoding] << utils::io::endl;
-        }
-        assert(error == nullptr);
-    }
-    {
-        NSError *error = nullptr;
-        NSString* content = [NSString stringWithContentsOfFile:@"/Users/bendoherty/code/filament-gh/shaderoutput/bakedColor.frag.metal"];
-        fragmentLibrary = [pImpl->mDevice newLibraryWithSource:content
-                                                       options:nil
-                                                         error:&error];
-        if (error) {
-            utils::slog.w << [error.userInfo[@"NSLocalizedDescription"] cStringUsingEncoding:NSUTF8StringEncoding] << utils::io::endl;
-        }
-        assert(error == nullptr);
-    }
-
-    MTLRenderPipelineDescriptor* pipeline = [[MTLRenderPipelineDescriptor alloc] init];
-    pipeline.label = @"Simple pipeline";
-
-    // Vertex program
-    pipeline.vertexFunction = [vertexLibrary newFunctionWithName:@"main0"];
-    MTLVertexDescriptor* vertex = [MTLVertexDescriptor vertexDescriptor];
-    vertex.attributes[0].format = MTLVertexFormatFloat2;
-    vertex.attributes[0].bufferIndex = VERTEX_BUFFER_BINDING;
-    vertex.attributes[0].offset = 0;
-
-    vertex.attributes[2].format = MTLVertexFormatUChar4Normalized;
-    vertex.attributes[2].bufferIndex = VERTEX_BUFFER_BINDING;
-    vertex.attributes[2].offset = sizeof(float) * 2;
-
-    vertex.layouts[VERTEX_BUFFER_BINDING].stride = sizeof(float) * 2 + sizeof(int32_t);
-    vertex.layouts[VERTEX_BUFFER_BINDING].stepFunction = MTLVertexStepFunctionPerVertex;
-
-    pipeline.vertexDescriptor = vertex;
-
-    pipeline.fragmentFunction = [fragmentLibrary newFunctionWithName:@"main0"];
-    pipeline.colorAttachments[0].pixelFormat = MTLPixelFormatBGRA8Unorm;
-
-    NSError* error = nullptr;
-    pImpl->mPipelineState = [pImpl->mDevice newRenderPipelineStateWithDescriptor:pipeline
-                                                                           error:&error];
-    assert(error == nullptr);
+    pImpl->mBinder.setDevice(pImpl->mDevice);
 }
 
 MetalDriver::~MetalDriver() noexcept {
@@ -597,7 +544,15 @@ void MetalDriver::draw(Driver::ProgramHandle ph, Driver::RasterState rs,
     ASSERT_PRECONDITION(pImpl->mCurrentCommandEncoder != nullptr,
             "Attempted to draw without a valid command encoder.");
     auto primitive = handle_cast<MetalRenderPrimitive>(mHandleMap, rph);
-    [pImpl->mCurrentCommandEncoder setRenderPipelineState:pImpl->mPipelineState];
+    auto program = handle_cast<MetalProgram>(mHandleMap, ph);
+
+    pImpl->mBinder.setShaderFunctions(program->vertexFunction, program->fragmentFunction);
+
+    // Bind a valid pipeline state for this draw call.
+    id<MTLRenderPipelineState> pipeline = nullptr;
+    pImpl->mBinder.getOrCreatePipelineState(pipeline);
+    assert(pipeline != nullptr);
+    [pImpl->mCurrentCommandEncoder setRenderPipelineState:pipeline];
 
     // Bind all the uniform buffers.
     for (const auto& entry : pImpl->mBoundUniforms) {

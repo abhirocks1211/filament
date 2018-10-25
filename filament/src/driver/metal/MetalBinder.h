@@ -17,10 +17,32 @@
 #ifndef TNT_METALBINDER_H
 #define TNT_METALBINDER_H
 
+#include <Metal/Metal.h>
+
+#include <memory>
+
 namespace filament {
 namespace driver {
 
+struct MetalBinderImpl;
+
 class MetalBinder {
+
+public:
+    MetalBinder();
+    ~MetalBinder();
+
+    void setDevice(id<MTLDevice> device);
+
+    // Pipeline State
+
+    void setShaderFunctions(id<MTLFunction> vertexFunction,
+            id<MTLFunction> fragmentFunction) noexcept;
+    void getOrCreatePipelineState(id<MTLRenderPipelineState>& pipelineState) noexcept;
+
+private:
+
+    std::unique_ptr<MetalBinderImpl> pImpl;
 
 };
 

@@ -104,6 +104,37 @@ struct MetalRenderPrimitive : public HwRenderPrimitive {
     MetalIndexBuffer* indexBuffer = nullptr;
 };
 
+struct MetalProgram : public HwProgram {
+    explicit MetalProgram(id<MTLDevice> device, const Program& program) noexcept
+            : HwProgram(program.getName()) {
+        using MetalFunctionPtr = id<MTLFunction>*;
+
+        MetalFunctionPtr shaderFunctions[2] = { &vertexFunction, &fragmentFunction };
+
+        const auto& sources = program.getShadersSource();
+        for (size_t i = 0; i < Program::NUM_SHADER_TYPES; i++) {
+            const auto& source = sources[i];
+            NSString* objcSource = [NSString stringWithCString:source.c_str()
+                                                     encoding:NSUTF8StringEncoding];
+            NSError* error = nil;
+            id<MTLLibrary> library = [device newLibraryWithSource:objcSource
+                                                          options:nil
+                                                            error:&error];
+            if (error) {
+                auto description =
+                        [error.localizedDescription cStringUsingEncoding:NSUTF8StringEncoding];
+                utils::slog.w << description << utils::io::endl;
+            }
+            ASSERT_POSTCONDITION(library != nil, "Unable to compile Metal shading library.");
+
+            *shaderFunctions[i] = [library newFunctionWithName:@"main0"];
+        }
+    }
+
+    id<MTLFunction> vertexFunction;
+    id<MTLFunction> fragmentFunction;
+};
+
 //
 
 Driver* MetalDriver::create(driver::MetalPlatform* const platform) {
@@ -229,36 +260,8 @@ void MetalDriver::createRenderPrimitive(Driver::RenderPrimitiveHandle rph, int d
     construct_handle<MetalRenderPrimitive>(mHandleMap, rph);
 }
 
-void MetalDriver::createProgram(Driver::ProgramHandle, Program&& program) {
-    const auto& shadersSource = program.getShadersSource();
-
-    using Shader = Program::Shader;
-
-    for (size_t i = 0; i < Program::NUM_SHADER_TYPES; i++) {
-        const char* shaderType;
-        Shader type = (Shader)i;
-        switch (type) {
-            case Shader::VERTEX:
-                shaderType = "vertex";
-                break;
-            case Shader::FRAGMENT:
-                shaderType = "fragment";
-                break;
-        }
-
-        if (shadersSource[i].length()) {
-            char outputName[1000];
-            sprintf(outputName, "/Users/bendoherty/code/filament-gh/shaderoutput/%s_%s.txt",
-                    program.getName().c_str(), shaderType);
-
-            std::ofstream file;
-            file.open(outputName, std::ios_base::binary);
-            assert(file.is_open());
-
-            file.write(shadersSource[i].c_str(), shadersSource[i].size());
-            file.close();
-        }
-    }
+void MetalDriver::createProgram(Driver::ProgramHandle rph, Program&& program) {
+    construct_handle<MetalProgram>(mHandleMap, rph, pImpl->mDevice, program);
 }
 
 void MetalDriver::createDefaultRenderTarget(Driver::RenderTargetHandle, int dummy) {
@@ -316,7 +319,7 @@ Driver::RenderPrimitiveHandle MetalDriver::createRenderPrimitiveSynchronous() no
 }
 
 Driver::ProgramHandle MetalDriver::createProgramSynchronous() noexcept {
-    return Driver::ProgramHandle((Driver::ProgramHandle::HandleId)0xDEAD0000);
+    return alloc_handle<MetalProgram, HwProgram>();
 }
 
 Driver::RenderTargetHandle MetalDriver::createDefaultRenderTargetSynchronous() noexcept {

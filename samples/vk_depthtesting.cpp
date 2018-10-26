@@ -62,7 +62,7 @@ static constexpr uint8_t BAKED_COLOR_PACKAGE[] = {
 int main(int argc, char** argv) {
     Config config;
     config.title = "depthtesting";
-    config.backend = Engine::Backend::VULKAN;
+    config.backend = Engine::Backend::METAL;
 
     App app;
     auto setup = [&app](Engine* engine, View* view, Scene* scene) {

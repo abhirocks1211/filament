@@ -25,6 +25,7 @@
 
 #include <utils/Log.h>
 #include <utils/Panic.h>
+#include <utils/trap.h>
 
 #include <unordered_map>
 
@@ -160,6 +161,7 @@ struct MetalUniformBuffer : public HwUniformBuffer {
                                       options:MTLResourceStorageModeShared];
     }
 
+    size_t offset = 0;
     id<MTLBuffer> buffer;
 };
 
@@ -567,6 +569,10 @@ void MetalDriver::makeCurrent(Driver::SwapChainHandle schDraw, Driver::SwapChain
                                   "Metal driver does not support distinct draw/read swap chains.");
     auto* swapChain = handle_cast<MetalSwapChain>(mHandleMap, schDraw);
     pImpl->mCurrentDrawable = [swapChain->layer nextDrawable];
+    if (pImpl->mCurrentDrawable == nil) {
+        utils::slog.e << "Could not obtain drawable." << utils::io::endl;
+        utils::debug_trap();
+    }
 }
 
 void MetalDriver::commit(Driver::SwapChainHandle sch) {
@@ -592,6 +598,9 @@ void MetalDriver::bindUniformBufferRange(size_t index, Driver::UniformBufferHand
                   << "    offset = " << offset << utils::io::endl
                   << "    size   = " << size << utils::io::endl
                   << ");" << utils::io::endl;
+    auto* uniformBuffer = handle_cast<MetalUniformBuffer>(mHandleMap, ubh);
+    uniformBuffer->offset = offset;
+    uniformBuffer->size = size;
     pImpl->mBoundUniforms[index] = ubh;
 }
 
@@ -653,11 +662,11 @@ void MetalDriver::draw(Driver::ProgramHandle ph, Driver::RasterState rs,
         // We have no way of knowing which uniform buffers will be used by which shader stage so for
         // now, bind the uniform buffer to both the vertex and fragment stages.
         [pImpl->mCurrentCommandEncoder setVertexBuffer:buffer->buffer
-                                                offset:0
+                                                offset:buffer->offset
                                                atIndex:bufferIndex];
 
         [pImpl->mCurrentCommandEncoder setFragmentBuffer:buffer->buffer
-                                                  offset:0
+                                                  offset:buffer->offset
                                                  atIndex:bufferIndex];
     }
 

@@ -41,6 +41,8 @@ struct MetalDriverImpl {
     id<MTLRenderCommandEncoder> mCurrentCommandEncoder = nullptr;
 
     id<CAMetalDrawable> mCurrentDrawable = nullptr;
+    id<MTLTexture> mDepthTexture = nullptr;
+    id<MTLDepthStencilState> mDepthStencilState = nullptr;
 
     std::unordered_map<size_t, Driver::UniformBufferHandle> mBoundUniforms;
 
@@ -241,6 +243,23 @@ MetalDriver::MetalDriver(driver::MetalPlatform* platform) noexcept
     pImpl->mDevice = MTLCreateSystemDefaultDevice();
     pImpl->mCommandQueue = [pImpl->mDevice newCommandQueue];
     pImpl->mBinder.setDevice(pImpl->mDevice);
+
+    // Create a depth texture and depthStencilState.
+    // todo: This should not be done globally and instead done per render target.
+    MTLTextureDescriptor* depthTextureDesc =
+            [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatDepth32Float
+                                                               width:1024
+                                                              height:640
+                                                           mipmapped:NO];
+    depthTextureDesc.usage = MTLTextureUsageRenderTarget;
+    depthTextureDesc.resourceOptions = MTLResourceStorageModePrivate;
+    pImpl->mDepthTexture = [pImpl->mDevice newTextureWithDescriptor:depthTextureDesc];
+
+    MTLDepthStencilDescriptor* depthStencilDescriptor = [MTLDepthStencilDescriptor new];
+    depthStencilDescriptor.depthCompareFunction = MTLCompareFunctionLessEqual;
+    depthStencilDescriptor.depthWriteEnabled = YES;
+    pImpl->mDepthStencilState =
+            [pImpl->mDevice newDepthStencilStateWithDescriptor:depthStencilDescriptor];
 }
 
 MetalDriver::~MetalDriver() noexcept {
@@ -518,6 +537,9 @@ void MetalDriver::beginRenderPass(Driver::RenderTargetHandle rth,
             params.clearColor.r, params.clearColor.g, params.clearColor.b, params.clearColor.a
     );
 
+    descriptor.depthAttachment.texture = pImpl->mDepthTexture;
+    descriptor.depthAttachment.clearDepth = params.clearDepth;
+
     pImpl->mCurrentCommandEncoder =
             [pImpl->mCurrentCommandBuffer renderCommandEncoderWithDescriptor:descriptor];
 }
@@ -648,10 +670,13 @@ void MetalDriver::draw(Driver::ProgramHandle ph, Driver::RasterState rs,
     pImpl->mBinder.setVertexDescription(primitive->vertexDescription);
 
     // Bind a valid pipeline state for this draw call.
+    // todo: check if the pipeline state needs to be rebound
     id<MTLRenderPipelineState> pipeline = nullptr;
     pImpl->mBinder.getOrCreatePipelineState(pipeline);
     assert(pipeline != nullptr);
     [pImpl->mCurrentCommandEncoder setRenderPipelineState:pipeline];
+
+    [pImpl->mCurrentCommandEncoder setDepthStencilState:pImpl->mDepthStencilState];
 
     // Bind all the uniform buffers.
     for (const auto& entry : pImpl->mBoundUniforms) {

@@ -144,6 +144,7 @@ void MetalBinder::getOrCreatePipelineState(
 
     // Attachments
     descriptor.colorAttachments[0].pixelFormat = MTLPixelFormatBGRA8Unorm;
+    descriptor.depthAttachmentPixelFormat = MTLPixelFormatDepth32Float;
 
     NSError* error = nullptr;
     id<MTLRenderPipelineState> pipeline =

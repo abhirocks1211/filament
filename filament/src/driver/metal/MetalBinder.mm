@@ -218,5 +218,13 @@ bool MetalBinder::getOrCreateDepthStencilState(id<MTLDepthStencilState>& depthSt
     return true;
 }
 
+id<MTLDepthStencilState> createDepthStencilState(id<MTLDevice> device,
+        const MetalBinder::DepthStencilState& state) {
+    MTLDepthStencilDescriptor* depthStencilDescriptor = [MTLDepthStencilDescriptor new];
+    depthStencilDescriptor.depthCompareFunction = state.compareFunction;
+    depthStencilDescriptor.depthWriteEnabled = state.depthWriteEnabled;
+    return [device newDepthStencilStateWithDescriptor:depthStencilDescriptor];
+}
+
 } // namespace driver
 } // namespace filament

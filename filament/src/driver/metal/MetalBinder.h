@@ -22,6 +22,8 @@
 #include <filament/EngineEnums.h>
 
 #include <memory>
+#include <tsl/robin_map.h>
+#include <utils/Hash.h>
 
 namespace filament {
 namespace driver {
@@ -106,6 +108,79 @@ private:
     std::unique_ptr<MetalBinderImpl> pImpl;
 
 };
+
+template<typename S, typename M>
+class StateBinder {
+
+public:
+
+    using StateCreationFn = std::function<M(id<MTLDevice>, const S&)>;
+
+    void setDevice(id<MTLDevice> device) { mDevice = device; }
+    void setCreationFunction(StateCreationFn creationFn) { mCreationFn = creationFn; }
+
+    void soil() noexcept { mStateDirty = true; }
+    void bindState(const S& newState) noexcept;
+    bool getOrCreateState(M& state) noexcept;
+
+private:
+
+    id<MTLDevice> mDevice = nil;
+
+    StateCreationFn mCreationFn;
+
+    S mStateKey = {};
+    bool mStateDirty = true;
+
+    using HashFn = utils::hash::MurmurHashFn<S>;
+    tsl::robin_map<S, M, HashFn> mStateCache;
+
+};
+
+template<typename S, typename M>
+void StateBinder<S, M>::bindState(const S& newState) noexcept {
+    if (mStateKey != newState) {
+        mStateKey = newState;
+        mStateDirty = true;
+    }
+}
+
+template<typename S, typename M>
+bool StateBinder<S, M>::getOrCreateState(M& state) noexcept {
+    if (!mStateDirty) {
+        // The state has not changed, no re-binding is necessary.
+        return false;
+    }
+
+    // The state is dirty. Check if a valid state already exists in the cache.
+    auto iter = mStateCache.find(mStateKey);
+    if (UTILS_LIKELY(iter != mStateCache.end())) {
+        auto foundState = iter.value();
+        state = foundState;
+        mStateDirty = false;
+        return true;
+    }
+
+    // If we reach this point, the state is dirty and we couldn't find one in the cache; create a
+    // new one.
+    const auto& newState = mCreationFn(mDevice, mStateKey);
+
+    mStateCache.emplace(std::make_pair(
+        mStateKey,
+        newState
+    ));
+
+    state = newState;
+    mStateDirty = false;
+
+    return true;
+}
+
+id<MTLDepthStencilState> createDepthStencilState(id<MTLDevice> device,
+        const MetalBinder::DepthStencilState& state);
+
+using DepthStencilStateBinder =
+        StateBinder<MetalBinder::DepthStencilState, id<MTLDepthStencilState>>;
 
 } // namespace driver
 } // namespace filament

@@ -46,6 +46,7 @@ struct MetalDriverImpl {
     std::unordered_map<size_t, Driver::UniformBufferHandle> mBoundUniforms;
 
     MetalBinder mBinder;
+    DepthStencilStateBinder mDepthStencilBinder;
 };
 
 // A hack, for now. Put all vertex data into buffer 10 so that it does not conflict with uniform
@@ -256,6 +257,8 @@ MetalDriver::MetalDriver(driver::MetalPlatform* platform) noexcept
     pImpl->mDevice = MTLCreateSystemDefaultDevice();
     pImpl->mCommandQueue = [pImpl->mDevice newCommandQueue];
     pImpl->mBinder.setDevice(pImpl->mDevice);
+    pImpl->mDepthStencilBinder.setDevice(pImpl->mDevice);
+    pImpl->mDepthStencilBinder.setCreationFunction(createDepthStencilState);
 
     // Create a depth texture and depthStencilState.
     // todo: This should not be done globally and instead done per render target.
@@ -554,7 +557,7 @@ void MetalDriver::beginRenderPass(Driver::RenderTargetHandle rth,
     // We must bind the depth-stencil state for each command encoder, so we dirty the state here
     // to force a rebinding during the draw call. Subsequent draw calls for this frame (with
     // identical depth states) will be able to re-use the state.
-    pImpl->mBinder.makeDepthStencilStateDirty();
+    pImpl->mDepthStencilBinder.soil();
 }
 
 void MetalDriver::endRenderPass(int dummy) {
@@ -679,7 +682,7 @@ void MetalDriver::draw(Driver::ProgramHandle ph, Driver::RasterState rs,
     auto primitive = handle_cast<MetalRenderPrimitive>(mHandleMap, rph);
     auto program = handle_cast<MetalProgram>(mHandleMap, ph);
 
-    pImpl->mBinder.bindDepthStencilState(MetalBinder::DepthStencilState {
+    pImpl->mDepthStencilBinder.bindState(MetalBinder::DepthStencilState {
         .compareFunction = getMetalCompareFunction(rs.depthFunc),
         .depthWriteEnabled = rs.depthWrite,
     });
@@ -694,7 +697,7 @@ void MetalDriver::draw(Driver::ProgramHandle ph, Driver::RasterState rs,
     [pImpl->mCurrentCommandEncoder setRenderPipelineState:pipeline];
 
     id<MTLDepthStencilState> depthStencilState = nil;
-    if (pImpl->mBinder.getOrCreateDepthStencilState(depthStencilState)) {
+    if (pImpl->mDepthStencilBinder.getOrCreateState(depthStencilState)) {
         assert(depthStencilState != nil);
         [pImpl->mCurrentCommandEncoder setDepthStencilState:depthStencilState];
     }

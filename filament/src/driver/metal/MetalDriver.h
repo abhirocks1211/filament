@@ -123,7 +123,7 @@ private:
         handleMap.erase(handle.getId());
     }
 
-    };
+};
 
 } // namespace driver
 } // namespace filament

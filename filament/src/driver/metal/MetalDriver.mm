@@ -42,7 +42,6 @@ struct MetalDriverImpl {
 
     id<CAMetalDrawable> mCurrentDrawable = nullptr;
     id<MTLTexture> mDepthTexture = nullptr;
-    id<MTLDepthStencilState> mDepthStencilState = nullptr;
 
     std::unordered_map<size_t, Driver::UniformBufferHandle> mBoundUniforms;
 
@@ -114,6 +113,20 @@ static MTLVertexFormat getMetalFormat(ElementType type, bool normalized) {
         case ElementType::FLOAT4: return MTLVertexFormatFloat4;
     }
     return MTLVertexFormatInvalid;
+}
+
+
+static MTLCompareFunction getMetalCompareFunction(Driver::RasterState::DepthFunc func) {
+    switch (func) {
+        case Driver::RasterState::DepthFunc::LE: return MTLCompareFunctionLessEqual;
+        case Driver::RasterState::DepthFunc::GE: return MTLCompareFunctionGreaterEqual;
+        case Driver::RasterState::DepthFunc::L: return MTLCompareFunctionLess;
+        case Driver::RasterState::DepthFunc::G: return MTLCompareFunctionGreater;
+        case Driver::RasterState::DepthFunc::E: return MTLCompareFunctionEqual;
+        case Driver::RasterState::DepthFunc::NE: return MTLCompareFunctionNotEqual;
+        case Driver::RasterState::DepthFunc::A: return MTLCompareFunctionAlways;
+        case Driver::RasterState::DepthFunc::N: return MTLCompareFunctionNever;
+    }
 }
 
 // todo: move into Headers file
@@ -254,12 +267,6 @@ MetalDriver::MetalDriver(driver::MetalPlatform* platform) noexcept
     depthTextureDesc.usage = MTLTextureUsageRenderTarget;
     depthTextureDesc.resourceOptions = MTLResourceStorageModePrivate;
     pImpl->mDepthTexture = [pImpl->mDevice newTextureWithDescriptor:depthTextureDesc];
-
-    MTLDepthStencilDescriptor* depthStencilDescriptor = [MTLDepthStencilDescriptor new];
-    depthStencilDescriptor.depthCompareFunction = MTLCompareFunctionLessEqual;
-    depthStencilDescriptor.depthWriteEnabled = YES;
-    pImpl->mDepthStencilState =
-            [pImpl->mDevice newDepthStencilStateWithDescriptor:depthStencilDescriptor];
 }
 
 MetalDriver::~MetalDriver() noexcept {
@@ -542,6 +549,12 @@ void MetalDriver::beginRenderPass(Driver::RenderTargetHandle rth,
 
     pImpl->mCurrentCommandEncoder =
             [pImpl->mCurrentCommandBuffer renderCommandEncoderWithDescriptor:descriptor];
+
+    // Metal requires a new command encoder for each render pass, and they cannot be reused.
+    // We must bind the depth-stencil state for each command encoder, so we dirty the state here
+    // to force a rebinding during the draw call. Subsequent draw calls for this frame (with
+    // identical depth states) will be able to re-use the state.
+    pImpl->mBinder.makeDepthStencilStateDirty();
 }
 
 void MetalDriver::endRenderPass(int dummy) {
@@ -666,6 +679,10 @@ void MetalDriver::draw(Driver::ProgramHandle ph, Driver::RasterState rs,
     auto primitive = handle_cast<MetalRenderPrimitive>(mHandleMap, rph);
     auto program = handle_cast<MetalProgram>(mHandleMap, ph);
 
+    pImpl->mBinder.bindDepthStencilState(MetalBinder::DepthStencilState {
+        .compareFunction = getMetalCompareFunction(rs.depthFunc),
+        .depthWriteEnabled = rs.depthWrite,
+    });
     pImpl->mBinder.setShaderFunctions(program->vertexFunction, program->fragmentFunction);
     pImpl->mBinder.setVertexDescription(primitive->vertexDescription);
 
@@ -676,7 +693,11 @@ void MetalDriver::draw(Driver::ProgramHandle ph, Driver::RasterState rs,
     assert(pipeline != nullptr);
     [pImpl->mCurrentCommandEncoder setRenderPipelineState:pipeline];
 
-    [pImpl->mCurrentCommandEncoder setDepthStencilState:pImpl->mDepthStencilState];
+    id<MTLDepthStencilState> depthStencilState = nil;
+    if (pImpl->mBinder.getOrCreateDepthStencilState(depthStencilState)) {
+        assert(depthStencilState != nil);
+        [pImpl->mCurrentCommandEncoder setDepthStencilState:depthStencilState];
+    }
 
     // Bind all the uniform buffers.
     for (const auto& entry : pImpl->mBoundUniforms) {

@@ -81,6 +81,26 @@ public:
     void setVertexDescription(const VertexDescription& vertexDescription) noexcept;
     void getOrCreatePipelineState(id<MTLRenderPipelineState>& pipelineState) noexcept;
 
+    // Depth-stencil State
+
+    struct DepthStencilState {
+        MTLCompareFunction compareFunction;
+        bool depthWriteEnabled;
+
+        bool operator==(const DepthStencilState& rhs) const noexcept {
+            return this->compareFunction == rhs.compareFunction &&
+                this->depthWriteEnabled == rhs.depthWriteEnabled;
+        }
+
+        bool operator!=(const DepthStencilState& rhs) const noexcept {
+            return !operator==(rhs);
+        }
+    };
+
+    void makeDepthStencilStateDirty() noexcept;
+    void bindDepthStencilState(const DepthStencilState& depthStencilState) noexcept;
+    bool getOrCreateDepthStencilState(id<MTLDepthStencilState>& depthStencilState) noexcept;
+
 private:
 
     std::unique_ptr<MetalBinderImpl> pImpl;

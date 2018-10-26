@@ -31,9 +31,9 @@ namespace filaflat {
 struct TextDictionaryReader {
     bool unflatten(Unflattener& unflattener, BlobDictionary& dictionary);
 
-    static bool unflatten(ChunkContainer const& container, BlobDictionary& blobDictionary) {
-        // Unflattener dictionaryUnflattener(container, filamat::ChunkType::DictionaryGlsl);
-        Unflattener dictionaryUnflattener(container, filamat::ChunkType::DictionaryMetal);
+    static bool unflatten(ChunkContainer const& container, BlobDictionary& blobDictionary,
+            filamat::ChunkType chunkType) {
+        Unflattener dictionaryUnflattener(container, chunkType);
         TextDictionaryReader dictionary;
         return dictionary.unflatten(dictionaryUnflattener, blobDictionary);
     }

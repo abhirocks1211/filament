@@ -83,6 +83,9 @@ struct MaterialParserDetails {
 
     bool getGlShader(filament::driver::ShaderModel shaderModel, uint8_t variant,
             filament::driver::ShaderType shaderType, ShaderBuilder& shaderBuilder) noexcept;
+
+    bool getMtlShader(filament::driver::ShaderModel shaderModel, uint8_t variant,
+            filament::driver::ShaderType shaderType, ShaderBuilder& shaderBuilder) noexcept;
 };
 
 template<typename T>
@@ -281,7 +284,7 @@ bool MaterialParser::getShader(
         return mImpl->getGlShader(shaderModel, variant, st, shader);
     }
     if (mImpl->mBackend == filament::driver::Backend::METAL) {
-        return mImpl->getGlShader(shaderModel, variant, st, shader);
+        return mImpl->getMtlShader(shaderModel, variant, st, shader);
     }
 }
 
@@ -308,21 +311,40 @@ bool MaterialParserDetails::getGlShader(filament::driver::ShaderModel shaderMode
         filament::driver::ShaderType st, ShaderBuilder& shader) noexcept {
 
     ChunkContainer const& container = mChunkContainer;
-    /*
     if (!container.hasChunk(ChunkType::MaterialGlsl) ||
         !container.hasChunk(ChunkType::DictionaryGlsl)) {
         return false;
     }
-     */
 
     // Read the dictionary only if it has not been read yet.
     if (UTILS_UNLIKELY(mBlobDictionary.isEmpty())) {
-        if (!TextDictionaryReader::unflatten(container, mBlobDictionary)) {
+        if (!TextDictionaryReader::unflatten(container, mBlobDictionary,
+                filamat::ChunkType::DictionaryGlsl)) {
             return false;
         }
     }
 
-    // Unflattener unflattener(container, ChunkType::MaterialGlsl);
+    Unflattener unflattener(container, ChunkType::MaterialGlsl);
+    return mMaterialChunk.getTextShader(unflattener, mBlobDictionary, shader, shaderModel, variant, st);
+}
+
+bool MaterialParserDetails::getMtlShader(filament::driver::ShaderModel shaderModel, uint8_t variant,
+        filament::driver::ShaderType st, ShaderBuilder& shader) noexcept {
+
+    ChunkContainer const& container = mChunkContainer;
+    if (!container.hasChunk(ChunkType::MaterialMetal) ||
+        !container.hasChunk(ChunkType::DictionaryMetal)) {
+        return false;
+    }
+
+    // Read the dictionary only if it has not been read yet.
+    if (UTILS_UNLIKELY(mBlobDictionary.isEmpty())) {
+        if (!TextDictionaryReader::unflatten(container, mBlobDictionary,
+                filamat::ChunkType::DictionaryMetal)) {
+            return false;
+        }
+    }
+
     Unflattener unflattener(container, ChunkType::MaterialMetal);
     return mMaterialChunk.getTextShader(unflattener, mBlobDictionary, shader, shaderModel, variant, st);
 }

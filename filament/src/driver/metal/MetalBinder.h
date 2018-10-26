@@ -19,6 +19,8 @@
 
 #include <Metal/Metal.h>
 
+#include <filament/EngineEnums.h>
+
 #include <memory>
 
 namespace filament {
@@ -29,6 +31,11 @@ struct MetalBinderImpl;
 class MetalBinder {
 
 public:
+    static constexpr uint32_t MAX_VERTEX_ATTRIBUTES = filament::ATTRIBUTE_INDEX_COUNT;
+
+    // Metal indexes vertex buffers and uniform buffers in the same number namespace.
+    static constexpr uint32_t MAX_BUFFERS = BindingPoints::COUNT + MAX_ATTRIBUTE_BUFFERS_COUNT;
+
     MetalBinder();
     ~MetalBinder();
 
@@ -36,8 +43,42 @@ public:
 
     // Pipeline State
 
+    struct VertexDescription {
+        struct Attribute {
+            MTLVertexFormat format;
+            uint32_t buffer;
+            uint32_t offset;
+        };
+        struct Layout {
+            uint32_t stride;
+        };
+        Attribute attributes[MAX_VERTEX_ATTRIBUTES];
+        // todo: we don't need that many layouts, only Vertex buffers need layouts.
+        Layout layouts[MAX_BUFFERS];
+
+        bool operator==(const VertexDescription& rhs) const noexcept {
+            bool result = true;
+            for (uint32_t i = 0; i < MAX_VERTEX_ATTRIBUTES; i++) {
+                result &= (
+                   this->attributes[i].format == rhs.attributes[i].format &&
+                   this->attributes[i].buffer == rhs.attributes[i].buffer &&
+                   this->attributes[i].offset == rhs.attributes[i].offset
+                );
+            }
+            for (uint32_t i = 0; i < MAX_BUFFERS; i++) {
+                result &= this->layouts[i].stride == rhs.layouts[i].stride;
+            }
+            return result;
+        }
+
+        bool operator!=(const VertexDescription& rhs) const noexcept {
+            return !operator==(rhs);
+        }
+    };
+
     void setShaderFunctions(id<MTLFunction> vertexFunction,
             id<MTLFunction> fragmentFunction) noexcept;
+    void setVertexDescription(const VertexDescription& vertexDescription) noexcept;
     void getOrCreatePipelineState(id<MTLRenderPipelineState>& pipelineState) noexcept;
 
 private:

@@ -23,13 +23,10 @@
 namespace filament {
 namespace driver {
 
-// A hack, for now. Put all vertex data into buffer 10 so that it does not conflict with uniform
-// buffers.
-constexpr uint8_t VERTEX_BUFFER_BINDING = 10;
-
 namespace Metal {
 
 struct PipelineKey {
+    MetalBinder::VertexDescription vertexDescription;
     id<MTLFunction> vertexFunction = nullptr;
     id<MTLFunction> fragmentFunction = nullptr;
 };
@@ -42,8 +39,11 @@ using PipelineHashFn = utils::hash::MurmurHashFn<PipelineKey>;
 
 struct PipelineEqual {
     bool operator()(const PipelineKey& left, const PipelineKey& right) const {
-        return left.vertexFunction == right.vertexFunction &&
-               left.fragmentFunction == right.fragmentFunction;
+        return (
+           left.vertexDescription == right.vertexDescription &&
+           left.vertexFunction == right.vertexFunction &&
+           left.fragmentFunction == right.fragmentFunction
+        );
     }
 };
 
@@ -85,6 +85,13 @@ void MetalBinder::setShaderFunctions(id<MTLFunction> vertexFunction,
     }
 }
 
+void MetalBinder::setVertexDescription(const VertexDescription& vertexDescription) noexcept {
+    if (pImpl->mPipelineKey.vertexDescription != vertexDescription) {
+        pImpl->mPipelineKey.vertexDescription = vertexDescription;
+        pImpl->mPipelineDirty = true;
+    }
+}
+
 void MetalBinder::getOrCreatePipelineState(
         id<MTLRenderPipelineState> &pipelineState) noexcept {
     assert(pImpl->mDevice != nullptr);
@@ -112,16 +119,26 @@ void MetalBinder::getOrCreatePipelineState(
 
     // Vertex attributes
     MTLVertexDescriptor* vertex = [MTLVertexDescriptor vertexDescriptor];
-    vertex.attributes[0].format = MTLVertexFormatFloat2;
-    vertex.attributes[0].bufferIndex = VERTEX_BUFFER_BINDING;
-    vertex.attributes[0].offset = 0;
 
-    vertex.attributes[2].format = MTLVertexFormatUChar4Normalized;
-    vertex.attributes[2].bufferIndex = VERTEX_BUFFER_BINDING;
-    vertex.attributes[2].offset = sizeof(float) * 2;
+    const auto& vertexDescription = pImpl->mPipelineKey.vertexDescription;
 
-    vertex.layouts[VERTEX_BUFFER_BINDING].stride = sizeof(float) * 2 + sizeof(int32_t);
-    vertex.layouts[VERTEX_BUFFER_BINDING].stepFunction = MTLVertexStepFunctionPerVertex;
+    for (uint32_t i = 0; i < MAX_VERTEX_ATTRIBUTES; i++) {
+        if (vertexDescription.attributes[i].format > MTLVertexFormatInvalid) {
+            const auto& attribute = vertexDescription.attributes[i];
+            vertex.attributes[i].format = attribute.format;
+            vertex.attributes[i].bufferIndex = attribute.buffer;
+            vertex.attributes[i].offset = attribute.offset;
+        }
+    }
+
+    for (uint32_t i = 0; i < MAX_BUFFERS; i++) {
+        if (vertexDescription.layouts[i].stride > 0) {
+            const auto& layout = vertexDescription.layouts[i];
+            // todo
+            vertex.layouts[10].stride = layout.stride;
+            vertex.layouts[10].stepFunction = MTLVertexStepFunctionPerVertex;
+        }
+    }
 
     descriptor.vertexDescriptor = vertex;
 

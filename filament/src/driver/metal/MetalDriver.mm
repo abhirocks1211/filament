@@ -50,6 +50,69 @@ struct MetalDriverImpl {
 // buffers.
 constexpr uint8_t VERTEX_BUFFER_BINDING = 10;
 
+static MTLVertexFormat getMetalFormat(ElementType type, bool normalized) {
+    if (normalized) {
+        switch (type) {
+            // Single Component Types
+            case ElementType::BYTE: return MTLVertexFormatCharNormalized;
+            case ElementType::UBYTE: return MTLVertexFormatUCharNormalized;
+            case ElementType::SHORT: return MTLVertexFormatShortNormalized;
+            case ElementType::USHORT: return MTLVertexFormatUShortNormalized;
+            // Two Component Types
+            case ElementType::BYTE2: return MTLVertexFormatChar2Normalized;
+            case ElementType::UBYTE2: return MTLVertexFormatUChar2Normalized;
+            case ElementType::SHORT2: return MTLVertexFormatShort2Normalized;
+            case ElementType::USHORT2: return MTLVertexFormatUShort2Normalized;
+            // Three Component Types
+            case ElementType::BYTE3: return MTLVertexFormatChar3Normalized;
+            case ElementType::UBYTE3: return MTLVertexFormatUChar3Normalized;
+            case ElementType::SHORT3: return MTLVertexFormatShort3Normalized;
+            case ElementType::USHORT3: return MTLVertexFormatUShort3Normalized;
+            // Four Component Types
+            case ElementType::BYTE4: return MTLVertexFormatChar4Normalized;
+            case ElementType::UBYTE4: return MTLVertexFormatUChar4Normalized;
+            case ElementType::SHORT4: return MTLVertexFormatShort4Normalized;
+            case ElementType::USHORT4: return MTLVertexFormatUShort4Normalized;
+            default:
+                ASSERT_POSTCONDITION(false, "Normalized format does not exist.");
+                return MTLVertexFormatInvalid;
+        }
+    }
+    switch (type) {
+        // Single Component Types
+        case ElementType::BYTE: return MTLVertexFormatChar;
+        case ElementType::UBYTE: return MTLVertexFormatUChar;
+        case ElementType::SHORT: return MTLVertexFormatShort;
+        case ElementType::USHORT: return MTLVertexFormatUShort;
+        case ElementType::HALF: return MTLVertexFormatHalf;
+        case ElementType::INT: return MTLVertexFormatInt;
+        case ElementType::UINT: return MTLVertexFormatUInt;
+        case ElementType::FLOAT: return MTLVertexFormatFloat;
+        // Two Component Types
+        case ElementType::BYTE2: return MTLVertexFormatChar2;
+        case ElementType::UBYTE2: return MTLVertexFormatUChar2;
+        case ElementType::SHORT2: return MTLVertexFormatShort2;
+        case ElementType::USHORT2: return MTLVertexFormatUShort2;
+        case ElementType::HALF2: return MTLVertexFormatHalf2;
+        case ElementType::FLOAT2: return MTLVertexFormatFloat2;
+        // Three Component Types
+        case ElementType::BYTE3: return MTLVertexFormatChar3;
+        case ElementType::UBYTE3: return MTLVertexFormatUChar3;
+        case ElementType::SHORT3: return MTLVertexFormatShort3;
+        case ElementType::USHORT3: return MTLVertexFormatUShort3;
+        case ElementType::HALF3: return MTLVertexFormatHalf3;
+        case ElementType::FLOAT3: return MTLVertexFormatFloat3;
+        // Four Component Types
+        case ElementType::BYTE4: return MTLVertexFormatChar4;
+        case ElementType::UBYTE4: return MTLVertexFormatUChar4;
+        case ElementType::SHORT4: return MTLVertexFormatShort4;
+        case ElementType::USHORT4: return MTLVertexFormatUShort4;
+        case ElementType::HALF4: return MTLVertexFormatHalf4;
+        case ElementType::FLOAT4: return MTLVertexFormatFloat4;
+    }
+    return MTLVertexFormatInvalid;
+}
+
 // todo: move into Headers file
 
 struct MetalSwapChain : public HwSwapChain {
@@ -103,6 +166,31 @@ struct MetalUniformBuffer : public HwUniformBuffer {
 struct MetalRenderPrimitive : public HwRenderPrimitive {
     MetalVertexBuffer* vertexBuffer = nullptr;
     MetalIndexBuffer* indexBuffer = nullptr;
+    MetalBinder::VertexDescription vertexDescription = {};
+
+    void setBuffers(MetalVertexBuffer* vertexBuffer, MetalIndexBuffer* indexBuffer,
+                    uint32_t enabledAttributes) {
+        this->vertexBuffer = vertexBuffer;
+        this->indexBuffer = indexBuffer;
+
+        const size_t attributeCount = vertexBuffer->attributes.size();
+        for (uint32_t attributeIndex = 0; attributeIndex < attributeCount; attributeIndex++) {
+            if (!(enabledAttributes & (1U << attributeIndex))) {
+                continue;
+            }
+            const auto& attribute = vertexBuffer->attributes[attributeIndex];
+
+            vertexDescription.attributes[attributeIndex] = {
+                .format = getMetalFormat(attribute.type,
+                        attribute.flags & Driver::Attribute::FLAG_NORMALIZED),
+                .buffer = 10,   // todo: hack, handle multiple buffers
+                .offset = attribute.offset
+            };
+            vertexDescription.layouts[10] = {
+                .stride = attribute.stride
+            };
+        };
+    }
 };
 
 struct MetalProgram : public HwProgram {
@@ -453,8 +541,9 @@ void MetalDriver::resizeRenderTarget(Driver::RenderTargetHandle rth, uint32_t wi
 void MetalDriver::setRenderPrimitiveBuffer(Driver::RenderPrimitiveHandle rph,
         Driver::VertexBufferHandle vbh, Driver::IndexBufferHandle ibh, uint32_t enabledAttributes) {
     auto primitive = handle_cast<MetalRenderPrimitive>(mHandleMap, rph);
-    primitive->vertexBuffer = handle_cast<MetalVertexBuffer>(mHandleMap, vbh);
-    primitive->indexBuffer = handle_cast<MetalIndexBuffer>(mHandleMap, ibh);
+    auto vertexBuffer = handle_cast<MetalVertexBuffer>(mHandleMap, vbh);
+    auto indexBuffer = handle_cast<MetalIndexBuffer>(mHandleMap, ibh);
+    primitive->setBuffers(vertexBuffer, indexBuffer, enabledAttributes);
 }
 
 void MetalDriver::setRenderPrimitiveRange(Driver::RenderPrimitiveHandle rph,
@@ -547,6 +636,7 @@ void MetalDriver::draw(Driver::ProgramHandle ph, Driver::RasterState rs,
     auto program = handle_cast<MetalProgram>(mHandleMap, ph);
 
     pImpl->mBinder.setShaderFunctions(program->vertexFunction, program->fragmentFunction);
+    pImpl->mBinder.setVertexDescription(primitive->vertexDescription);
 
     // Bind a valid pipeline state for this draw call.
     id<MTLRenderPipelineState> pipeline = nullptr;
@@ -577,7 +667,7 @@ void MetalDriver::draw(Driver::ProgramHandle ph, Driver::RasterState rs,
                                            atIndex:VERTEX_BUFFER_BINDING];
 
     [pImpl->mCurrentCommandEncoder drawIndexedPrimitives:MTLPrimitiveTypeTriangle
-                                              indexCount:3
+                                              indexCount:primitive->count
                                                indexType:MTLIndexTypeUInt16
                                              indexBuffer:primitive->indexBuffer->buffer
                                        indexBufferOffset:0];

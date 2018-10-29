@@ -109,6 +109,70 @@ private:
 
 };
 
+template<typename StateType, typename MetalType>
+class StateCache {
+
+public:
+
+    using StateCreationFn = std::function<MetalType(id<MTLDevice>, const StateType&)>;
+
+    void setDevice(id<MTLDevice> device) { mDevice = device; }
+    void setCreationFunction(StateCreationFn creationFn) { mCreationFn = creationFn; }
+
+    MetalType getOrCreateState(const StateType& state) noexcept {
+        // Check if a valid state already exists in the cache.
+        auto iter = mStateCache.find(state);
+        if (UTILS_LIKELY(iter != mStateCache.end())) {
+            auto foundState = iter.value();
+            return foundState;
+        }
+
+        // If we reach this point, we couldn't find one in the cache; create a new one.
+        const auto& metalObject = mCreationFn(mDevice, state);
+
+        mStateCache.emplace(std::make_pair(
+            state,
+            metalObject
+        ));
+
+        return metalObject;
+    }
+
+private:
+
+    id<MTLDevice> mDevice = nil;
+
+    StateCreationFn mCreationFn;
+
+    using HashFn = utils::hash::MurmurHashFn<StateType>;
+    tsl::robin_map<StateType, MetalType, HashFn> mStateCache;
+
+};
+
+template<typename StateType>
+class StateTracker {
+
+public:
+
+    void invalidate() noexcept { mStateDirty = true; }
+
+    bool stateChanged(const StateType& newState) noexcept {
+        if (mCurrentState != newState || mStateDirty) {
+            mCurrentState = newState;
+            mStateDirty = false;
+            return true;
+        }
+        return false;
+    }
+
+private:
+
+    bool mStateDirty = true;
+    StateType mCurrentState = {};
+
+};
+
+/*
 template<typename S, typename M>
 class StateBinder {
 
@@ -175,12 +239,19 @@ bool StateBinder<S, M>::getOrCreateState(M& state) noexcept {
 
     return true;
 }
+ */
 
 id<MTLDepthStencilState> createDepthStencilState(id<MTLDevice> device,
         const MetalBinder::DepthStencilState& state);
 
+using DepthStencilStateTracker = StateTracker<MetalBinder::DepthStencilState>;
+
+using DepthStencilStateCache = StateCache<MetalBinder::DepthStencilState, id<MTLDepthStencilState>>;
+
+/*
 using DepthStencilStateBinder =
         StateBinder<MetalBinder::DepthStencilState, id<MTLDepthStencilState>>;
+*/
 
 } // namespace driver
 } // namespace filament

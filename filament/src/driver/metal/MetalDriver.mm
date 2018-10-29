@@ -694,9 +694,9 @@ void MetalDriver::draw(Driver::ProgramHandle ph, Driver::RasterState rs,
     [pImpl->mCurrentCommandEncoder setRenderPipelineState:pipeline];
 
     // Set the depth-stencil state, if a state change is needed.
-    MetalBinder::DepthStencilState depthState {
-            .compareFunction = getMetalCompareFunction(rs.depthFunc),
-            .depthWriteEnabled = rs.depthWrite,
+    DepthStencilState depthState {
+        .compareFunction = getMetalCompareFunction(rs.depthFunc),
+        .depthWriteEnabled = rs.depthWrite,
     };
     if (pImpl->mDepthStencilState.stateChanged(depthState)) {
         id<MTLDepthStencilState> state =

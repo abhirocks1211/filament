@@ -83,26 +83,6 @@ public:
     void setVertexDescription(const VertexDescription& vertexDescription) noexcept;
     void getOrCreatePipelineState(id<MTLRenderPipelineState>& pipelineState) noexcept;
 
-    // Depth-stencil State
-
-    struct DepthStencilState {
-        MTLCompareFunction compareFunction;
-        bool depthWriteEnabled;
-
-        bool operator==(const DepthStencilState& rhs) const noexcept {
-            return this->compareFunction == rhs.compareFunction &&
-                this->depthWriteEnabled == rhs.depthWriteEnabled;
-        }
-
-        bool operator!=(const DepthStencilState& rhs) const noexcept {
-            return !operator==(rhs);
-        }
-    };
-
-    void makeDepthStencilStateDirty() noexcept;
-    void bindDepthStencilState(const DepthStencilState& depthStencilState) noexcept;
-    bool getOrCreateDepthStencilState(id<MTLDepthStencilState>& depthStencilState) noexcept;
-
 private:
 
     std::unique_ptr<MetalBinderImpl> pImpl;
@@ -172,86 +152,28 @@ private:
 
 };
 
-/*
-template<typename S, typename M>
-class StateBinder {
+// Depth-stencil State
 
-public:
+struct DepthStencilState {
+    MTLCompareFunction compareFunction;
+    bool depthWriteEnabled;
 
-    using StateCreationFn = std::function<M(id<MTLDevice>, const S&)>;
+    bool operator==(const DepthStencilState& rhs) const noexcept {
+        return this->compareFunction == rhs.compareFunction &&
+               this->depthWriteEnabled == rhs.depthWriteEnabled;
+    }
 
-    void setDevice(id<MTLDevice> device) { mDevice = device; }
-    void setCreationFunction(StateCreationFn creationFn) { mCreationFn = creationFn; }
-
-    void soil() noexcept { mStateDirty = true; }
-    void bindState(const S& newState) noexcept;
-    bool getOrCreateState(M& state) noexcept;
-
-private:
-
-    id<MTLDevice> mDevice = nil;
-
-    StateCreationFn mCreationFn;
-
-    S mStateKey = {};
-    bool mStateDirty = true;
-
-    using HashFn = utils::hash::MurmurHashFn<S>;
-    tsl::robin_map<S, M, HashFn> mStateCache;
-
+    bool operator!=(const DepthStencilState& rhs) const noexcept {
+        return !operator==(rhs);
+    }
 };
 
-template<typename S, typename M>
-void StateBinder<S, M>::bindState(const S& newState) noexcept {
-    if (mStateKey != newState) {
-        mStateKey = newState;
-        mStateDirty = true;
-    }
-}
-
-template<typename S, typename M>
-bool StateBinder<S, M>::getOrCreateState(M& state) noexcept {
-    if (!mStateDirty) {
-        // The state has not changed, no re-binding is necessary.
-        return false;
-    }
-
-    // The state is dirty. Check if a valid state already exists in the cache.
-    auto iter = mStateCache.find(mStateKey);
-    if (UTILS_LIKELY(iter != mStateCache.end())) {
-        auto foundState = iter.value();
-        state = foundState;
-        mStateDirty = false;
-        return true;
-    }
-
-    // If we reach this point, the state is dirty and we couldn't find one in the cache; create a
-    // new one.
-    const auto& newState = mCreationFn(mDevice, mStateKey);
-
-    mStateCache.emplace(std::make_pair(
-        mStateKey,
-        newState
-    ));
-
-    state = newState;
-    mStateDirty = false;
-
-    return true;
-}
- */
-
 id<MTLDepthStencilState> createDepthStencilState(id<MTLDevice> device,
-        const MetalBinder::DepthStencilState& state);
+        const DepthStencilState& state);
 
-using DepthStencilStateTracker = StateTracker<MetalBinder::DepthStencilState>;
+using DepthStencilStateTracker = StateTracker<DepthStencilState>;
 
-using DepthStencilStateCache = StateCache<MetalBinder::DepthStencilState, id<MTLDepthStencilState>>;
-
-/*
-using DepthStencilStateBinder =
-        StateBinder<MetalBinder::DepthStencilState, id<MTLDepthStencilState>>;
-*/
+using DepthStencilStateCache = StateCache<DepthStencilState, id<MTLDepthStencilState>>;
 
 } // namespace driver
 } // namespace filament

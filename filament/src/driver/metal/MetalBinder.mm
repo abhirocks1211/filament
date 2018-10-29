@@ -36,7 +36,6 @@ struct PipelineValue {
 };
 
 using PipelineHashFn = utils::hash::MurmurHashFn<PipelineKey>;
-using DepthStencilStateHash = utils::hash::MurmurHashFn<MetalBinder::DepthStencilState>;
 
 struct PipelineEqual {
     bool operator()(const PipelineKey& left, const PipelineKey& right) const {
@@ -59,16 +58,8 @@ struct MetalBinderImpl {
     tsl::robin_map<Metal::PipelineKey, Metal::PipelineValue,
             Metal::PipelineHashFn, Metal::PipelineEqual> mPipelines;
 
-    // A cache of depth-stencil states.
-    tsl::robin_map<MetalBinder::DepthStencilState, id<MTLDepthStencilState>,
-            Metal::DepthStencilStateHash> mDepthStencilStates;
-
     // Current state of pipeline bindings.
     Metal::PipelineKey mPipelineKey = {};
-
-    // Current depth-stencil state.
-    MetalBinder::DepthStencilState mDepthStencilStateKey = {};
-    bool mDepthStencilStateDirty = true;
 
     // If mPipelineDirty is true, then mCurrentPipelineState is invalid and need to either create a
     // new pipeline, or retrieve a valid one from the cache.
@@ -171,55 +162,8 @@ void MetalBinder::getOrCreatePipelineState(
     pImpl->mPipelineDirty = false;
 }
 
-void MetalBinder::makeDepthStencilStateDirty() noexcept {
-    pImpl->mDepthStencilStateDirty = true;
-}
-
-void MetalBinder::bindDepthStencilState(const DepthStencilState& depthStencilState) noexcept {
-    if (pImpl->mDepthStencilStateKey != depthStencilState) {
-        pImpl->mDepthStencilStateKey = depthStencilState;
-        pImpl->mDepthStencilStateDirty = true;
-    }
-}
-
-bool MetalBinder::getOrCreateDepthStencilState(id<MTLDepthStencilState>& depthStencilState)
-        noexcept {
-    if (!pImpl->mDepthStencilStateDirty) {
-        // The state has not changed, no re-binding is necessary.
-        return false;
-    }
-
-    // The depth-stencil state is dirty, so check if a valid one exists in the cache.
-    auto iter = pImpl->mDepthStencilStates.find(pImpl->mDepthStencilStateKey);
-    if (UTILS_LIKELY(iter != pImpl->mDepthStencilStates.end())) {
-        auto foundDepthStencilState = iter.value();
-        // pImpl->mCurrentPipelineState = foundPipelineState;
-        depthStencilState = foundDepthStencilState;
-        return true;
-    }
-
-    // If we reach this point, the state is dirty and we couldn't find one in the cache, so create
-    // a new one.
-
-    MTLDepthStencilDescriptor* depthStencilDescriptor = [MTLDepthStencilDescriptor new];
-    depthStencilDescriptor.depthCompareFunction = pImpl->mDepthStencilStateKey.compareFunction;
-    depthStencilDescriptor.depthWriteEnabled = pImpl->mDepthStencilStateKey.depthWriteEnabled;
-    id<MTLDepthStencilState> newDepthStencilState =
-            [pImpl->mDevice newDepthStencilStateWithDescriptor:depthStencilDescriptor];
-
-    pImpl->mDepthStencilStates.emplace(std::make_pair(
-        pImpl->mDepthStencilStateKey,
-        newDepthStencilState
-    ));
-
-    depthStencilState = newDepthStencilState;
-    pImpl->mDepthStencilStateDirty = false;
-
-    return true;
-}
-
 id<MTLDepthStencilState> createDepthStencilState(id<MTLDevice> device,
-        const MetalBinder::DepthStencilState& state) {
+        const DepthStencilState& state) {
     MTLDepthStencilDescriptor* depthStencilDescriptor = [MTLDepthStencilDescriptor new];
     depthStencilDescriptor.depthCompareFunction = state.compareFunction;
     depthStencilDescriptor.depthWriteEnabled = state.depthWriteEnabled;

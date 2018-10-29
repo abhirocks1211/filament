@@ -111,7 +111,7 @@ void MetalBinder::getOrCreatePipelineState(
     }
 
     // Create a new pipeline and store it in the cache.
-    MTLRenderPipelineDescriptor* descriptor = [[MTLRenderPipelineDescriptor alloc] init];
+    MTLRenderPipelineDescriptor* descriptor = [MTLRenderPipelineDescriptor new];
 
     // Shader Functions
     descriptor.vertexFunction = pImpl->mPipelineKey.vertexFunction;
@@ -152,6 +152,8 @@ void MetalBinder::getOrCreatePipelineState(
                                                            error:&error];
     assert(error == nullptr);
 
+    [descriptor release];
+
     pImpl->mPipelines.emplace(std::make_pair(
         pImpl->mPipelineKey,
         Metal::PipelineValue { pipeline }
@@ -167,7 +169,10 @@ id<MTLDepthStencilState> createDepthStencilState(id<MTLDevice> device,
     MTLDepthStencilDescriptor* depthStencilDescriptor = [MTLDepthStencilDescriptor new];
     depthStencilDescriptor.depthCompareFunction = state.compareFunction;
     depthStencilDescriptor.depthWriteEnabled = state.depthWriteEnabled;
-    return [device newDepthStencilStateWithDescriptor:depthStencilDescriptor];
+    id<MTLDepthStencilState> depthStencilState =
+            [device newDepthStencilStateWithDescriptor:depthStencilDescriptor];
+    [depthStencilDescriptor release];
+    return depthStencilState;
 }
 
 } // namespace driver

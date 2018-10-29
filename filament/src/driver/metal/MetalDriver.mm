@@ -275,6 +275,8 @@ MetalDriver::MetalDriver(driver::MetalPlatform* platform) noexcept
 }
 
 MetalDriver::~MetalDriver() noexcept {
+    [pImpl->mCommandQueue release];
+    [pImpl->mDepthTexture release];
     delete pImpl;
 }
 

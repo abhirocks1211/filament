@@ -19,6 +19,8 @@
 
 #include <Metal/Metal.h>
 
+#include "driver/Driver.h"
+
 #include <filament/EngineEnums.h>
 
 #include <memory>
@@ -27,6 +29,8 @@
 
 namespace filament {
 namespace driver {
+
+static constexpr uint32_t MAX_UNIFORMS = BindingPoints::COUNT;
 
 struct MetalBinderImpl;
 
@@ -136,13 +140,22 @@ public:
 
     void invalidate() noexcept { mStateDirty = true; }
 
-    bool stateChanged(const StateType& newState) noexcept {
-        if (mCurrentState != newState || mStateDirty) {
+    void updateState(const StateType& newState) noexcept {
+        if (mCurrentState != newState) {
             mCurrentState = newState;
-            mStateDirty = false;
-            return true;
+            mStateDirty = true;
         }
-        return false;
+    }
+
+    // Returns true if the state has changed since the last call to stateChanged.
+    bool stateChanged() noexcept {
+        bool ret = mStateDirty;
+        mStateDirty = false;
+        return ret;
+    }
+
+    const StateType& getState() const {
+        return mCurrentState;
     }
 
 private:
@@ -174,6 +187,27 @@ id<MTLDepthStencilState> createDepthStencilState(id<MTLDevice> device,
 using DepthStencilStateTracker = StateTracker<DepthStencilState>;
 
 using DepthStencilStateCache = StateCache<DepthStencilState, id<MTLDepthStencilState>>;
+
+// Uniform buffers
+
+struct UniformBufferState {
+    bool bound;
+    Driver::UniformBufferHandle ubh;
+    uint64_t offset;
+
+    bool operator==(const UniformBufferState& rhs) const noexcept {
+        return this->bound == rhs.bound &&
+               this->ubh.getId() == rhs.ubh.getId() &&
+               this->offset == rhs.offset;
+    }
+
+    bool operator!=(const UniformBufferState& rhs) const noexcept {
+        return !operator==(rhs);
+    }
+};
+
+using UniformBufferStateTracker = StateTracker<UniformBufferState>;
+
 
 } // namespace driver
 } // namespace filament

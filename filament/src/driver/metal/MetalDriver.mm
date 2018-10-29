@@ -43,7 +43,7 @@ struct MetalDriverImpl {
     id<CAMetalDrawable> mCurrentDrawable = nullptr;
     id<MTLTexture> mDepthTexture = nullptr;
 
-    std::unordered_map<size_t, Driver::UniformBufferHandle> mBoundUniforms;
+    UniformBufferStateTracker mUniformState[MAX_UNIFORMS];
 
     MetalBinder mBinder;
 
@@ -557,7 +557,10 @@ void MetalDriver::beginRenderPass(Driver::RenderTargetHandle rth,
 
     // Metal requires a new command encoder for each render pass, and they cannot be reused.
     // We must bind the depth-stencil state for each command encoder, so we dirty the state here
-    // to force a rebinding at the first the draw call of this frame.
+    // to force a rebinding at the first the draw call of this pass.
+    for (uint32_t i = 0; i < MAX_UNIFORMS; i++) {
+        pImpl->mUniformState[i].invalidate();
+    }
     pImpl->mDepthStencilState.invalidate();
 }
 
@@ -627,7 +630,11 @@ void MetalDriver::bindUniformBuffer(size_t index, Driver::UniformBufferHandle ub
     utils::slog.d << "bindUniformBuffer(" << utils::io::endl
                   << "    index  = " << index << utils::io::endl
                   << ");" << utils::io::endl;
-    pImpl->mBoundUniforms[index] = ubh;
+    pImpl->mUniformState[index].updateState(UniformBufferState {
+        .bound = true,
+        .ubh = ubh,
+        .offset = 0
+    });
 }
 
 void MetalDriver::bindUniformBufferRange(size_t index, Driver::UniformBufferHandle ubh,
@@ -637,10 +644,11 @@ void MetalDriver::bindUniformBufferRange(size_t index, Driver::UniformBufferHand
                   << "    offset = " << offset << utils::io::endl
                   << "    size   = " << size << utils::io::endl
                   << ");" << utils::io::endl;
-    auto* uniformBuffer = handle_cast<MetalUniformBuffer>(mHandleMap, ubh);
-    uniformBuffer->offset = offset;
-    uniformBuffer->size = size;
-    pImpl->mBoundUniforms[index] = ubh;
+    pImpl->mUniformState[index].updateState(UniformBufferState {
+        .bound = true,
+        .ubh = ubh,
+        .offset = offset
+    });
 }
 
 void MetalDriver::bindSamplers(size_t index, Driver::SamplerBufferHandle sbh) {
@@ -698,28 +706,37 @@ void MetalDriver::draw(Driver::ProgramHandle ph, Driver::RasterState rs,
         .compareFunction = getMetalCompareFunction(rs.depthFunc),
         .depthWriteEnabled = rs.depthWrite,
     };
-    if (pImpl->mDepthStencilState.stateChanged(depthState)) {
+    pImpl->mDepthStencilState.updateState(depthState);
+    if (pImpl->mDepthStencilState.stateChanged()) {
         id<MTLDepthStencilState> state =
                 pImpl->mDepthStencilStateCache.getOrCreateState(depthState);
         assert(state != nil);
         [pImpl->mCurrentCommandEncoder setDepthStencilState:state];
     }
 
-    // Bind all the uniform buffers.
-    for (const auto& entry : pImpl->mBoundUniforms) {
-        const auto bufferIndex = entry.first;
-        const auto ubh = entry.second;
-        auto* buffer = handle_const_cast<MetalUniformBuffer>(mHandleMap, ubh);
+    // Bind any uniform buffers that have changed since the last draw call.
+    for (uint32_t i = 0; i < MAX_UNIFORMS; i++) {
+        auto& thisUniform = pImpl->mUniformState[i];
+        if (thisUniform.stateChanged() ) {
+            const auto& uniformState = thisUniform.getState();
+            if (!uniformState.bound) {
+                continue;
+            }
 
-        // We have no way of knowing which uniform buffers will be used by which shader stage so for
-        // now, bind the uniform buffer to both the vertex and fragment stages.
-        [pImpl->mCurrentCommandEncoder setVertexBuffer:buffer->buffer
-                                                offset:buffer->offset
-                                               atIndex:bufferIndex];
+            const auto* uniform = handle_const_cast<MetalUniformBuffer>(mHandleMap,
+                    uniformState.ubh);
 
-        [pImpl->mCurrentCommandEncoder setFragmentBuffer:buffer->buffer
-                                                  offset:buffer->offset
-                                                 atIndex:bufferIndex];
+            // We have no way of knowing which uniform buffers will be used by which shader stage
+            // so for now, bind the uniform buffer to both the vertex and fragment stages.
+
+            [pImpl->mCurrentCommandEncoder setVertexBuffer:uniform->buffer
+                                                    offset:uniformState.offset
+                                                   atIndex:i];
+
+            [pImpl->mCurrentCommandEncoder setFragmentBuffer:uniform->buffer
+                                                      offset:uniformState.offset
+                                                     atIndex:i];
+        }
     }
 
     // Bind the vertex buffer.

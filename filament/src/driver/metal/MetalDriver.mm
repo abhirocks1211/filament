@@ -281,7 +281,9 @@ MetalDriver::~MetalDriver() noexcept {
 }
 
 void MetalDriver::debugCommand(const char *methodName) {
+#if METAL_DEBUG_COMMANDS
     utils::slog.d << methodName << utils::io::endl;
+#endif
 }
 
 void MetalDriver::beginFrame(int64_t monotonic_clock_ns, uint32_t frameId) {
@@ -534,6 +536,7 @@ void MetalDriver::updateUniformBuffer(Driver::UniformBufferHandle ubh,
         Driver::BufferDescriptor&& data) {
     auto buffer = handle_cast<MetalUniformBuffer>(mHandleMap, ubh);
     memcpy(buffer->buffer.contents, data.buffer, data.size);
+    scheduleDestroy(std::move(data));
 }
 
 void MetalDriver::updateSamplerBuffer(Driver::SamplerBufferHandle ubh,
@@ -629,9 +632,6 @@ void MetalDriver::viewport(ssize_t left, ssize_t bottom, size_t width, size_t he
 }
 
 void MetalDriver::bindUniformBuffer(size_t index, Driver::UniformBufferHandle ubh) {
-    utils::slog.d << "bindUniformBuffer(" << utils::io::endl
-                  << "    index  = " << index << utils::io::endl
-                  << ");" << utils::io::endl;
     pImpl->mUniformState[index].updateState(UniformBufferState {
         .bound = true,
         .ubh = ubh,
@@ -641,11 +641,6 @@ void MetalDriver::bindUniformBuffer(size_t index, Driver::UniformBufferHandle ub
 
 void MetalDriver::bindUniformBufferRange(size_t index, Driver::UniformBufferHandle ubh,
         size_t offset, size_t size) {
-    utils::slog.d << "bindUniformBufferRange(" << utils::io::endl
-                  << "    index  = " << index << utils::io::endl
-                  << "    offset = " << offset << utils::io::endl
-                  << "    size   = " << size << utils::io::endl
-                  << ");" << utils::io::endl;
     pImpl->mUniformState[index].updateState(UniformBufferState {
         .bound = true,
         .ubh = ubh,

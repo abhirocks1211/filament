@@ -126,17 +126,16 @@ void MetalBinder::getOrCreatePipelineState(
         if (vertexDescription.attributes[i].format > MTLVertexFormatInvalid) {
             const auto& attribute = vertexDescription.attributes[i];
             vertex.attributes[i].format = attribute.format;
-            vertex.attributes[i].bufferIndex = attribute.buffer;
+            vertex.attributes[i].bufferIndex = VERTEX_BUFFER_START + attribute.buffer;
             vertex.attributes[i].offset = attribute.offset;
         }
     }
 
-    for (uint32_t i = 0; i < MAX_BUFFERS; i++) {
+    for (uint32_t i = 0; i < MAX_VERTEX_ATTRIBUTES; i++) {
         if (vertexDescription.layouts[i].stride > 0) {
             const auto& layout = vertexDescription.layouts[i];
-            // todo
-            vertex.layouts[10].stride = layout.stride;
-            vertex.layouts[10].stepFunction = MTLVertexStepFunctionPerVertex;
+            vertex.layouts[VERTEX_BUFFER_START + i].stride = layout.stride;
+            vertex.layouts[VERTEX_BUFFER_START + i].stepFunction = MTLVertexStepFunctionPerVertex;
         }
     }
 

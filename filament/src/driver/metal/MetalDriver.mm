@@ -28,6 +28,7 @@
 #include <utils/trap.h>
 
 #include <unordered_map>
+#include <vector>
 
 namespace filament {
 namespace driver {
@@ -43,7 +44,7 @@ struct MetalDriverImpl {
     id<CAMetalDrawable> mCurrentDrawable = nullptr;
     id<MTLTexture> mDepthTexture = nullptr;
 
-    UniformBufferStateTracker mUniformState[MAX_UNIFORMS];
+    UniformBufferStateTracker mUniformState[VERTEX_BUFFER_START];
 
     MetalBinder mBinder;
 
@@ -142,25 +143,26 @@ struct MetalVertexBuffer : public HwVertexBuffer {
     MetalVertexBuffer(id<MTLDevice> device, uint8_t bufferCount, uint8_t attributeCount,
             uint32_t vertexCount, Driver::AttributeArray const& attributes)
             : HwVertexBuffer(bufferCount, attributeCount, vertexCount, attributes) {
-        // todo: handle more than 1 buffer
 
-        // Calculate buffer size.
-        uint8_t bufferIndex = 0;
-        uint32_t size = 0;
-        for (auto const& item : attributes) {
-            if (item.buffer == bufferIndex) {
-                uint32_t end = item.offset + vertexCount * item.stride;
-                size = std::max(size, end);
+        buffers.reserve(bufferCount);
+
+        for (uint8_t bufferIndex = 0; bufferIndex < bufferCount; ++bufferIndex) {
+            // Calculate buffer size.
+            uint32_t size = 0;
+            for (auto const& item : attributes) {
+                if (item.buffer == bufferIndex) {
+                    uint32_t end = item.offset + vertexCount * item.stride;
+                    size = std::max(size, end);
+                }
             }
-        }
 
-        buffer = [device newBufferWithLength:size
-                                     options:MTLResourceStorageModeShared];
-        bufferSize = size;
+            id<MTLBuffer> buffer = [device newBufferWithLength:size
+                                                       options:MTLResourceStorageModeShared];
+            buffers.push_back(buffer);
+        }
     }
 
-    id<MTLBuffer> buffer;
-    uint32_t bufferSize;
+    std::vector<id<MTLBuffer>> buffers;
 };
 
 struct MetalIndexBuffer : public HwIndexBuffer {
@@ -186,7 +188,12 @@ struct MetalUniformBuffer : public HwUniformBuffer {
 struct MetalRenderPrimitive : public HwRenderPrimitive {
     MetalVertexBuffer* vertexBuffer = nullptr;
     MetalIndexBuffer* indexBuffer = nullptr;
+
+    // This struct is used to create the pipeline description to describe vertex assembly.
     MetalBinder::VertexDescription vertexDescription = {};
+
+    std::vector<id<MTLBuffer>> buffers;
+    std::vector<NSUInteger> offsets;
 
     void setBuffers(MetalVertexBuffer* vertexBuffer, MetalIndexBuffer* indexBuffer,
                     uint32_t enabledAttributes) {
@@ -194,21 +201,35 @@ struct MetalRenderPrimitive : public HwRenderPrimitive {
         this->indexBuffer = indexBuffer;
 
         const size_t attributeCount = vertexBuffer->attributes.size();
+
+        buffers.clear();
+        buffers.reserve(attributeCount);
+        offsets.clear();
+        offsets.reserve(attributeCount);
+
+        // Each attribute gets its own vertex buffer.
+
+        uint32_t bufferIndex = 0;
         for (uint32_t attributeIndex = 0; attributeIndex < attributeCount; attributeIndex++) {
             if (!(enabledAttributes & (1U << attributeIndex))) {
                 continue;
             }
             const auto& attribute = vertexBuffer->attributes[attributeIndex];
 
+            buffers.push_back(vertexBuffer->buffers[attribute.buffer]);
+            offsets.push_back(attribute.offset);
+
             vertexDescription.attributes[attributeIndex] = {
                 .format = getMetalFormat(attribute.type,
                         attribute.flags & Driver::Attribute::FLAG_NORMALIZED),
-                .buffer = 10,   // todo: hack, handle multiple buffers
-                .offset = attribute.offset
+                .buffer = bufferIndex,
+                .offset = 0
             };
-            vertexDescription.layouts[10] = {
+            vertexDescription.layouts[bufferIndex] = {
                 .stride = attribute.stride
             };
+
+            bufferIndex++;
         };
     }
 };
@@ -501,7 +522,7 @@ bool MetalDriver::isFrameTimeSupported() {
 void MetalDriver::loadVertexBuffer(Driver::VertexBufferHandle vbh, size_t index,
         Driver::BufferDescriptor&& data, uint32_t byteOffset, uint32_t byteSize) {
     auto* vb = handle_cast<MetalVertexBuffer>(mHandleMap, vbh);
-    memcpy(vb->buffer.contents, data.buffer, data.size);
+    memcpy(vb->buffers[index].contents, data.buffer, data.size);
 }
 
 void MetalDriver::loadIndexBuffer(Driver::IndexBufferHandle ibh, Driver::BufferDescriptor&& data,
@@ -563,7 +584,7 @@ void MetalDriver::beginRenderPass(Driver::RenderTargetHandle rth,
     // Metal requires a new command encoder for each render pass, and they cannot be reused.
     // We must bind the depth-stencil state for each command encoder, so we dirty the state here
     // to force a rebinding at the first the draw call of this pass.
-    for (uint32_t i = 0; i < MAX_UNIFORMS; i++) {
+    for (uint32_t i = 0; i < VERTEX_BUFFER_START; i++) {
         pImpl->mUniformState[i].invalidate();
     }
     pImpl->mDepthStencilState.invalidate();
@@ -712,7 +733,7 @@ void MetalDriver::draw(Driver::ProgramHandle ph, Driver::RasterState rs,
     }
 
     // Bind any uniform buffers that have changed since the last draw call.
-    for (uint32_t i = 0; i < MAX_UNIFORMS; i++) {
+    for (uint32_t i = 0; i < VERTEX_BUFFER_START; i++) {
         auto& thisUniform = pImpl->mUniformState[i];
         if (thisUniform.stateChanged() ) {
             const auto& uniformState = thisUniform.getState();
@@ -736,10 +757,11 @@ void MetalDriver::draw(Driver::ProgramHandle ph, Driver::RasterState rs,
         }
     }
 
-    // Bind the vertex buffer.
-    [pImpl->mCurrentCommandEncoder setVertexBuffer:primitive->vertexBuffer->buffer
-                                            offset:0
-                                           atIndex:VERTEX_BUFFER_BINDING];
+    // Bind the vertex buffers.
+    NSRange bufferRange = NSMakeRange(VERTEX_BUFFER_START, primitive->buffers.size());
+    [pImpl->mCurrentCommandEncoder setVertexBuffers:primitive->buffers.data()
+                                            offsets:primitive->offsets.data()
+                                          withRange:bufferRange];
 
     [pImpl->mCurrentCommandEncoder drawIndexedPrimitives:MTLPrimitiveTypeTriangle
                                               indexCount:primitive->count

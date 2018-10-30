@@ -43,7 +43,7 @@ static constexpr uint8_t BAKED_COLOR_PACKAGE[] {
 int main(int argc, char** argv) {
     Config config;
     config.title = "vbotest";
-    config.backend = Engine::Backend::VULKAN;
+    config.backend = Engine::Backend::METAL;
 
     // Aggregate positions and colors into a single buffer without interleaving.
     std::vector<uint8_t> vbo(sizeof(POSITIONS) + sizeof(COLORS));
@@ -52,6 +52,8 @@ int main(int argc, char** argv) {
 
     App app;
     auto setup = [&app, &vbo](Engine* engine, View* view, Scene* scene) {
+
+        view->setPostProcessingEnabled(false);
 
         // Populate vertex buffer.
         app.vb = VertexBuffer::Builder().vertexCount(3).bufferCount(1)

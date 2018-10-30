@@ -30,17 +30,14 @@
 namespace filament {
 namespace driver {
 
-static constexpr uint32_t MAX_UNIFORMS = BindingPoints::COUNT;
+static constexpr uint32_t VERTEX_BUFFER_START = BindingPoints::COUNT;
+static constexpr uint32_t MAX_VERTEX_ATTRIBUTES = filament::ATTRIBUTE_INDEX_COUNT;
 
 struct MetalBinderImpl;
 
 class MetalBinder {
 
 public:
-    static constexpr uint32_t MAX_VERTEX_ATTRIBUTES = filament::ATTRIBUTE_INDEX_COUNT;
-
-    // Metal indexes vertex buffers and uniform buffers in the same number namespace.
-    static constexpr uint32_t MAX_BUFFERS = BindingPoints::COUNT + MAX_ATTRIBUTE_BUFFERS_COUNT;
 
     MetalBinder();
     ~MetalBinder();
@@ -59,8 +56,7 @@ public:
             uint32_t stride;
         };
         Attribute attributes[MAX_VERTEX_ATTRIBUTES];
-        // todo: we don't need that many layouts, only Vertex buffers need layouts.
-        Layout layouts[MAX_BUFFERS];
+        Layout layouts[MAX_VERTEX_ATTRIBUTES];
 
         bool operator==(const VertexDescription& rhs) const noexcept {
             bool result = true;
@@ -71,7 +67,7 @@ public:
                    this->attributes[i].offset == rhs.attributes[i].offset
                 );
             }
-            for (uint32_t i = 0; i < MAX_BUFFERS; i++) {
+            for (uint32_t i = 0; i < MAX_VERTEX_ATTRIBUTES; i++) {
                 result &= this->layouts[i].stride == rhs.layouts[i].stride;
             }
             return result;

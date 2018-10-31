@@ -37,12 +37,13 @@ static constexpr uint16_t TRIANGLE_INDICES[3] = { 0, 1, 2 };
 int main(int argc, char** argv) {
     Config config;
     config.title = "viewtest";
-    config.backend = Engine::Backend::VULKAN;
+    config.backend = Engine::Backend::METAL;
 
     App app;
     auto setup = [&app](Engine* engine, View* view, Scene* scene) {
         view->setClearColor({0, 0, 1, 1});
         view->setViewport({100, 100, 512, 512});
+        view->setPostProcessingEnabled(false);
         app.vb = VertexBuffer::Builder()
                 .vertexCount(3).bufferCount(1)
                 .attribute(VertexAttribute::POSITION, 0, VertexBuffer::AttributeType::FLOAT2, 0, 8)

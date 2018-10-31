@@ -41,15 +41,18 @@ struct MetalDriverImpl {
     id<MTLCommandBuffer> mCurrentCommandBuffer = nullptr;
     id<MTLRenderCommandEncoder> mCurrentCommandEncoder = nullptr;
 
-    id<CAMetalDrawable> mCurrentDrawable = nullptr;
-    id<MTLTexture> mDepthTexture = nullptr;
-
     UniformBufferStateTracker mUniformState[VERTEX_BUFFER_START];
 
     MetalBinder mBinder;
 
     DepthStencilStateTracker mDepthStencilState;
     DepthStencilStateCache mDepthStencilStateCache;
+
+    // Surface-related properties.
+    id<CAMetalDrawable> mCurrentDrawable = nullptr;
+    id<MTLTexture> mDepthTexture = nullptr;
+    MTLViewport mCurrentViewport = {};
+    NSUInteger mSurfaceHeight = 0;
 };
 
 // A hack, for now. Put all vertex data into buffer 10 so that it does not conflict with uniform
@@ -389,6 +392,7 @@ void MetalDriver::createSwapChain(Driver::SwapChainHandle sch, void* nativeWindo
     depthTextureDesc.usage = MTLTextureUsageRenderTarget;
     depthTextureDesc.resourceOptions = MTLResourceStorageModePrivate;
     pImpl->mDepthTexture = [pImpl->mDevice newTextureWithDescriptor:depthTextureDesc];
+    pImpl->mSurfaceHeight = height;
 }
 
 void MetalDriver::createStreamFromTextureId(Driver::StreamHandle, intptr_t externalTextureId,
@@ -574,6 +578,11 @@ void MetalDriver::updateSamplerBuffer(Driver::SamplerBufferHandle ubh,
 void MetalDriver::beginRenderPass(Driver::RenderTargetHandle rth,
         const Driver::RenderPassParams& params) {
     ASSERT_PRECONDITION(pImpl->mCurrentDrawable != nullptr, "mCurrentDrawable is null.");
+
+    // Metal clears the entire attachment without respect to viewport or scissor.
+    // todo: might need to clear the scissor area manually via a draw call if we need that
+    // functionality.
+
     MTLRenderPassDescriptor* descriptor = [MTLRenderPassDescriptor renderPassDescriptor];
     descriptor.colorAttachments[0].texture = pImpl->mCurrentDrawable.texture;
     descriptor.colorAttachments[0].loadAction = MTLLoadActionClear;
@@ -587,11 +596,13 @@ void MetalDriver::beginRenderPass(Driver::RenderTargetHandle rth,
     pImpl->mCurrentCommandEncoder =
             [pImpl->mCurrentCommandBuffer renderCommandEncoderWithDescriptor:descriptor];
 
+    viewport(params.left, params.bottom, params.width, params.height);
+
     // Metal requires a new command encoder for each render pass, and they cannot be reused.
     // We must bind the depth-stencil state for each command encoder, so we dirty the state here
     // to force a rebinding at the first the draw call of this pass.
-    for (uint32_t i = 0; i < VERTEX_BUFFER_START; i++) {
-        pImpl->mUniformState[i].invalidate();
+    for (auto &i : pImpl->mUniformState) {
+        i.invalidate();
     }
     pImpl->mDepthStencilState.invalidate();
 }
@@ -656,7 +667,16 @@ void MetalDriver::commit(Driver::SwapChainHandle sch) {
 }
 
 void MetalDriver::viewport(ssize_t left, ssize_t bottom, size_t width, size_t height) {
-
+    ASSERT_PRECONDITION(pImpl->mCurrentCommandEncoder != nullptr, "mCurrentCommandEncoder is null");
+    // Flip the viewport, because Metal's screen space is vertically flipped that of Filament's.
+    pImpl->mCurrentViewport = MTLViewport {
+        .originX = static_cast<double>(left),
+        .originY = pImpl->mSurfaceHeight - static_cast<double>(bottom) - static_cast<double>(height),
+        .height = static_cast<double>(height),
+        .width = static_cast<double>(width),
+        .znear = 0.0,
+        .zfar = 1.0
+    };
 }
 
 void MetalDriver::bindUniformBuffer(size_t index, Driver::UniformBufferHandle ubh) {
@@ -725,6 +745,9 @@ void MetalDriver::draw(Driver::ProgramHandle ph, Driver::RasterState rs,
     pImpl->mBinder.getOrCreatePipelineState(pipeline);
     assert(pipeline != nullptr);
     [pImpl->mCurrentCommandEncoder setRenderPipelineState:pipeline];
+
+    // Set the viewport state.
+    [pImpl->mCurrentCommandEncoder setViewport:pImpl->mCurrentViewport];
 
     // Set the depth-stencil state, if a state change is needed.
     DepthStencilState depthState {

@@ -42,6 +42,8 @@ namespace filament {
 #include <filament/Box.h>
 #include <filament/Texture.h>
 #include <filament/TextureSampler.h>
+#include <filament/TransformManager.h>
+
 
 //#include <assimp/Importer.hpp>
 
@@ -64,13 +66,11 @@ public:
     }
 
     //For use with normalizing coordinates
-    //TODO: change to use float3?
     math::float3 minBound = math::float3(1.0f);
     math::float3 maxBound = math::float3(-1.0f);
-    float minX = 1, maxX = -1;
-    float minY = 1, maxY = -1;
-    float minZ = 1, maxZ = -1;
 
+    filament::TransformManager::Instance rootInstance = filament::TransformManager::Instance();
+    utils::Entity rootEntity;
 private:
     struct Part {
         size_t offset;
@@ -89,6 +89,7 @@ private:
         std::vector<Part> parts;
         filament::Box aabb;
         mat4f transform;
+        mat4f accTransform;
     };
 
     bool setFromFile(const utils::Path& file,

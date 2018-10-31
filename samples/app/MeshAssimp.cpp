@@ -182,6 +182,29 @@ void setTextureFromPath(const aiScene *scene,
     std::cout << texDir + texFile.C_Str() << std::endl;
 }
 
+float3 transformPoint(float3 point, mat4f transform){
+    float4 point4 = float4(point.x, point.y, point.z, 1.0f);
+    float4 transformed = transform * point4;
+    return float3(transformed.x, transformed.y, transformed.z);
+}
+
+template<typename VECTOR, typename INDEX>
+Box computeTransformedAABB(VECTOR const* vertices, INDEX const* indices, size_t count,
+                           mat4f transform) noexcept {
+    size_t stride = sizeof(VECTOR);
+    math::float3 bmin(std::numeric_limits<float>::max());
+    math::float3 bmax(std::numeric_limits<float>::lowest());
+    for (size_t i = 0; i < count; ++i) {
+        VECTOR const* p = reinterpret_cast<VECTOR const*>(
+                (char const*)vertices + indices[i] * stride);
+        const math::float3 v(p->x, p->y, p->z);
+        float3 tv = transformPoint(v, transform);
+        bmin = min(bmin, tv);
+        bmax = max(bmax, tv);
+    }
+    return Box().set(bmin, bmax);
+}
+
 void MeshAssimp::addFromFile(const Path& path,
         std::map<std::string, MaterialInstance*>& materials, bool overrideMaterial) {
 
@@ -290,20 +313,18 @@ void MeshAssimp::addFromFile(const Path& path,
         materials[AI_DEFAULT_MATERIAL_NAME] = mDefaultColorMaterial->createInstance();
     }
 
-
-
     size_t startIndex = mRenderables.size();
     mRenderables.resize(startIndex + meshes.size());
     EntityManager::get().create(meshes.size(), mRenderables.data() + startIndex);
+    EntityManager::get().create(1, &rootEntity);
 
     TransformManager& tcm = mEngine.getTransformManager();
+    //Add root instance
+    tcm.create(rootEntity, TransformManager::Instance{}, mat4f());
 
     for (auto& mesh : meshes) {
         RenderableManager::Builder builder(mesh.parts.size());
         builder.boundingBox(mesh.aabb);
-        std::cout << mesh.aabb.center.x << "," << mesh.aabb.center.y << "," << mesh.aabb.center.z << std::endl;
-        std::cout << mesh.aabb.halfExtent.x << "," << mesh.aabb.halfExtent.y << "," << mesh.aabb.halfExtent.z << std::endl;
-
 
         size_t partIndex = 0;
         for (auto& part : mesh.parts) {
@@ -320,7 +341,6 @@ void MeshAssimp::addFromFile(const Path& path,
                 if (pos != materials.end()) {
                     builder.material(partIndex, pos->second);
                 } else {
-                    std::cout << "I don't think this should be running" << std::endl;
                     MaterialInstance* colorMaterial;
                     if (part.opacity < 1.0f) {
                         colorMaterial = mDefaultTransparentColorMaterial->createInstance();
@@ -347,8 +367,9 @@ void MeshAssimp::addFromFile(const Path& path,
             builder.build(mEngine, entity);
         }
         auto pindex = parents[meshIndex];
+        std::cout << pindex << std::endl;
         TransformManager::Instance parent((pindex < 0) ?
-                TransformManager::Instance{} : tcm.getInstance(mRenderables[pindex]));
+                tcm.getInstance(rootEntity) : tcm.getInstance(mRenderables[pindex]));
         tcm.create(entity, parent, mesh.transform);
     }
 }
@@ -434,6 +455,15 @@ bool MeshAssimp::setFromFile(const Path& file,
         outMeshes.back().offset = outIndices.size();
         outMeshes.back().transform = current;
 
+        mat4f parentTransform = parentIndex >= 0 ? outMeshes[parentIndex].accTransform : mat4f();
+//        std::cout << "parTrans" << std::endl << parentTransform << std::endl;
+        outMeshes.back().accTransform = parentTransform * current;
+        std::cout << "accTransform: " << std::endl << outMeshes.back().accTransform << std::endl;
+//        if(node->mNumMeshes > 0) {
+//            std::cout << "currTrans" << std::endl << current << std::endl;
+//            std::cout << "accTrans" << std::endl << outMeshes.back().accTransform << std::endl;
+//        }
+
         // Bias and scale factor when storing tangent frames in normalized short4
         const float bias = 1.0f / 32767.0f;
         const float factor = (float) (sqrt(1.0 - (double) bias * (double) bias));
@@ -495,10 +525,10 @@ bool MeshAssimp::setFromFile(const Path& file,
                     uint32_t materialId = mesh->mMaterialIndex;
                     aiMaterial const* material = scene->mMaterials[materialId];
 
-                    //Get filepaths for PBR textures
-                    for (i=0; i < material->mNumProperties; i++) {
-                        std::cout << material->mProperties[i]->mKey.C_Str() << std::endl;
-                    }
+//                    //Get filepaths for PBR textures
+//                    for (i=0; i < material->mNumProperties; i++) {
+//                        std::cout << material->mProperties[i]->mKey.C_Str() << std::endl;
+//                    }
 
                     int texIndex = 0;
                     aiString baseColorPath;
@@ -682,32 +712,43 @@ bool MeshAssimp::setFromFile(const Path& file,
                     outIndices.data() + mesh.offset,
                     mesh.count);
 
-            float3 aabbMin = mesh.aabb.getMin();
-            float3 aabbMax = mesh.aabb.getMax();
+            Box transformedAabb = computeTransformedAABB(
+                    outPositions.data(),
+                    outIndices.data() + mesh.offset,
+                    mesh.count,
+                    mesh.accTransform);
 
+            float3 aabbMin = transformedAabb.getMin();
+            float3 aabbMax = transformedAabb.getMax();
 
-            if (minBound.x > maxBound.x){
-                minBound.x = aabbMin.x;
-                maxBound.x = aabbMax.x;
-            } else {
-                minBound.x = fmin(minBound.x, aabbMin.x);
-                maxBound.x = fmax(maxBound.x, aabbMax.x);
+            if(!isinf(aabbMin.x) && !isinf(aabbMax.x)) {
+                if (minBound.x > maxBound.x) {
+                    minBound.x = aabbMin.x;
+                    maxBound.x = aabbMax.x;
+                } else {
+                    minBound.x = fmin(minBound.x, aabbMin.x);
+                    maxBound.x = fmax(maxBound.x, aabbMax.x);
+                }
             }
 
-            if (minBound.y > maxBound.y){
-                minBound.y = aabbMin.y;
-                maxBound.y = aabbMax.y;
-            } else {
-                minBound.y = fmin(minBound.y, aabbMin.y);
-                maxBound.y = fmax(maxBound.y, aabbMax.y);
+            if(!isinf(aabbMin.y) && !isinf(aabbMax.y)) {
+                if (minBound.y > maxBound.y) {
+                    minBound.y = aabbMin.y;
+                    maxBound.y = aabbMax.y;
+                } else {
+                    minBound.y = fmin(minBound.y, aabbMin.y);
+                    maxBound.y = fmax(maxBound.y, aabbMax.y);
+                }
             }
 
-            if (minBound.z > maxBound.z){
-                minBound.z = aabbMin.z;
-                maxBound.z = aabbMax.z;
-            } else {
-                minBound.z = fmin(minBound.z, aabbMin.z);
-                maxBound.z = fmax(maxBound.z, aabbMax.z);
+            if(!isinf(aabbMin.z) && !isinf(aabbMax.z)) {
+                if (minBound.z > maxBound.z) {
+                    minBound.z = aabbMin.z;
+                    maxBound.z = aabbMax.z;
+                } else {
+                    minBound.z = fmin(minBound.z, aabbMin.z);
+                    maxBound.z = fmax(maxBound.z, aabbMax.z);
+                }
             }
         }
 
@@ -717,4 +758,24 @@ bool MeshAssimp::setFromFile(const Path& file,
     return false;
 }
 
+//template<typename VECTOR, typename INDEX, typename, typename>
+//
+//Box MeshAssimp::computeTransformedAABB(std::vector<uint32_t> &outIndices, std::vector<half4> &outPositions,
+//                                       MeshAssimp::Mesh &mesh) const {
+//    math::float3 bmin(std::numeric_limits<float>::max());
+//    math::float3 bmax(std::numeric_limits<float>::lowest());
+//    for (size_t i = 0; i < mesh.count; ++i) {
+//         vector const* p = reinterpret_cast<VECTOR const*>(
+//                (char const*)vertices + indices[i] * stride);
+//        const math::float3 v(p->x, p->y, p->z);
+//        bmin = min(bmin, v);
+//        bmax = max(bmax, v);
+//    }
+//    return Box().set(bmin, bmax);
+//
+//    mesh.aabb = RenderableManager::computeAABB(
+//            outPositions.data(),
+//            outIndices.data() + mesh.offset,
+//            mesh.count);
+//}
 

@@ -47,6 +47,12 @@
 
 #include <filamat/MaterialBuilder.h>
 
+#include "app/Cube.h"
+
+static constexpr uint8_t TRANSPARENT_COLOR_PACKAGE[] = {
+    #include "generated/material/transparentColor.inc"
+};
+
 using namespace math;
 using namespace filament;
 using namespace filamat;
@@ -63,6 +69,8 @@ static Texture* g_roughnessMap = nullptr;
 static Texture* g_aoMap = nullptr;
 static Texture* g_normalMap = nullptr;
 static Texture* g_baseColorMap = nullptr;
+
+static Cube* boundingCube = nullptr;
 
 static Config g_config;
 static struct PbrConfig {
@@ -170,6 +178,7 @@ static void cleanup(Engine* engine, View* view, Scene* scene) {
     engine->destroy(g_aoMap);
     engine->destroy(g_normalMap);
 
+    delete boundingCube;
     EntityManager& em = EntityManager::get();
     engine->destroy(g_light);
     em.destroy(g_light);
@@ -203,24 +212,35 @@ static void setup(Engine* engine, View* view, Scene* scene) {
     maxBound = fmax(g_meshSet->maxBound.x - g_meshSet->minBound.x, g_meshSet->maxBound.y - g_meshSet->minBound.y);
     maxBound = fmax(maxBound, g_meshSet->maxBound.z - g_meshSet->minBound.z);
 
-    float3 center = (g_meshSet->maxBound + g_meshSet->minBound) / 2.0f;
+    float scaleFactor = 2.0f / maxBound;
+    mat4f scale = mat4f{ mat3f(2.0f / maxBound), float4(0.0f, 0.0f, 0.0f, 1.0f) };
 
-    mat4f translation = mat4f();
+    float3 center = -1 * (g_meshSet->maxBound + g_meshSet->minBound) / 2.0f;
+    center.z -= 4.0f / scaleFactor;
 
-    std::cout << g_meshSet->maxBound << std::endl;
-    std::cout << g_meshSet->minBound << std::endl;
+    auto rooti = tcm.getInstance(g_meshSet->rootEntity);
+    tcm.setTransform(rooti, mat4f::scale(float3(scaleFactor)) * mat4f::translate(center));
 
-    translation[3][0] = -center.x;
-    translation[3][1] = -center.y;
-    translation[3][2] = -center.z;
+    //Draw bounding box
+//    filament::Material const* transparentMaterial = Material::Builder()
+//            .package((void*) TRANSPARENT_COLOR_PACKAGE, sizeof(TRANSPARENT_COLOR_PACKAGE))
+//            .build(*engine);
+//    Cube *bbcube = new Cube(*engine, transparentMaterial, {1,0,0});
+//    bbcube->mapAabb(*engine, Box().set(g_meshSet->minBound, g_meshSet->maxBound));
+//    scene->addEntity(bbcube->getWireFrameRenderable());
+//    scene->addEntity(bbcube->getSolidRenderable());
 
-    std::cout << translation << std::endl;
     for (auto renderable : g_meshSet->getRenderables()) {
         if (rcm.hasComponent(renderable)) {
             auto ti = tcm.getInstance(renderable);
-            tcm.setTransform(ti, mat4f{ mat3f(2.0 / maxBound), float3(0.0f, 0.0f, -4.0f) } * translation *
-                                 tcm.getWorldTransform(ti));
+            std::cout << "worldTrans" << std::endl << tcm.getWorldTransform(ti) << std::endl;
+
+//            mat4f transform = tcm.getWorldTransform(ti);
+//            mat4f transform =  mat4f::scale(scale) * mat4f::translate(translation);
+
+//            tcm.setTransform(ti, tcm.getWorldTransform(ti));
             scene->addEntity(renderable);
+//            std::cout << "finaltrans" << std::endl << transform << std::endl;
         }
     }
 

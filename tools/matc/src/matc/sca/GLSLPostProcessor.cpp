@@ -126,9 +126,10 @@ static std::string shrinkString(const std::string& s) {
 }
 
 bool SpvToMsl(const SpirvBlob* spirv, std::string* outMsl) {
-    CompilerMSL::Options mslOptions;
     CompilerMSL mslCompiler(*spirv);
-    mslCompiler.set_msl_options(mslOptions);
+    mslCompiler.set_common_options(CompilerGLSL::Options {
+        .vertex.fixup_clipspace = true
+    });
     *outMsl = mslCompiler.compile();
 }
 

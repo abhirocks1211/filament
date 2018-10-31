@@ -56,8 +56,7 @@ FView::FView(FEngine& engine)
     : mFroxelizer(engine),
       mPerViewUb(engine.getPerViewUib()),
       mPerViewSb(engine.getPerViewSib()),
-      mClipSpace01(engine.getBackend() == Backend::VULKAN ||
-                   engine.getBackend() == Backend::METAL),
+      mClipSpace01(engine.getBackend() == Backend::VULKAN),
       mDirectionalShadowMap(engine) {
     DriverApi& driverApi = engine.getDriverApi();
 

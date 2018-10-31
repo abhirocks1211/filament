@@ -34,11 +34,11 @@ namespace filament {
 namespace driver {
 
 struct MetalDriverImpl {
-    id<MTLDevice> mDevice;
-    id<MTLCommandQueue> mCommandQueue;
+    id<MTLDevice> mDevice = nullptr;
+    id<MTLCommandQueue> mCommandQueue = nullptr;
 
     // Single use, re-created each frame.
-    id<MTLCommandBuffer> mCurrentCommandBuffer;
+    id<MTLCommandBuffer> mCurrentCommandBuffer = nullptr;
     id<MTLRenderCommandEncoder> mCurrentCommandEncoder = nullptr;
 
     id<CAMetalDrawable> mCurrentDrawable = nullptr;
@@ -284,15 +284,6 @@ MetalDriver::MetalDriver(driver::MetalPlatform* platform) noexcept
     pImpl->mDepthStencilStateCache.setCreationFunction(createDepthStencilState);
 
     // Create a depth texture and depthStencilState.
-    // todo: This should not be done globally and instead done per render target.
-    MTLTextureDescriptor* depthTextureDesc =
-            [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatDepth32Float
-                                                               width:1024
-                                                              height:640
-                                                           mipmapped:NO];
-    depthTextureDesc.usage = MTLTextureUsageRenderTarget;
-    depthTextureDesc.resourceOptions = MTLResourceStorageModePrivate;
-    pImpl->mDepthTexture = [pImpl->mDevice newTextureWithDescriptor:depthTextureDesc];
 }
 
 MetalDriver::~MetalDriver() noexcept {
@@ -376,13 +367,28 @@ void MetalDriver::createFence(Driver::FenceHandle, int dummy) {
 }
 
 void MetalDriver::createSwapChain(Driver::SwapChainHandle sch, void* nativeWindow, uint64_t flags) {
-    auto* swapChain = construct_handle<MetalSwapChain>(mHandleMap, sch);
+    auto *swapChain = construct_handle<MetalSwapChain>(mHandleMap, sch);
 
     // Obtain the CAMetalLayer-backed view.
     // todo: move this into Platform.
-    NSView* nsview = (NSView*) nativeWindow;
+    NSView *nsview = (NSView *) nativeWindow;
     nsview = [nsview viewWithTag:255];
-    swapChain->layer = (CAMetalLayer*) nsview.layer;
+    swapChain->layer = (CAMetalLayer *) nsview.layer;
+
+    // Create the depth buffer.
+    // todo: This is a hack for now, and assumes createSwapChain is only called once.
+    CGSize size = swapChain->layer.bounds.size;
+    CGFloat scale = swapChain->layer.contentsScale;
+    auto width = static_cast<NSUInteger>(size.width * scale);
+    auto height = static_cast<NSUInteger>(size.height * scale);
+    MTLTextureDescriptor* depthTextureDesc =
+            [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatDepth32Float
+                                                               width:width
+                                                              height:height
+                                                           mipmapped:NO];
+    depthTextureDesc.usage = MTLTextureUsageRenderTarget;
+    depthTextureDesc.resourceOptions = MTLResourceStorageModePrivate;
+    pImpl->mDepthTexture = [pImpl->mDevice newTextureWithDescriptor:depthTextureDesc];
 }
 
 void MetalDriver::createStreamFromTextureId(Driver::StreamHandle, intptr_t externalTextureId,
@@ -637,6 +643,7 @@ void MetalDriver::makeCurrent(Driver::SwapChainHandle schDraw, Driver::SwapChain
                                   "Metal driver does not support distinct draw/read swap chains.");
     auto* swapChain = handle_cast<MetalSwapChain>(mHandleMap, schDraw);
     pImpl->mCurrentDrawable = [swapChain->layer nextDrawable];
+
     if (pImpl->mCurrentDrawable == nil) {
         utils::slog.e << "Could not obtain drawable." << utils::io::endl;
         utils::debug_trap();

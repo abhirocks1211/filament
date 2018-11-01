@@ -163,21 +163,21 @@ void setTextureFromPath(const aiScene *scene,
                         filament::TextureSampler sampler,
                         char *parameterName){
 
-    Texture* baseColorMap = nullptr;
+    Texture* textureMap = nullptr;
     int embeddedId = getEmbeddedTexId(texFile);
 
     if (embeddedId != -1){
         std::cout << "embedded texture " << embeddedId << std::endl;
-        loadEmbeddedTex(engine, scene->mTextures[embeddedId], &baseColorMap);
+        loadEmbeddedTex(engine, scene->mTextures[embeddedId], &textureMap);
     } else {
-        loadTex(engine, texDir + texFile.C_Str(), &baseColorMap);
+        loadTex(engine, texDir + texFile.C_Str(), &textureMap, false);
     }
 
-    textures.push_back(baseColorMap);
+    textures.push_back(textureMap);
 
-    if (baseColorMap != nullptr) {
+    if (textureMap != nullptr) {
         outMaterials[materialName]->setParameter(
-                parameterName, baseColorMap, sampler);
+                parameterName, textureMap, sampler);
     }
     std::cout << texDir + texFile.C_Str() << std::endl;
 }

@@ -12,6 +12,7 @@ set(MATERIAL_SRCS
         materials/aiDefaultTrans.mat
         materials/depthVisualizer.mat
         materials/gltf2.mat
+        materials/gltf2DoubleSided.mat
         materials/groundShadow.mat
         materials/sandboxCloth.mat
         materials/sandboxLit.mat

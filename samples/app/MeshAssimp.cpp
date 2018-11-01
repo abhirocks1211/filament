@@ -59,6 +59,10 @@ static constexpr uint8_t GLTF2_PACKAGE[] = {
     #include "generated/material/gltf2.inc"
 };
 
+static constexpr uint8_t GLTF2DS_PACKAGE[] = {
+    #include "generated/material/gltf2DoubleSided.inc"
+};
+
 MeshAssimp::MeshAssimp(Engine& engine) : mEngine(engine) {
 }
 
@@ -68,6 +72,7 @@ MeshAssimp::~MeshAssimp() {
     mEngine.destroy(mDefaultColorMaterial);
     mEngine.destroy(mDefaultTransparentColorMaterial);
     mEngine.destroy(mGltfMaterial);
+    mEngine.destroy(mGltfMaterialDS);
     mEngine.destroy(mDefaultNormalMap);
     mEngine.destroy(mDefaultMap);
     for (Entity renderable : mRenderables) {
@@ -470,6 +475,10 @@ bool MeshAssimp::setFromFile(const Path& file,
                 .package((void*) GLTF2_PACKAGE, sizeof(GLTF2_PACKAGE))
                 .build(mEngine);
 
+        mGltfMaterialDS = Material::Builder()
+                .package((void*) GLTF2DS_PACKAGE, sizeof(GLTF2DS_PACKAGE))
+                .build(mEngine);
+
         for (size_t i = 0; i < node->mNumMeshes; i++) {
             aiMesh const* mesh = scene->mMeshes[node->mMeshes[i]];
 
@@ -526,9 +535,9 @@ bool MeshAssimp::setFromFile(const Path& file,
 
 //                    //Get filepaths for PBR textures
                     //For some reason, uncommenting this messes up some of the models
-//                    for (i=0; i < material->mNumProperties; i++) {
-//                        std::cout << material->mProperties[i]->mKey.C_Str() << std::endl;
-//                    }
+                    for (i=0; i < material->mNumProperties; i++) {
+                        std::cout << material->mProperties[i]->mKey.C_Str() << std::endl;
+                    }
 
                     int texIndex = 0;
                     aiString baseColorPath;
@@ -559,8 +568,16 @@ bool MeshAssimp::setFromFile(const Path& file,
 
                     if (outMaterials.find(materialName) == outMaterials.end()) {
 
-
-                        outMaterials[materialName] = mGltfMaterial->createInstance();
+                        bool isDoubleSided = false;
+                        if (material->Get("$mat.twosided", 0, 0, isDoubleSided) == AI_SUCCESS){
+                            if (isDoubleSided){
+                                outMaterials[materialName] = mGltfMaterialDS->createInstance();
+                            } else {
+                                outMaterials[materialName] = mGltfMaterial->createInstance();
+                            }
+                        } else {
+                            outMaterials[materialName] = mGltfMaterial->createInstance();
+                        }
 
                         // Load property values for gltf files
                         aiColor4D baseColorFactor;
@@ -628,6 +645,8 @@ bool MeshAssimp::setFromFile(const Path& file,
                             baseColorFactorCast = *reinterpret_cast<sRGBColorA*>(&baseColorFactor);
                             outMaterials[materialName]->setParameter("baseColorFactor", baseColorFactorCast);
                         }
+
+                        //Set various texture settings
 
                     }
 

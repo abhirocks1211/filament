@@ -108,7 +108,9 @@ private:
 
     filament::Material* mDefaultColorMaterial = nullptr;
     filament::Material* mDefaultTransparentColorMaterial = nullptr;
-    filament::Material* mGltfMaterial = nullptr;
+    filament::Material* mGltfMaterial = nullptr; // Single sided gltf material
+    filament::Material* mGltfMaterialDS = nullptr; // Double sided gltf material
+
 
     filament::Texture* mDefaultMap = nullptr;
     filament::Texture* mDefaultNormalMap = nullptr;

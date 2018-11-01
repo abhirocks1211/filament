@@ -221,7 +221,7 @@ static void setup(Engine* engine, View* view, Scene* scene) {
     auto rooti = tcm.getInstance(g_meshSet->rootEntity);
     tcm.setTransform(rooti, mat4f::scale(float3(scaleFactor)) * mat4f::translate(center));
 
-    //Draw bounding box
+//    //Draw bounding box
 //    filament::Material const* transparentMaterial = Material::Builder()
 //            .package((void*) TRANSPARENT_COLOR_PACKAGE, sizeof(TRANSPARENT_COLOR_PACKAGE))
 //            .build(*engine);
@@ -232,15 +232,7 @@ static void setup(Engine* engine, View* view, Scene* scene) {
 
     for (auto renderable : g_meshSet->getRenderables()) {
         if (rcm.hasComponent(renderable)) {
-            auto ti = tcm.getInstance(renderable);
-            std::cout << "worldTrans" << std::endl << tcm.getWorldTransform(ti) << std::endl;
-
-//            mat4f transform = tcm.getWorldTransform(ti);
-//            mat4f transform =  mat4f::scale(scale) * mat4f::translate(translation);
-
-//            tcm.setTransform(ti, tcm.getWorldTransform(ti));
             scene->addEntity(renderable);
-//            std::cout << "finaltrans" << std::endl << transform << std::endl;
         }
     }
 

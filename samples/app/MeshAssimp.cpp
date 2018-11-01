@@ -458,7 +458,6 @@ bool MeshAssimp::setFromFile(const Path& file,
         mat4f parentTransform = parentIndex >= 0 ? outMeshes[parentIndex].accTransform : mat4f();
 //        std::cout << "parTrans" << std::endl << parentTransform << std::endl;
         outMeshes.back().accTransform = parentTransform * current;
-        std::cout << "accTransform: " << std::endl << outMeshes.back().accTransform << std::endl;
 //        if(node->mNumMeshes > 0) {
 //            std::cout << "currTrans" << std::endl << current << std::endl;
 //            std::cout << "accTrans" << std::endl << outMeshes.back().accTransform << std::endl;
@@ -526,6 +525,7 @@ bool MeshAssimp::setFromFile(const Path& file,
                     aiMaterial const* material = scene->mMaterials[materialId];
 
 //                    //Get filepaths for PBR textures
+                    //For some reason, uncommenting this messes up some of the models
 //                    for (i=0; i < material->mNumProperties; i++) {
 //                        std::cout << material->mProperties[i]->mKey.C_Str() << std::endl;
 //                    }
@@ -540,7 +540,12 @@ bool MeshAssimp::setFromFile(const Path& file,
                     std::string materialName;
 
                     if (material->Get(AI_MATKEY_NAME, name) != AI_SUCCESS) {
-                        materialName = AI_DEFAULT_MATERIAL_NAME;
+                        static int matCount = 0;
+                        while (outMaterials.find("_mat_" + std::to_string(matCount)) != outMaterials.end()){
+                            matCount ++;
+                        }
+                        materialName = "_mat_" + std::to_string(matCount);
+                        std::cout << materialName << std::endl;
                     } else {
                         materialName = name.C_Str();
                     }
@@ -556,6 +561,7 @@ bool MeshAssimp::setFromFile(const Path& file,
 
                     if (outMaterials.find(materialName) == outMaterials.end()) {
 
+
                         outMaterials[materialName] = mGltfMaterial->createInstance();
 
                         // Load property values for gltf files
@@ -566,6 +572,7 @@ bool MeshAssimp::setFromFile(const Path& file,
                         float metallicFactor = 1.0;
                         float roughnessFactor = 1.0;
 
+                        //TODO: is occlusion strength available on Assimp now?
 //                        if(material->Get("$mat.gltf.occlusionTexture.strength", 0, 0, occlusionStrength) == AI_SUCCESS){
 //                            std::cout << "hey" << std::endl;
 //                        }

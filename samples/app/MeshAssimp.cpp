@@ -367,7 +367,6 @@ void MeshAssimp::addFromFile(const Path& path,
             builder.build(mEngine, entity);
         }
         auto pindex = parents[meshIndex];
-        std::cout << pindex << std::endl;
         TransformManager::Instance parent((pindex < 0) ?
                 tcm.getInstance(rootEntity) : tcm.getInstance(mRenderables[pindex]));
         tcm.create(entity, parent, mesh.transform);
@@ -394,7 +393,7 @@ bool MeshAssimp::setFromFile(const Path& file,
     aiScene const* scene = importer.ReadFile(file,
             // normals and tangents
             aiProcess_GenSmoothNormals |
-//            aiProcess_CalcTangentSpace |
+            aiProcess_CalcTangentSpace |
             // UV Coordinates
             aiProcess_GenUVCoords |
             // topology optimization
@@ -498,6 +497,7 @@ bool MeshAssimp::setFromFile(const Path& file,
                         if (!tangents) {
                             bitangent = norm(cross(normal, float3{1.0, 0.0, 0.0}));
                             tangent = norm(cross(normal, bitangent));
+                            std::cout << "tangents being generated" << std::endl;
                         } else {
                             tangent = tangents[j];
                             bitangent = bitangents[j];
@@ -545,7 +545,6 @@ bool MeshAssimp::setFromFile(const Path& file,
                             matCount ++;
                         }
                         materialName = "_mat_" + std::to_string(matCount);
-                        std::cout << materialName << std::endl;
                     } else {
                         materialName = name.C_Str();
                     }
@@ -557,7 +556,6 @@ bool MeshAssimp::setFromFile(const Path& file,
                     sampler.setAnisotropy(8.0f);
 
                     std::string dirName = file.getParent();
-                    std::cout << "directory: " << dirName << std::endl;
 
                     if (outMaterials.find(materialName) == outMaterials.end()) {
 

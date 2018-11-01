@@ -75,13 +75,13 @@ static constexpr uint8_t BAKED_TEXTURE_PACKAGE[] = {
 int main(int argc, char** argv) {
     Config config;
     config.title = "texturedquad";
-    config.backend = Engine::Backend::VULKAN;
+    config.backend = Engine::Backend::METAL;
 
     App app;
     auto setup = [&app](Engine* engine, View* view, Scene* scene) {
 
         // Load texture
-        Path path = FilamentApp::getRootPath() + "third_party/textures/Moss_01/Moss_01_Color.png";
+        Path path = "third_party/textures/Moss_01/Moss_01_Color.png";
         if (!path.exists()) {
             std::cerr << "The texture " << path << " does not exist" << std::endl;
             exit(1);

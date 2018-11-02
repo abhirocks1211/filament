@@ -157,6 +157,17 @@ int getEmbeddedTexId(aiString path){
     return -1;
 }
 
+TextureSampler::WrapMode aiToFilamentMapMode(aiTextureMapMode mapMode){
+    switch(mapMode) {
+        case aiTextureMapMode_Clamp :
+            return TextureSampler::WrapMode::CLAMP_TO_EDGE;
+        case aiTextureMapMode_Mirror :
+            return TextureSampler::WrapMode::MIRRORED_REPEAT;
+        default:
+            return TextureSampler::WrapMode::REPEAT;
+    }
+}
+
 // TODO: Change this to a member function (requires some alteration of cmakelsts.txt)
 void setTextureFromPath(const aiScene *scene,
                         Engine *engine,
@@ -165,8 +176,21 @@ void setTextureFromPath(const aiScene *scene,
                         const std::string &materialName,
                         const std::string &texDir,
                         std::map<std::string, MaterialInstance *> &outMaterials,
-                        filament::TextureSampler sampler,
+                        aiTextureMapMode *mapMode,
                         char *parameterName){
+    TextureSampler sampler;
+    if (mapMode) {
+        sampler = TextureSampler(TextureSampler::MinFilter::LINEAR_MIPMAP_LINEAR,
+                                 TextureSampler::MagFilter::LINEAR,
+                                 aiToFilamentMapMode(mapMode[0]),
+                                 aiToFilamentMapMode(mapMode[1]),
+                                 aiToFilamentMapMode(mapMode[2]));
+    } else {
+        sampler = TextureSampler(TextureSampler::MinFilter::LINEAR_MIPMAP_LINEAR,
+                                 TextureSampler::MagFilter::LINEAR, TextureSampler::WrapMode::REPEAT);
+    }
+
+//    sampler.setAnisotropy(8.0f);
 
     Texture* textureMap = nullptr;
     int embeddedId = getEmbeddedTexId(texFile);
@@ -263,6 +287,7 @@ void MeshAssimp::addFromFile(const Path& path,
         mDefaultNormalMap->setImage(mEngine, 0, std::move(defaultNormalBuffer));
         mDefaultNormalMap->generateMipmaps(mEngine);
 
+        //TODO: a lot of these method arguments should probably be class or global variables
         if (!setFromFile(path, indices, positions, tangents, texCoords, meshes, parents, materials)) {
             return;
         }
@@ -413,8 +438,6 @@ bool MeshAssimp::setFromFile(const Path& file,
 
     scene = importer.ApplyPostProcessing(aiProcess_CalcTangentSpace);
 
-
-
     if (!scene){
         std::cout << "no scene" << std::endl;
     }
@@ -533,11 +556,10 @@ bool MeshAssimp::setFromFile(const Path& file,
                     uint32_t materialId = mesh->mMaterialIndex;
                     aiMaterial const* material = scene->mMaterials[materialId];
 
-//                    //Get filepaths for PBR textures
                     //For some reason, uncommenting this messes up some of the models
-                    for (i=0; i < material->mNumProperties; i++) {
-                        std::cout << material->mProperties[i]->mKey.C_Str() << std::endl;
-                    }
+//                    for (i=0; i < material->mNumProperties; i++) {
+//                        std::cout << material->mProperties[i]->mKey.C_Str() << std::endl;
+//                    }
 
                     int texIndex = 0;
                     aiString baseColorPath;
@@ -546,8 +568,9 @@ bool MeshAssimp::setFromFile(const Path& file,
                     aiString normalPath;
                     aiString emissivePath;
                     aiString name;
-                    std::string materialName;
+                    aiTextureMapMode mapMode[3];
 
+                    std::string materialName;
                     if (material->Get(AI_MATKEY_NAME, name) != AI_SUCCESS) {
                         static int matCount = 0;
                         while (outMaterials.find("_mat_" + std::to_string(matCount)) != outMaterials.end()){
@@ -558,13 +581,10 @@ bool MeshAssimp::setFromFile(const Path& file,
                         materialName = name.C_Str();
                     }
 
-                    // TODO: Add support for non-image path values and binary gltf
-
-                    TextureSampler sampler(TextureSampler::MinFilter::LINEAR_MIPMAP_LINEAR,
-                                           TextureSampler::MagFilter::LINEAR, TextureSampler::WrapMode::REPEAT);
-                    sampler.setAnisotropy(8.0f);
-
                     std::string dirName = file.getParent();
+                    TextureSampler defaultSampler(TextureSampler::MinFilter::LINEAR_MIPMAP_LINEAR,
+                                           TextureSampler::MagFilter::LINEAR, TextureSampler::WrapMode::REPEAT);
+                    defaultSampler.setAnisotropy(8.0f);
 
                     if (outMaterials.find(materialName) == outMaterials.end()) {
 
@@ -594,39 +614,44 @@ bool MeshAssimp::setFromFile(const Path& file,
 
                         // Load texture images for gltf files
                         // TODO: lots of repeated code here...
-                        if (material->GetTexture(aiTextureType_DIFFUSE, 1, &baseColorPath) == AI_SUCCESS) {
-                            setTextureFromPath(scene, &mEngine, mTextures, baseColorPath, materialName, dirName, outMaterials, sampler, "baseColorMap");
+                        if (material->GetTexture(aiTextureType_DIFFUSE, 1, &baseColorPath, nullptr, nullptr,
+                                                 nullptr, nullptr, mapMode) == AI_SUCCESS) {
+                            setTextureFromPath(scene, &mEngine, mTextures, baseColorPath, materialName, dirName, outMaterials, mapMode, "baseColorMap");
                         } else {
-                            outMaterials[materialName]->setParameter("baseColorMap", mDefaultMap, sampler);
+                            outMaterials[materialName]->setParameter("baseColorMap", mDefaultMap, defaultSampler);
                         }
 
-                        if (material->GetTexture(aiTextureType_UNKNOWN, 0, &MRPath) == AI_SUCCESS) {
-                            setTextureFromPath(scene, &mEngine, mTextures, MRPath, materialName, dirName, outMaterials, sampler, "metallicRoughnessMap");
+                        if (material->GetTexture(aiTextureType_UNKNOWN, 0, &MRPath, nullptr, nullptr,
+                                                 nullptr, nullptr, mapMode) == AI_SUCCESS) {
+                            setTextureFromPath(scene, &mEngine, mTextures, MRPath, materialName, dirName, outMaterials, mapMode, "metallicRoughnessMap");
 
                         } else {
-                            outMaterials[materialName]->setParameter("metallicRoughnessMap", mDefaultMap, sampler);
+                            outMaterials[materialName]->setParameter("metallicRoughnessMap", mDefaultMap, defaultSampler);
                             outMaterials[materialName]->setParameter("metallicFactor", mDefaultMetallic);
                             outMaterials[materialName]->setParameter("roughnessFactor", mDefaultRoughness);
                         }
 
-                        if (material->GetTexture(aiTextureType_LIGHTMAP, 0, &AOPath) == AI_SUCCESS) {
-                            setTextureFromPath(scene, &mEngine, mTextures, AOPath, materialName, dirName, outMaterials, sampler, "aoMap");
+                        if (material->GetTexture(aiTextureType_LIGHTMAP, 0, &AOPath, nullptr, nullptr,
+                                                 nullptr, nullptr, mapMode) == AI_SUCCESS) {
+                            setTextureFromPath(scene, &mEngine, mTextures, AOPath, materialName, dirName, outMaterials, mapMode, "aoMap");
 
                         } else {
-                            outMaterials[materialName]->setParameter("aoMap", mDefaultMap, sampler);
+                            outMaterials[materialName]->setParameter("aoMap", mDefaultMap, defaultSampler);
                         }
 
-                        if (material->GetTexture(aiTextureType_NORMALS, 0, &normalPath) == AI_SUCCESS) {
-                            setTextureFromPath(scene, &mEngine, mTextures, normalPath, materialName, dirName, outMaterials, sampler, "normalMap");
+                        if (material->GetTexture(aiTextureType_NORMALS, 0, &normalPath, nullptr, nullptr,
+                                                 nullptr, nullptr, mapMode) == AI_SUCCESS) {
+                            setTextureFromPath(scene, &mEngine, mTextures, normalPath, materialName, dirName, outMaterials, mapMode, "normalMap");
                         } else {
-                            outMaterials[materialName]->setParameter("normalMap", mDefaultNormalMap, sampler);
+                            outMaterials[materialName]->setParameter("normalMap", mDefaultNormalMap, defaultSampler);
                         }
 
-                        if (material->GetTexture(aiTextureType_EMISSIVE, 0, &emissivePath) == AI_SUCCESS) {
-                            setTextureFromPath(scene, &mEngine, mTextures, emissivePath, materialName, dirName, outMaterials, sampler, "emissiveMap");
+                        if (material->GetTexture(aiTextureType_EMISSIVE, 0, &emissivePath, nullptr, nullptr,
+                                                 nullptr, nullptr, mapMode) == AI_SUCCESS) {
+                            setTextureFromPath(scene, &mEngine, mTextures, emissivePath, materialName, dirName, outMaterials, mapMode, "emissiveMap");
 
                         }  else {
-                            outMaterials[materialName]->setParameter("emissiveMap", mDefaultMap, sampler);
+                            outMaterials[materialName]->setParameter("emissiveMap", mDefaultMap, defaultSampler);
                             outMaterials[materialName]->setParameter("emissiveFactor", mDefaultEmissive);
                         }
 
@@ -645,9 +670,6 @@ bool MeshAssimp::setFromFile(const Path& file,
                             baseColorFactorCast = *reinterpret_cast<sRGBColorA*>(&baseColorFactor);
                             outMaterials[materialName]->setParameter("baseColorFactor", baseColorFactorCast);
                         }
-
-                        //Set various texture settings
-
                     }
 
                     aiColor3D color;

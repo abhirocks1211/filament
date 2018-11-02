@@ -199,7 +199,12 @@ void setTextureFromPath(const aiScene *scene,
         std::cout << "embedded texture " << embeddedId << std::endl;
         loadEmbeddedTex(engine, scene->mTextures[embeddedId], &textureMap);
     } else {
-        loadTex(engine, texDir + texFile.C_Str(), &textureMap, false);
+        //TODO: change this in refactor
+        if (parameterName == "baseColorMap") {
+            loadTex(engine, texDir + texFile.C_Str(), &textureMap, true);
+        } else {
+            loadTex(engine, texDir + texFile.C_Str(), &textureMap, false);
+        }
     }
 
     textures.push_back(textureMap);

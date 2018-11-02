@@ -163,8 +163,8 @@ void MetalBinder::getOrCreatePipelineState(
     pImpl->mPipelineDirty = false;
 }
 
-id<MTLDepthStencilState> createDepthStencilState(id<MTLDevice> device,
-        const DepthStencilState& state) {
+id<MTLDepthStencilState> DepthStateCreator::operator()(id<MTLDevice> device,
+        const DepthStencilState& state) noexcept {
     MTLDepthStencilDescriptor* depthStencilDescriptor = [MTLDepthStencilDescriptor new];
     depthStencilDescriptor.depthCompareFunction = state.compareFunction;
     depthStencilDescriptor.depthWriteEnabled = state.depthWriteEnabled;
@@ -242,7 +242,8 @@ constexpr inline MTLCompareFunction getCompareFunction(SamplerCompareFunc compar
     }
 }
 
-id<MTLSamplerState> createSamplerState(id<MTLDevice> device, const driver::SamplerParams& state) {
+id<MTLSamplerState> SamplerStateCreator::operator()(id<MTLDevice> device,
+        const driver::SamplerParams& state) noexcept {
     assert(state.depthStencil == false);
     MTLSamplerDescriptor* samplerDescriptor = [[MTLSamplerDescriptor new] autorelease];
     samplerDescriptor.minFilter = getFilter(state.filterMin);

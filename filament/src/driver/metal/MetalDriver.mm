@@ -84,9 +84,7 @@ MetalDriver::MetalDriver(driver::MetalPlatform* platform) noexcept
     pImpl->mCommandQueue = [pImpl->mDevice newCommandQueue];
     pImpl->mBinder.setDevice(pImpl->mDevice);
     pImpl->mDepthStencilStateCache.setDevice(pImpl->mDevice);
-    pImpl->mDepthStencilStateCache.setCreationFunction(createDepthStencilState);
     pImpl->mSamplerStateCache.setDevice(pImpl->mDevice);
-    pImpl->mSamplerStateCache.setCreationFunction(createSamplerState);
 }
 
 MetalDriver::~MetalDriver() noexcept {

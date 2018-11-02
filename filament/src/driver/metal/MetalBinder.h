@@ -93,15 +93,13 @@ private:
 };
 
 template<typename StateType,
-         typename MetalType>
+         typename MetalType,
+         typename StateCreator>
 class StateCache {
 
 public:
 
-    using StateCreationFn = std::function<MetalType(id<MTLDevice>, const StateType&)>;
-
     void setDevice(id<MTLDevice> device) { mDevice = device; }
-    void setCreationFunction(StateCreationFn creationFn) { mCreationFn = creationFn; }
 
     MetalType getOrCreateState(const StateType& state) noexcept {
         // Check if a valid state already exists in the cache.
@@ -112,7 +110,7 @@ public:
         }
 
         // If we reach this point, we couldn't find one in the cache; create a new one.
-        const auto& metalObject = mCreationFn(mDevice, state);
+        const auto& metalObject = creator(mDevice, state);
 
         mStateCache.emplace(std::make_pair(
             state,
@@ -124,9 +122,8 @@ public:
 
 private:
 
+    StateCreator creator;
     id<MTLDevice> mDevice = nil;
-
-    StateCreationFn mCreationFn;
 
     using HashFn = utils::hash::MurmurHashFn<StateType>;
     tsl::robin_map<StateType, MetalType, HashFn> mStateCache;
@@ -181,12 +178,15 @@ struct DepthStencilState {
     }
 };
 
-id<MTLDepthStencilState> createDepthStencilState(id<MTLDevice> device,
-        const DepthStencilState& state);
+struct DepthStateCreator {
+    id<MTLDepthStencilState> operator()(id<MTLDevice> device, const DepthStencilState& state)
+            noexcept;
+};
 
 using DepthStencilStateTracker = StateTracker<DepthStencilState>;
 
-using DepthStencilStateCache = StateCache<DepthStencilState, id<MTLDepthStencilState>>;
+using DepthStencilStateCache = StateCache<DepthStencilState, id<MTLDepthStencilState>,
+        DepthStateCreator>;
 
 // Uniform buffers
 
@@ -210,14 +210,17 @@ using UniformBufferStateTracker = StateTracker<UniformBufferState>;
 
 // Sampler states
 
-id<MTLSamplerState> createSamplerState(id<MTLDevice> device, const driver::SamplerParams& state);
+struct SamplerStateCreator {
+    id<MTLSamplerState> operator()(id<MTLDevice> device, const driver::SamplerParams& state)
+            noexcept;
+};
 
 inline bool operator==(const driver::SamplerParams& lhs, const driver::SamplerParams& rhs) {
     return lhs.u == rhs.u;
 }
 
-using SamplerStateCache = StateCache<driver::SamplerParams, id<MTLSamplerState>>;
-
+using SamplerStateCache = StateCache<driver::SamplerParams, id<MTLSamplerState>,
+        SamplerStateCreator>;
 
 } // namespace driver
 } // namespace filament

@@ -190,7 +190,7 @@ void setTextureFromPath(const aiScene *scene,
                                  TextureSampler::MagFilter::LINEAR, TextureSampler::WrapMode::REPEAT);
     }
 
-//    sampler.setAnisotropy(8.0f);
+//    sampler.setAnisotropy(0.0f);
 
     Texture* textureMap = nullptr;
     int embeddedId = getEmbeddedTexId(texFile);
@@ -265,7 +265,7 @@ void MeshAssimp::addFromFile(const Path& path,
                 .width(uint32_t(1))
                 .height(uint32_t(1))
                 .levels(0xff)
-                .format(driver::TextureFormat::SRGB8)
+                .format(driver::TextureFormat::RGB8)
                 .build(mEngine);
         Texture::PixelBufferDescriptor defaultBuffer(defaultTexData, size_t(1 * 1 * 3),
                                                      Texture::Format::RGB, Texture::Type::UBYTE
@@ -284,7 +284,7 @@ void MeshAssimp::addFromFile(const Path& path,
                 .width(uint32_t(1))
                 .height(uint32_t(1))
                 .levels(0xff)
-                .format(driver::TextureFormat::SRGB8)
+                .format(driver::TextureFormat::RGB8)
                 .build(mEngine);
         Texture::PixelBufferDescriptor defaultNormalBuffer(defaultNormalTexData, size_t(1 * 1 * 3),
                                                      Texture::Format::RGB, Texture::Type::UBYTE
@@ -589,7 +589,7 @@ bool MeshAssimp::setFromFile(const Path& file,
                     std::string dirName = file.getParent();
                     TextureSampler defaultSampler(TextureSampler::MinFilter::LINEAR_MIPMAP_LINEAR,
                                            TextureSampler::MagFilter::LINEAR, TextureSampler::WrapMode::REPEAT);
-                    defaultSampler.setAnisotropy(8.0f);
+//                    defaultSampler.setAnisotropy(0.0f);
 
                     if (outMaterials.find(materialName) == outMaterials.end()) {
 

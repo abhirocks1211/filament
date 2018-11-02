@@ -219,10 +219,13 @@ struct MetalProgram : public HwProgram {
 
             *shaderFunctions[i] = [library newFunctionWithName:@"main0"];
         }
+
+        samplerBindings = *program.getSamplerBindings();
     }
 
     id<MTLFunction> vertexFunction;
     id<MTLFunction> fragmentFunction;
+    SamplerBindingMap samplerBindings;
 };
 
 struct MetalTexture : public HwTexture {
@@ -237,6 +240,12 @@ struct MetalTexture : public HwTexture {
 
     id<MTLTexture> texture;
     uint8_t bytesPerPixel;
+
+};
+
+struct MetalSamplerBuffer : public HwSamplerBuffer {
+
+    MetalSamplerBuffer(size_t size) : HwSamplerBuffer(size) {}
 
 };
 

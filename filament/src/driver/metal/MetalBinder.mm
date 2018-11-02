@@ -174,5 +174,89 @@ id<MTLDepthStencilState> createDepthStencilState(id<MTLDevice> device,
     return depthStencilState;
 }
 
+constexpr inline MTLSamplerMinMagFilter getFilter(SamplerMinFilter filter) {
+    switch (filter) {
+        case SamplerMinFilter::NEAREST:
+        case SamplerMinFilter::NEAREST_MIPMAP_NEAREST:
+        case SamplerMinFilter::LINEAR_MIPMAP_NEAREST:
+            return MTLSamplerMinMagFilterNearest;
+        case SamplerMinFilter::LINEAR:
+        case SamplerMinFilter::NEAREST_MIPMAP_LINEAR:
+        case SamplerMinFilter::LINEAR_MIPMAP_LINEAR:
+            return MTLSamplerMinMagFilterLinear;
+    }
+}
+
+constexpr inline MTLSamplerMinMagFilter getFilter(SamplerMagFilter filter) noexcept {
+    switch (filter) {
+        case SamplerMagFilter::NEAREST:
+            return MTLSamplerMinMagFilterNearest;
+        case SamplerMagFilter::LINEAR:
+            return MTLSamplerMinMagFilterLinear;
+    }
+}
+
+constexpr inline MTLSamplerMipFilter getMipFilter(SamplerMinFilter filter) noexcept {
+    switch (filter) {
+        case SamplerMinFilter::NEAREST:
+        case SamplerMinFilter::LINEAR:
+            return MTLSamplerMipFilterNotMipmapped;
+        case SamplerMinFilter::NEAREST_MIPMAP_NEAREST:
+        case SamplerMinFilter::LINEAR_MIPMAP_NEAREST:
+            return MTLSamplerMipFilterNearest;
+        case SamplerMinFilter::NEAREST_MIPMAP_LINEAR:
+        case SamplerMinFilter::LINEAR_MIPMAP_LINEAR:
+            return MTLSamplerMipFilterLinear;
+    }
+}
+
+constexpr inline MTLSamplerAddressMode getAddressMode(SamplerWrapMode wrapMode) noexcept {
+    switch (wrapMode) {
+        case SamplerWrapMode::CLAMP_TO_EDGE:
+            return MTLSamplerAddressModeClampToEdge;
+        case SamplerWrapMode::REPEAT:
+            return MTLSamplerAddressModeRepeat;
+        case SamplerWrapMode::MIRRORED_REPEAT:
+            return MTLSamplerAddressModeMirrorRepeat;
+    }
+}
+
+constexpr inline MTLCompareFunction getCompareFunction(SamplerCompareFunc compareFunc) noexcept {
+    switch (compareFunc) {
+        case SamplerCompareFunc::LE:
+            return MTLCompareFunctionLessEqual;
+        case SamplerCompareFunc::GE:
+            return MTLCompareFunctionGreaterEqual;
+        case SamplerCompareFunc::L:
+            return MTLCompareFunctionLess;
+        case SamplerCompareFunc::G:
+            return MTLCompareFunctionGreater;
+        case SamplerCompareFunc::E:
+            return MTLCompareFunctionEqual;
+        case SamplerCompareFunc::NE:
+            return MTLCompareFunctionNotEqual;
+        case SamplerCompareFunc::A:
+            return MTLCompareFunctionAlways;
+        case SamplerCompareFunc::N:
+            return MTLCompareFunctionNever;
+    }
+}
+
+id<MTLSamplerState> createSamplerState(id<MTLDevice> device, const driver::SamplerParams& state) {
+    assert(state.depthStencil == false);
+    MTLSamplerDescriptor* samplerDescriptor = [[MTLSamplerDescriptor new] autorelease];
+    samplerDescriptor.minFilter = getFilter(state.filterMin);
+    samplerDescriptor.magFilter = getFilter(state.filterMag);
+    samplerDescriptor.mipFilter = getMipFilter(state.filterMin);
+    samplerDescriptor.sAddressMode = getAddressMode(state.wrapS);
+    samplerDescriptor.tAddressMode = getAddressMode(state.wrapT);
+    samplerDescriptor.rAddressMode = getAddressMode(state.wrapR);
+    samplerDescriptor.maxAnisotropy = 1u << state.anisotropyLog2;
+    samplerDescriptor.compareFunction =
+            state.compareMode == SamplerCompareMode::NONE ?
+                MTLCompareFunctionNever : getCompareFunction(state.compareFunc);
+    return [device newSamplerStateWithDescriptor:samplerDescriptor];
+}
+
 } // namespace driver
 } // namespace filament

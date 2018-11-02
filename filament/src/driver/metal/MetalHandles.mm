@@ -44,7 +44,7 @@ MetalTexture::MetalTexture(id<MTLDevice> device, driver::SamplerType target, uin
             bytesPerPixel = 4;
             break;
         case TextureFormat::RGBA8:
-            pixelFormat = MTLPixelFormatRGBA8Uint;
+            pixelFormat = MTLPixelFormatRGBA8Unorm;
             bytesPerPixel = 4;
             break;
     }

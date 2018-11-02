@@ -45,6 +45,9 @@ struct MetalDriverImpl {
 
     DepthStencilStateTracker mDepthStencilState;
     DepthStencilStateCache mDepthStencilStateCache;
+    SamplerStateCache mSamplerStateCache;
+
+    MetalSamplerBuffer* mSamplerBindings[NUM_SAMPLER_BINDINGS];
 
     // Surface-related properties.
     id<CAMetalDrawable> mCurrentDrawable = nullptr;
@@ -82,8 +85,8 @@ MetalDriver::MetalDriver(driver::MetalPlatform* platform) noexcept
     pImpl->mBinder.setDevice(pImpl->mDevice);
     pImpl->mDepthStencilStateCache.setDevice(pImpl->mDevice);
     pImpl->mDepthStencilStateCache.setCreationFunction(createDepthStencilState);
-
-    // Create a depth texture and depthStencilState.
+    pImpl->mSamplerStateCache.setDevice(pImpl->mDevice);
+    pImpl->mSamplerStateCache.setCreationFunction(createSamplerState);
 }
 
 MetalDriver::~MetalDriver() noexcept {
@@ -135,8 +138,8 @@ void MetalDriver::createTexture(Driver::TextureHandle th, Driver::SamplerType ta
             width, height, depth, usage);
 }
 
-void MetalDriver::createSamplerBuffer(Driver::SamplerBufferHandle, size_t size) {
-
+void MetalDriver::createSamplerBuffer(Driver::SamplerBufferHandle sbh, size_t size) {
+    construct_handle<MetalSamplerBuffer>(mHandleMap, sbh, size);
 }
 
 void MetalDriver::createUniformBuffer(Driver::UniformBufferHandle ubh, size_t size,
@@ -211,7 +214,7 @@ Driver::TextureHandle MetalDriver::createTextureSynchronous() noexcept {
 }
 
 Driver::SamplerBufferHandle MetalDriver::createSamplerBufferSynchronous() noexcept {
-    return {};
+    return alloc_handle<MetalSamplerBuffer, HwSamplerBuffer>();
 }
 
 Driver::UniformBufferHandle MetalDriver::createUniformBufferSynchronous() noexcept {
@@ -370,9 +373,11 @@ void MetalDriver::updateUniformBuffer(Driver::UniformBufferHandle ubh,
     scheduleDestroy(std::move(data));
 }
 
-void MetalDriver::updateSamplerBuffer(Driver::SamplerBufferHandle ubh,
+void MetalDriver::updateSamplerBuffer(Driver::SamplerBufferHandle sbh,
         SamplerBuffer&& samplerBuffer) {
-
+    auto sb = handle_cast<MetalSamplerBuffer>(mHandleMap, sbh);
+    // todo: enable a move here.
+    *sb->sb = samplerBuffer;
 }
 
 void MetalDriver::beginRenderPass(Driver::RenderTargetHandle rth,
@@ -497,7 +502,8 @@ void MetalDriver::bindUniformBufferRange(size_t index, Driver::UniformBufferHand
 }
 
 void MetalDriver::bindSamplers(size_t index, Driver::SamplerBufferHandle sbh) {
-
+    auto sb = handle_cast<MetalSamplerBuffer>(mHandleMap, sbh);
+    pImpl->mSamplerBindings[index] = sb;
 }
 
 void MetalDriver::insertEventMarker(const char* string, size_t len) {
@@ -584,6 +590,43 @@ void MetalDriver::draw(Driver::ProgramHandle ph, Driver::RasterState rs,
             [pImpl->mCurrentCommandEncoder setFragmentBuffer:uniform->buffer
                                                       offset:uniformState.offset
                                                      atIndex:i];
+        }
+    }
+
+    for (uint8_t bufferIdx = 0; bufferIdx < NUM_SAMPLER_BINDINGS; bufferIdx++) {
+        MetalSamplerBuffer* metalSb = pImpl->mSamplerBindings[bufferIdx];
+        if (!metalSb) {
+            continue;
+        }
+        SamplerBuffer* sb = metalSb->sb.get();
+        for (uint8_t samplerIdx = 0; samplerIdx < sb->getSize(); samplerIdx++) {
+            const SamplerBuffer::Sampler* sampler = sb->getBuffer() + samplerIdx;
+            if (!sampler->t) {
+                continue;
+            }
+            uint8_t binding, group;
+            if (program->samplerBindings.getSamplerBinding(bufferIdx, samplerIdx, &binding,
+                    &group)) {
+                const auto metalTexture = handle_const_cast<MetalTexture>(mHandleMap, sampler->t);
+
+                // Similar to uniforms, we can't tell which stage will use the textures, so bind to
+                // both the vertex and fragment stages.
+
+                id<MTLSamplerState> samplerState =
+                        pImpl->mSamplerStateCache.getOrCreateState(sampler->s);
+
+                [pImpl->mCurrentCommandEncoder setFragmentTexture:metalTexture->texture
+                                                          atIndex:binding];
+
+                [pImpl->mCurrentCommandEncoder setVertexTexture:metalTexture->texture
+                                                        atIndex:binding];
+
+                [pImpl->mCurrentCommandEncoder setFragmentSamplerState:samplerState
+                                                               atIndex:binding];
+
+                [pImpl->mCurrentCommandEncoder setVertexSamplerState:samplerState
+                                                             atIndex:binding];
+            }
         }
     }
 

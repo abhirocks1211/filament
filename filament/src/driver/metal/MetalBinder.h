@@ -33,6 +33,9 @@ namespace driver {
 static constexpr uint32_t VERTEX_BUFFER_START = BindingPoints::COUNT;
 static constexpr uint32_t MAX_VERTEX_ATTRIBUTES = filament::ATTRIBUTE_INDEX_COUNT;
 
+// todo: saw this in VulkanBinder, but how do we know this?
+static constexpr uint32_t NUM_SAMPLER_BINDINGS = 8;
+
 struct MetalBinderImpl;
 
 class MetalBinder {
@@ -89,7 +92,8 @@ private:
 
 };
 
-template<typename StateType, typename MetalType>
+template<typename StateType,
+         typename MetalType>
 class StateCache {
 
 public:
@@ -187,9 +191,9 @@ using DepthStencilStateCache = StateCache<DepthStencilState, id<MTLDepthStencilS
 // Uniform buffers
 
 struct UniformBufferState {
-    bool bound;
+    bool bound = false;
     Driver::UniformBufferHandle ubh;
-    uint64_t offset;
+    uint64_t offset = 0;
 
     bool operator==(const UniformBufferState& rhs) const noexcept {
         return this->bound == rhs.bound &&
@@ -203,6 +207,16 @@ struct UniformBufferState {
 };
 
 using UniformBufferStateTracker = StateTracker<UniformBufferState>;
+
+// Sampler states
+
+id<MTLSamplerState> createSamplerState(id<MTLDevice> device, const driver::SamplerParams& state);
+
+inline bool operator==(const driver::SamplerParams& lhs, const driver::SamplerParams& rhs) {
+    return lhs.u == rhs.u;
+}
+
+using SamplerStateCache = StateCache<driver::SamplerParams, id<MTLSamplerState>>;
 
 
 } // namespace driver

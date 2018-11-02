@@ -104,7 +104,7 @@ int main(int argc, char** argv) {
                 .format(driver::TextureFormat::RGBA8)
                 .build(*engine);
                 app.tex->setImage(*engine, 0, std::move(buffer));
-        TextureSampler sampler(MinFilter::LINEAR, MagFilter::LINEAR);
+        TextureSampler sampler(MinFilter::NEAREST, MagFilter::NEAREST);
 
         // Set up view
         view->setClearColor({0.1, 0.125, 0.25, 1.0});

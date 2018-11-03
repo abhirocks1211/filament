@@ -23,6 +23,7 @@
 #include <QuartzCore/QuartzCore.h> // for CAMetalLayer
 
 #include "MetalBinder.h" // for MetalBinder::VertexDescription
+#include "MetalEnums.h"
 
 #include <utils/Panic.h>
 
@@ -30,70 +31,6 @@
 
 namespace filament {
 namespace driver {
-
-static MTLVertexFormat getMetalFormat(ElementType type, bool normalized) {
-    if (normalized) {
-        switch (type) {
-            // Single Component Types
-            case ElementType::BYTE: return MTLVertexFormatCharNormalized;
-            case ElementType::UBYTE: return MTLVertexFormatUCharNormalized;
-            case ElementType::SHORT: return MTLVertexFormatShortNormalized;
-            case ElementType::USHORT: return MTLVertexFormatUShortNormalized;
-                // Two Component Types
-            case ElementType::BYTE2: return MTLVertexFormatChar2Normalized;
-            case ElementType::UBYTE2: return MTLVertexFormatUChar2Normalized;
-            case ElementType::SHORT2: return MTLVertexFormatShort2Normalized;
-            case ElementType::USHORT2: return MTLVertexFormatUShort2Normalized;
-                // Three Component Types
-            case ElementType::BYTE3: return MTLVertexFormatChar3Normalized;
-            case ElementType::UBYTE3: return MTLVertexFormatUChar3Normalized;
-            case ElementType::SHORT3: return MTLVertexFormatShort3Normalized;
-            case ElementType::USHORT3: return MTLVertexFormatUShort3Normalized;
-                // Four Component Types
-            case ElementType::BYTE4: return MTLVertexFormatChar4Normalized;
-            case ElementType::UBYTE4: return MTLVertexFormatUChar4Normalized;
-            case ElementType::SHORT4: return MTLVertexFormatShort4Normalized;
-            case ElementType::USHORT4: return MTLVertexFormatUShort4Normalized;
-            default:
-                ASSERT_POSTCONDITION(false, "Normalized format does not exist.");
-                return MTLVertexFormatInvalid;
-        }
-    }
-    switch (type) {
-        // Single Component Types
-        case ElementType::BYTE: return MTLVertexFormatChar;
-        case ElementType::UBYTE: return MTLVertexFormatUChar;
-        case ElementType::SHORT: return MTLVertexFormatShort;
-        case ElementType::USHORT: return MTLVertexFormatUShort;
-        case ElementType::HALF: return MTLVertexFormatHalf;
-        case ElementType::INT: return MTLVertexFormatInt;
-        case ElementType::UINT: return MTLVertexFormatUInt;
-        case ElementType::FLOAT: return MTLVertexFormatFloat;
-            // Two Component Types
-        case ElementType::BYTE2: return MTLVertexFormatChar2;
-        case ElementType::UBYTE2: return MTLVertexFormatUChar2;
-        case ElementType::SHORT2: return MTLVertexFormatShort2;
-        case ElementType::USHORT2: return MTLVertexFormatUShort2;
-        case ElementType::HALF2: return MTLVertexFormatHalf2;
-        case ElementType::FLOAT2: return MTLVertexFormatFloat2;
-            // Three Component Types
-        case ElementType::BYTE3: return MTLVertexFormatChar3;
-        case ElementType::UBYTE3: return MTLVertexFormatUChar3;
-        case ElementType::SHORT3: return MTLVertexFormatShort3;
-        case ElementType::USHORT3: return MTLVertexFormatUShort3;
-        case ElementType::HALF3: return MTLVertexFormatHalf3;
-        case ElementType::FLOAT3: return MTLVertexFormatFloat3;
-            // Four Component Types
-        case ElementType::BYTE4: return MTLVertexFormatChar4;
-        case ElementType::UBYTE4: return MTLVertexFormatUChar4;
-        case ElementType::SHORT4: return MTLVertexFormatShort4;
-        case ElementType::USHORT4: return MTLVertexFormatUShort4;
-        case ElementType::HALF4: return MTLVertexFormatHalf4;
-        case ElementType::FLOAT4: return MTLVertexFormatFloat4;
-    }
-    return MTLVertexFormatInvalid;
-}
-
 
 struct MetalSwapChain : public HwSwapChain {
     CAMetalLayer* layer = nullptr;

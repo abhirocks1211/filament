@@ -18,6 +18,7 @@
 #include "driver/CommandStream.h"
 
 #include "MetalBinder.h"
+#include "MetalEnums.h"
 #include "MetalHandles.h"
 
 #include <AppKit/AppKit.h>
@@ -55,28 +56,6 @@ struct MetalDriverImpl {
     MTLViewport mCurrentViewport = {};
     NSUInteger mSurfaceHeight = 0;
 };
-
-static MTLCompareFunction getMetalCompareFunction(Driver::RasterState::DepthFunc func) {
-    switch (func) {
-        case Driver::RasterState::DepthFunc::LE: return MTLCompareFunctionLessEqual;
-        case Driver::RasterState::DepthFunc::GE: return MTLCompareFunctionGreaterEqual;
-        case Driver::RasterState::DepthFunc::L: return MTLCompareFunctionLess;
-        case Driver::RasterState::DepthFunc::G: return MTLCompareFunctionGreater;
-        case Driver::RasterState::DepthFunc::E: return MTLCompareFunctionEqual;
-        case Driver::RasterState::DepthFunc::NE: return MTLCompareFunctionNotEqual;
-        case Driver::RasterState::DepthFunc::A: return MTLCompareFunctionAlways;
-        case Driver::RasterState::DepthFunc::N: return MTLCompareFunctionNever;
-    }
-}
-
-static inline MTLIndexType getIndexType(size_t elementSize) {
-    if (elementSize == 2) {
-        return MTLIndexTypeUInt16;
-    } else if (elementSize == 4) {
-        return MTLIndexTypeUInt32;
-    }
-    ASSERT_POSTCONDITION(false, "Index element size not supported.");
-}
 
 Driver* MetalDriver::create(MetalPlatform* const platform) {
     assert(platform);

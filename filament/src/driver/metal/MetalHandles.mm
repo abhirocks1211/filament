@@ -26,8 +26,6 @@ MetalTexture::MetalTexture(id<MTLDevice> device, driver::SamplerType target, uin
         TextureUsage usage) noexcept
     : HwTexture(target, levels, samples, width, height, depth) {
 
-    assert(levels == 1);
-
     // todo: Just a few texture formats to get it working.
     MTLPixelFormat pixelFormat = MTLPixelFormatInvalid;
     switch (format) {
@@ -70,7 +68,7 @@ MetalTexture::MetalTexture(id<MTLDevice> device, driver::SamplerType target, uin
 }
 
 void MetalTexture::load2DImage(uint32_t level, uint32_t xoffset, uint32_t yoffset, uint32_t width,
-                 uint32_t height, Driver::PixelBufferDescriptor& data) noexcept {
+        uint32_t height, Driver::PixelBufferDescriptor& data) noexcept {
     MTLRegion region {
         .origin = {
             .x = xoffset,
@@ -90,6 +88,21 @@ void MetalTexture::load2DImage(uint32_t level, uint32_t xoffset, uint32_t yoffse
                  withBytes:data.buffer
                bytesPerRow:bytesPerRow
              bytesPerImage:0];          // only needed for MTLTextureType3D
+}
+
+void MetalTexture::loadCubeImage(const PixelBufferDescriptor& data, const FaceOffsets& faceOffsets,
+        int miplevel) {
+    NSUInteger bytesPerRow = bytesPerPixel * width;
+    for (NSUInteger slice = 0; slice < 6; slice++) {
+        auto faceoffset = faceOffsets.offsets[slice];
+        MTLRegion region = MTLRegionMake2D(0, 0, width, width);
+        [texture replaceRegion:region
+                   mipmapLevel:static_cast<NSUInteger>(miplevel)
+                         slice:slice
+                     withBytes:static_cast<uint8_t*>(data.buffer) + faceoffset
+                   bytesPerRow:bytesPerRow
+                 bytesPerImage:0];
+    }
 }
 
 } // namespace driver

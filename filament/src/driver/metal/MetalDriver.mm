@@ -69,6 +69,14 @@ static MTLCompareFunction getMetalCompareFunction(Driver::RasterState::DepthFunc
     }
 }
 
+static inline MTLIndexType getIndexType(size_t elementSize) {
+    if (elementSize == 2) {
+        return MTLIndexTypeUInt16;
+    } else if (elementSize == 4) {
+        return MTLIndexTypeUInt32;
+    }
+    ASSERT_POSTCONDITION(false, "Index element size not supported.");
+}
 
 Driver* MetalDriver::create(MetalPlatform* const platform) {
     assert(platform);
@@ -636,10 +644,12 @@ void MetalDriver::draw(Driver::ProgramHandle ph, Driver::RasterState rs,
                                             offsets:primitive->offsets.data()
                                           withRange:bufferRange];
 
+    MetalIndexBuffer* indexBuffer = primitive->indexBuffer;
+
     [pImpl->mCurrentCommandEncoder drawIndexedPrimitives:MTLPrimitiveTypeTriangle
                                               indexCount:primitive->count
-                                               indexType:MTLIndexTypeUInt16
-                                             indexBuffer:primitive->indexBuffer->buffer
+                                               indexType:getIndexType(indexBuffer->elementSize)
+                                             indexBuffer:indexBuffer->buffer
                                        indexBufferOffset:0];
 }
 

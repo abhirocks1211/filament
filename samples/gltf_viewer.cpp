@@ -221,7 +221,7 @@ static void setup(Engine* engine, View* view, Scene* scene) {
     auto rooti = tcm.getInstance(g_meshSet->rootEntity);
     tcm.setTransform(rooti, mat4f::scale(float3(scaleFactor)) * mat4f::translate(center));
 
-//    //Draw bounding box
+//    //Draw bounding box (before normalized scale and translation to origin)
 //    filament::Material const* transparentMaterial = Material::Builder()
 //            .package((void*) TRANSPARENT_COLOR_PACKAGE, sizeof(TRANSPARENT_COLOR_PACKAGE))
 //            .build(*engine);

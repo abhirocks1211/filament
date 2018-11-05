@@ -102,6 +102,8 @@ private:
             std::map<std::string, filament::MaterialInstance*>& outMaterials
             );
 
+    filament::Texture* createOneByOneTexture(std::array<int, 4> pixel);
+
     filament::Engine& mEngine;
     filament::VertexBuffer* mVertexBuffer = nullptr;
     filament::IndexBuffer* mIndexBuffer = nullptr;

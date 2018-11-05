@@ -17,6 +17,7 @@
 #include "MeshAssimp.h"
 
 #include <string.h>
+#include <array>
 
 #include <filament/Color.h>
 #include <filament/VertexBuffer.h>
@@ -63,7 +64,34 @@ static constexpr uint8_t GLTF2DS_PACKAGE[] = {
     #include "generated/material/gltf2DoubleSided.inc"
 };
 
+Texture* MeshAssimp::createOneByOneTexture(std::array<int, 4> pixel){
+    Texture *texPtr;
+
+    unsigned char *texData = (unsigned char *) malloc(4 * sizeof(unsigned char*));
+    texData[0] = static_cast<unsigned char>(pixel[0]);
+    texData[1] = static_cast<unsigned char>(pixel[1]);
+    texData[2] = static_cast<unsigned char>(pixel[2]);
+    texData[3] = static_cast<unsigned char>(pixel[3]);
+
+    texPtr = Texture::Builder()
+            .width(uint32_t(1))
+            .height(uint32_t(1))
+            .levels(0xff)
+            .format(driver::TextureFormat::RGB8)
+            .build(mEngine);
+    Texture::PixelBufferDescriptor defaultNormalBuffer(texData, size_t(1 * 1 * 3),
+                                                       Texture::Format::RGB, Texture::Type::UBYTE
+            ,(driver::BufferDescriptor::Callback) &free);
+    texPtr->setImage(mEngine, 0, std::move(defaultNormalBuffer));
+    texPtr->generateMipmaps(mEngine);
+
+    return texPtr;
+}
+
 MeshAssimp::MeshAssimp(Engine& engine) : mEngine(engine) {
+    //Initialize some things here
+    mDefaultMap = createOneByOneTexture({255, 255, 255, 255});
+    mDefaultNormalMap = createOneByOneTexture({128, 128, 255, 255});
 }
 
 MeshAssimp::~MeshAssimp() {
@@ -254,43 +282,6 @@ void MeshAssimp::addFromFile(const Path& path,
         // TODO: if we had a way to allocate temporary buffers from the engine with a
         // "command buffer" lifetime, we wouldn't need to have to deal with freeing the
         // std::vectors here.
-
-        // Make default map for all textures except Normal
-        int defaultTexSize = 4;
-        unsigned char *defaultTexData = (unsigned char *) malloc(defaultTexSize*sizeof(unsigned char*));
-        for (int i=0; i < defaultTexSize; i++){
-            defaultTexData[i] = static_cast<unsigned char>(255);
-        }
-        mDefaultMap = Texture::Builder()
-                .width(uint32_t(1))
-                .height(uint32_t(1))
-                .levels(0xff)
-                .format(driver::TextureFormat::RGB8)
-                .build(mEngine);
-        Texture::PixelBufferDescriptor defaultBuffer(defaultTexData, size_t(1 * 1 * 3),
-                                                     Texture::Format::RGB, Texture::Type::UBYTE
-                ,(driver::BufferDescriptor::Callback) &free);
-        mDefaultMap->setImage(mEngine, 0, std::move(defaultBuffer));
-        mDefaultMap->generateMipmaps(mEngine);
-
-        //Make default Normal Map
-        unsigned char *defaultNormalTexData = (unsigned char *) malloc(defaultTexSize*sizeof(unsigned char*));
-        defaultNormalTexData[0] = static_cast<unsigned char>(128);
-        defaultNormalTexData[1] = static_cast<unsigned char>(128);
-        defaultNormalTexData[2] = static_cast<unsigned char>(255);
-        defaultNormalTexData[3] = static_cast<unsigned char>(0);
-
-        mDefaultNormalMap = Texture::Builder()
-                .width(uint32_t(1))
-                .height(uint32_t(1))
-                .levels(0xff)
-                .format(driver::TextureFormat::RGB8)
-                .build(mEngine);
-        Texture::PixelBufferDescriptor defaultNormalBuffer(defaultNormalTexData, size_t(1 * 1 * 3),
-                                                     Texture::Format::RGB, Texture::Type::UBYTE
-                ,(driver::BufferDescriptor::Callback) &free);
-        mDefaultNormalMap->setImage(mEngine, 0, std::move(defaultNormalBuffer));
-        mDefaultNormalMap->generateMipmaps(mEngine);
 
         //TODO: a lot of these method arguments should probably be class or global variables
         if (!setFromFile(path, indices, positions, tangents, texCoords, meshes, parents, materials)) {
@@ -534,7 +525,6 @@ bool MeshAssimp::setFromFile(const Path& file,
                         if (!tangents) {
                             bitangent = norm(cross(normal, float3{1.0, 0.0, 0.0}));
                             tangent = norm(cross(normal, bitangent));
-                            std::cout << "tangents being generated" << std::endl;
                         } else {
                             tangent = tangents[j];
                             bitangent = bitangents[j];
@@ -809,24 +799,4 @@ bool MeshAssimp::setFromFile(const Path& file,
     return false;
 }
 
-//template<typename VECTOR, typename INDEX, typename, typename>
-//
-//Box MeshAssimp::computeTransformedAABB(std::vector<uint32_t> &outIndices, std::vector<half4> &outPositions,
-//                                       MeshAssimp::Mesh &mesh) const {
-//    math::float3 bmin(std::numeric_limits<float>::max());
-//    math::float3 bmax(std::numeric_limits<float>::lowest());
-//    for (size_t i = 0; i < mesh.count; ++i) {
-//         vector const* p = reinterpret_cast<VECTOR const*>(
-//                (char const*)vertices + indices[i] * stride);
-//        const math::float3 v(p->x, p->y, p->z);
-//        bmin = min(bmin, v);
-//        bmax = max(bmax, v);
-//    }
-//    return Box().set(bmin, bmax);
-//
-//    mesh.aabb = RenderableManager::computeAABB(
-//            outPositions.data(),
-//            outIndices.data() + mesh.offset,
-//            mesh.count);
-//}
 

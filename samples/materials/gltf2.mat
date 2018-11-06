@@ -53,34 +53,19 @@ material {
 }
 
 fragment {
-//    void material(inout MaterialInputs material) {
-//        material.normal = texture(materialParams_normalMap, getUV0()).xyz * 2.0 - 1.0;
-//        prepareMaterial(material);
-//        material.baseColor = texture(materialParams_baseColorMap, getUV0());
-//        material.roughness = texture(materialParams_metallicRoughnessMap, getUV0()).g;
-//        material.metallic = texture(materialParams_metallicRoughnessMap, getUV0()).b;
-//        material.ambientOcclusion = texture(materialParams_aoMap, getUV0()).r;
-//    }
+    void material(inout MaterialInputs material) {
+        material.normal = texture(materialParams_normalMap, getUV0()).xyz * 2.0 - 1.0;
+        material.normal.y = -material.normal.y;
+        prepareMaterial(material);
 
-void material(inout MaterialInputs material) {
-    material.normal = texture(materialParams_normalMap, getUV0()).xyz * 2.0 - 1.0;
-    material.normal.y = -material.normal.y;
-    prepareMaterial(material);
-//    material.baseColor.rgb = float3(1.0, 0.75, 0.94);
-//    material.metallic = 0.0;
-//    material.roughness = 1.0;
-//    material.ambientOcclusion = 1.0;
-    material.baseColor = texture(materialParams_baseColorMap, getUV0());
-    material.baseColor.r *= materialParams.baseColorFactor[0];
-    material.baseColor.g *= materialParams.baseColorFactor[1];
-    material.baseColor.b *= materialParams.baseColorFactor[2];
-    material.roughness = materialParams.roughnessFactor * texture(materialParams_metallicRoughnessMap, getUV0()).g;
-    material.metallic = materialParams.metallicFactor * texture(materialParams_metallicRoughnessMap, getUV0()).b;
-    material.ambientOcclusion = texture(materialParams_aoMap, getUV0()).r;
-    material.emissive = texture(materialParams_emissiveMap, getUV0());
-    material.emissive.r *= materialParams.emissiveFactor[0];
-    material.emissive.g *= materialParams.emissiveFactor[1];
-    material.emissive.b *= materialParams.emissiveFactor[2];
+        material.baseColor = texture(materialParams_baseColorMap, getUV0());
+        material.baseColor.rgb *= materialParams.baseColorFactor.xyz;
+        material.baseColor.rgb *= material.baseColor.a;
 
-}
+        material.roughness = materialParams.roughnessFactor * texture(materialParams_metallicRoughnessMap, getUV0()).g;
+        material.metallic = materialParams.metallicFactor * texture(materialParams_metallicRoughnessMap, getUV0()).b;
+        material.ambientOcclusion = texture(materialParams_aoMap, getUV0()).r;
+        material.emissive = texture(materialParams_emissiveMap, getUV0());
+        material.emissive.rgb *= materialParams.emissiveFactor.rgb;
+    }
 }

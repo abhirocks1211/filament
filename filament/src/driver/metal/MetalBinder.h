@@ -223,27 +223,6 @@ inline bool operator==(const driver::SamplerParams& lhs, const driver::SamplerPa
 using SamplerStateCache = StateCache<driver::SamplerParams, id<MTLSamplerState>,
         SamplerStateCreator>;
 
-using SamplerStateTracker = StateTracker<id<MTLSamplerState>>;
-
-// Texture bindings
-
-struct TextureState {
-    bool bound = false;
-    Driver::TextureHandle texture;
-
-    bool operator==(const TextureState& rhs) const noexcept {
-        return this->bound == rhs.bound &&
-               this->texture.getId() == rhs.texture.getId();
-    }
-
-    bool operator!=(const TextureState& rhs) const noexcept {
-        return !operator==(rhs);
-    }
-};
-
-using TextureStateTracker = StateTracker<TextureState>;
-
-
 } // namespace driver
 } // namespace filament
 

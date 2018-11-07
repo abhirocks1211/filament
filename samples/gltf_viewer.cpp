@@ -57,11 +57,6 @@ static const Material* g_material;
 static Entity g_light;
 
 static Config g_config;
-static struct PbrConfig {
-    std::string materialDir;
-    bool clearCoat = false;
-    bool anisotropy = false;
-} g_pbrConfig;
 
 static void printUsage(char* name) {
     std::string exec_name(Path(name).getName());
@@ -127,9 +122,6 @@ static void cleanup(Engine* engine, View* view, Scene* scene) {
 }
 
 static void setup(Engine* engine, View* view, Scene* scene) {
-    Path path(g_pbrConfig.materialDir);
-    std::string name(path.getName());
-
     g_meshSet = std::make_unique<MeshAssimp>(*engine);
     for (auto& filename : g_filenames) {
         g_meshSet->addFromFile(filename, g_materialInstances, false);
@@ -182,7 +174,6 @@ int main(int argc, char* argv[]) {
         g_filenames.push_back(filename);
     }
 
-    g_config.title = "gltf_viewer";
     FilamentApp& filamentApp = FilamentApp::get();
     filamentApp.run(g_config, setup, cleanup);
 

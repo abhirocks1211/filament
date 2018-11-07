@@ -32,6 +32,7 @@ namespace driver {
 
 static constexpr uint32_t VERTEX_BUFFER_START = BindingPoints::COUNT;
 static constexpr uint32_t MAX_VERTEX_ATTRIBUTES = filament::ATTRIBUTE_INDEX_COUNT;
+static constexpr uint32_t NUM_UBUFFER_BINDINGS = filament::BindingPoints::COUNT;
 
 // todo: saw this in VulkanBinder, but how do we know this?
 static constexpr uint32_t NUM_SAMPLER_BINDINGS = 8;
@@ -221,6 +222,27 @@ inline bool operator==(const driver::SamplerParams& lhs, const driver::SamplerPa
 
 using SamplerStateCache = StateCache<driver::SamplerParams, id<MTLSamplerState>,
         SamplerStateCreator>;
+
+using SamplerStateTracker = StateTracker<id<MTLSamplerState>>;
+
+// Texture bindings
+
+struct TextureState {
+    bool bound = false;
+    Driver::TextureHandle texture;
+
+    bool operator==(const TextureState& rhs) const noexcept {
+        return this->bound == rhs.bound &&
+               this->texture.getId() == rhs.texture.getId();
+    }
+
+    bool operator!=(const TextureState& rhs) const noexcept {
+        return !operator==(rhs);
+    }
+};
+
+using TextureStateTracker = StateTracker<TextureState>;
+
 
 } // namespace driver
 } // namespace filament

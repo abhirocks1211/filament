@@ -46,7 +46,11 @@ struct MetalDriverImpl {
 
     DepthStencilStateTracker mDepthStencilState;
     DepthStencilStateCache mDepthStencilStateCache;
+
     SamplerStateCache mSamplerStateCache;
+    SamplerStateTracker mSamplerState[NUM_SAMPLER_BINDINGS];
+
+    TextureStateTracker mTextureState[NUM_SAMPLER_BINDINGS];
 
     MetalSamplerBuffer* mSamplerBindings[NUM_SAMPLER_BINDINGS];
 
@@ -393,7 +397,13 @@ void MetalDriver::beginRenderPass(Driver::RenderTargetHandle rth,
     // Metal requires a new command encoder for each render pass, and they cannot be reused.
     // We must bind the depth-stencil state for each command encoder, so we dirty the state here
     // to force a rebinding at the first the draw call of this pass.
-    for (auto &i : pImpl->mUniformState) {
+    for (auto& i : pImpl->mUniformState) {
+        i.invalidate();
+    }
+    for (auto& i : pImpl->mTextureState) {
+        i.invalidate();
+    }
+    for (auto& i : pImpl->mSamplerState) {
         i.invalidate();
     }
     pImpl->mDepthStencilState.invalidate();
@@ -580,6 +590,8 @@ void MetalDriver::draw(Driver::ProgramHandle ph, Driver::RasterState rs,
         }
     }
 
+    uint8_t offset = NUM_UBUFFER_BINDINGS;
+
     for (uint8_t bufferIdx = 0; bufferIdx < NUM_SAMPLER_BINDINGS; bufferIdx++) {
         MetalSamplerBuffer* metalSb = pImpl->mSamplerBindings[bufferIdx];
         if (!metalSb) {
@@ -594,26 +606,49 @@ void MetalDriver::draw(Driver::ProgramHandle ph, Driver::RasterState rs,
             uint8_t binding, group;
             if (program->samplerBindings.getSamplerBinding(bufferIdx, samplerIdx, &binding,
                     &group)) {
-                const auto metalTexture = handle_const_cast<MetalTexture>(mHandleMap, sampler->t);
 
-                // Similar to uniforms, we can't tell which stage will use the textures, so bind to
-                // both the vertex and fragment stages.
+                pImpl->mTextureState[binding - offset].updateState(TextureState {
+                    .texture = sampler->t,
+                    .bound = true
+                });
 
                 id<MTLSamplerState> samplerState =
                         pImpl->mSamplerStateCache.getOrCreateState(sampler->s);
 
+                pImpl->mSamplerState[binding - offset].updateState(samplerState);
+            }
+        }
+    }
+
+    // Bind textures and samplers.
+    for (uint8_t idx = 0; idx < NUM_SAMPLER_BINDINGS; idx++) {
+        auto& thisTexture = pImpl->mTextureState[idx];
+        auto& thisSampler = pImpl->mSamplerState[idx];
+
+        // Similar to uniforms, we can't tell which stage will use the textures / samplers, so bind
+        // to both the vertex and fragment stages.
+
+        if (thisTexture.stateChanged()) {
+            const auto& textureState = thisTexture.getState();
+            if (textureState.bound) {
+                const auto metalTexture = handle_const_cast<MetalTexture>(mHandleMap, textureState.texture);
+
                 [pImpl->mCurrentCommandEncoder setFragmentTexture:metalTexture->texture
-                                                          atIndex:binding];
+                                                          atIndex:idx + offset];
 
                 [pImpl->mCurrentCommandEncoder setVertexTexture:metalTexture->texture
-                                                        atIndex:binding];
-
-                [pImpl->mCurrentCommandEncoder setFragmentSamplerState:samplerState
-                                                               atIndex:binding];
-
-                [pImpl->mCurrentCommandEncoder setVertexSamplerState:samplerState
-                                                             atIndex:binding];
+                                                        atIndex:idx + offset];
             }
+        }
+
+        if (thisSampler.stateChanged()) {
+            const auto& samplerState = thisSampler.getState();
+
+            [pImpl->mCurrentCommandEncoder setFragmentSamplerState:samplerState
+                                                           atIndex:idx + offset];
+
+            [pImpl->mCurrentCommandEncoder setVertexSamplerState:samplerState
+                                                         atIndex:idx + offset];
         }
     }
 

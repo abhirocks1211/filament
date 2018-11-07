@@ -77,7 +77,6 @@ set(SRCS
         src/Frustum.cpp
         src/IndexBuffer.cpp
         src/IndirectLight.cpp
-        src/GpuLightBuffer.cpp
         src/Material.cpp
         src/MaterialInstance.cpp
         src/PostProcessManager.cpp
@@ -113,7 +112,6 @@ set(PRIVATE_HDRS
         src/details/Froxelizer.h
         src/details/IndexBuffer.h
         src/details/IndirectLight.h
-        src/details/GpuLightBuffer.h
         src/details/Material.h
         src/details/MaterialInstance.h
         src/details/RenderPrimitive.h
@@ -320,7 +318,7 @@ if (ANDROID)
     target_link_libraries(${TARGET} PUBLIC GLESv3 EGL android)
 endif()
 
-if (APPLE)
+if (APPLE AND NOT IOS)
     target_link_libraries(${TARGET} PRIVATE "-framework Cocoa")
 endif()
 

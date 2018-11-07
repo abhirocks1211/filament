@@ -321,44 +321,18 @@ DECL_DRIVER_API_SYNCHRONOUS_0(bool, isFrameTimeSupported)
  * -----------------------
  */
 
-DECL_DRIVER_API_5(loadVertexBuffer,
+DECL_DRIVER_API_5(updateVertexBuffer,
         Driver::VertexBufferHandle, vbh,
         size_t, index,
         Driver::BufferDescriptor&&, data,
         uint32_t, byteOffset,
         uint32_t, byteSize)
 
-DECL_DRIVER_API_4(loadIndexBuffer,
+DECL_DRIVER_API_4(updateIndexBuffer,
         Driver::IndexBufferHandle, ibh,
         Driver::BufferDescriptor&&, data,
         uint32_t, byteOffset,
         uint32_t, byteSize)
-
-DECL_DRIVER_API_7(load2DImage,
-        Driver::TextureHandle, th,
-        uint32_t, level,
-        uint32_t, xoffset,
-        uint32_t, yoffset,
-        uint32_t, width,
-        uint32_t, height,
-        Driver::PixelBufferDescriptor&&, data)
-
-DECL_DRIVER_API_4(loadCubeImage,
-        Driver::TextureHandle, th,
-        uint32_t, level,
-        Driver::PixelBufferDescriptor&&, data,
-        Driver::FaceOffsets, faceOffsets)
-
-DECL_DRIVER_API_2(setExternalImage,
-        Driver::TextureHandle, th,
-        void*, image)
-
-DECL_DRIVER_API_2(setExternalStream,
-        Driver::TextureHandle, th,
-        Driver::StreamHandle, sh)
-
-DECL_DRIVER_API_1(generateMipmaps,
-        Driver::TextureHandle, th)
 
 DECL_DRIVER_API_2(updateUniformBuffer,
         Driver::UniformBufferHandle, ubh,
@@ -367,6 +341,32 @@ DECL_DRIVER_API_2(updateUniformBuffer,
 DECL_DRIVER_API_2(updateSamplerBuffer,
         Driver::SamplerBufferHandle, ubh,
         SamplerBuffer&&, samplerBuffer)
+
+DECL_DRIVER_API_7(update2DImage,
+        Driver::TextureHandle, th,
+        uint32_t, level,
+        uint32_t, xoffset,
+        uint32_t, yoffset,
+        uint32_t, width,
+        uint32_t, height,
+        Driver::PixelBufferDescriptor&&, data)
+
+DECL_DRIVER_API_4(updateCubeImage,
+        Driver::TextureHandle, th,
+        uint32_t, level,
+        Driver::PixelBufferDescriptor&&, data,
+        Driver::FaceOffsets, faceOffsets)
+
+DECL_DRIVER_API_1(generateMipmaps,
+        Driver::TextureHandle, th)
+
+DECL_DRIVER_API_2(setExternalImage,
+        Driver::TextureHandle, th,
+        void*, image)
+
+DECL_DRIVER_API_2(setExternalStream,
+        Driver::TextureHandle, th,
+        Driver::StreamHandle, sh)
 
 DECL_DRIVER_API_2(beginRenderPass,
         Driver::RenderTargetHandle, rth,

@@ -50,6 +50,14 @@ public:
     static Driver* create(driver::OpenGLPlatform* platform, void* sharedGLContext) noexcept;
 
     // OpenGLDriver specific fields
+    struct GLBuffer {
+        GLuint id = 0;
+        uint32_t capacity = 0;
+        uint32_t base = 0;
+        uint32_t size = 0;
+        driver::BufferUsage usage = {};
+    };
+
     struct GLVertexBuffer : public HwVertexBuffer {
         using HwVertexBuffer::HwVertexBuffer;
         struct {
@@ -61,6 +69,22 @@ public:
         using HwIndexBuffer::HwIndexBuffer;
         struct {
             GLuint buffer;
+        } gl;
+    };
+
+    struct GLUniformBuffer : public HwUniformBuffer {
+        GLUniformBuffer(uint32_t capacity, driver::BufferUsage usage) noexcept {
+            gl.ubo.capacity = capacity;
+            gl.ubo.usage = usage;
+        }
+        struct {
+            GLBuffer ubo;
+        } gl;
+    };
+
+    struct GLSamplerBuffer : public HwSamplerBuffer {
+        using HwSamplerBuffer::HwSamplerBuffer;
+        struct {
         } gl;
     };
 
@@ -140,20 +164,8 @@ public:
         } user_thread;
     };
 
-    struct GLSamplerBuffer : public HwSamplerBuffer {
-        using HwSamplerBuffer::HwSamplerBuffer;
-        struct {
-        } gl;
-    };
-
-    struct GLUniformBuffer : public HwUniformBuffer {
-        using HwUniformBuffer::HwUniformBuffer;
-        struct {
-            GLuint ubo = 0;
-        } gl;
-    };
-
     struct GLRenderTarget : public HwRenderTarget {
+        using HwRenderTarget::HwRenderTarget;
         struct GL {
             struct RenderBuffer {
                 union {
@@ -367,7 +379,6 @@ private:
     static constexpr const size_t MAX_BUFFER_BINDINGS = 32;
 
     GLRenderPrimitive mDefaultVAO;
-    GLint mMaxRenderBufferSize = 0;
 
     template <typename T, typename F>
     inline void update_state(T& state, T const& expected, F functor, bool force = false) noexcept {
@@ -489,6 +500,13 @@ private:
     mutable tsl::robin_map<uint32_t, GLuint> mSamplerMap;
     mutable std::vector<GLTexture*> mExternalStreams;
 
+    // glGet*() values
+    struct {
+        GLint max_renderbuffer_size = 0;
+        GLint max_uniform_block_size = 0;
+        GLint uniform_buffer_offset_alignment = 256;
+    } gets;
+
     // features supported by this version of GL or GLES
     struct {
         bool multisample_texture = false;
@@ -539,6 +557,7 @@ private:
 
     OpenGLBlitter* mOpenGLBlitter = nullptr;
     void updateStream(GLTexture* t, driver::DriverApi* driver) noexcept;
+    void updateBuffer(GLenum target, GLBuffer* buffer, BufferDescriptor const& p, uint32_t alignment = 16) noexcept;
 };
 
 // ------------------------------------------------------------------------------------------------

@@ -295,8 +295,8 @@ void FRenderableManager::create(
                 std::unique_ptr<Bones>& bones = manager[ci].bones;
 
                 bones.reset(new Bones); // FIXME: maybe use a pool allocator
-                bones->bones = UniformBuffer(CONFIG_MAX_BONE_COUNT * sizeof(InternalBone));
-                bones->handle = driver.createUniformBuffer(CONFIG_MAX_BONE_COUNT * sizeof(InternalBone),
+                bones->bones = UniformBuffer(CONFIG_MAX_BONE_COUNT * sizeof(PerRenderableUibBone));
+                bones->handle = driver.createUniformBuffer(CONFIG_MAX_BONE_COUNT * sizeof(PerRenderableUibBone),
                         driver::BufferUsage::DYNAMIC);
             }
         }
@@ -310,9 +310,9 @@ void FRenderableManager::create(
                 setBones(ci, builder->mUserBoneMatrices, bones->count);
             } else {
                 // initialize the bones to identity
-                InternalBone* UTILS_RESTRICT out =
-                        (InternalBone*)bones->bones.invalidateUniforms(0, bones->count * sizeof(InternalBone));
-                std::uninitialized_fill_n(out, bones->count, InternalBone{});
+                PerRenderableUibBone* UTILS_RESTRICT out =
+                        (PerRenderableUibBone*)bones->bones.invalidateUniforms(0, bones->count * sizeof(PerRenderableUibBone));
+                std::uninitialized_fill_n(out, bones->count, PerRenderableUibBone{});
             }
         }
     }
@@ -470,13 +470,13 @@ void FRenderableManager::setBones(Instance ci,
         assert(bones && offset + boneCount <= bones->count);
         if (bones) {
             boneCount = std::min(boneCount, bones->count - offset);
-            InternalBone* UTILS_RESTRICT out = (InternalBone*)bones->bones.invalidateUniforms(
-                    offset * sizeof(InternalBone),
-                    boneCount * sizeof(InternalBone));
+            PerRenderableUibBone* UTILS_RESTRICT out = (PerRenderableUibBone*)bones->bones.invalidateUniforms(
+                    offset * sizeof(PerRenderableUibBone),
+                    boneCount * sizeof(PerRenderableUibBone));
             for (size_t i = 0, c = bones->count; i < c; ++i) {
-                out[i].rigidTransform = transforms[i].unitQuaternion;
-                out[i].translation.xyz = transforms[i].translation;
-                out[i].scales = out[i].iscales = { 1, 1, 1, 0 };
+                out[i].q = transforms[i].unitQuaternion;
+                out[i].t.xyz = transforms[i].translation;
+                out[i].s = out[i].ns = { 1, 1, 1, 0 };
             }
         }
     }
@@ -489,9 +489,9 @@ void FRenderableManager::setBones(Instance ci,
         assert(bones && offset + boneCount <= bones->count);
         if (bones) {
             boneCount = std::min(boneCount, bones->count - offset);
-            InternalBone* UTILS_RESTRICT out = (InternalBone*)bones->bones.invalidateUniforms(
-                    offset * sizeof(InternalBone),
-                    boneCount * sizeof(InternalBone));
+            PerRenderableUibBone* UTILS_RESTRICT out = (PerRenderableUibBone*)bones->bones.invalidateUniforms(
+                    offset * sizeof(PerRenderableUibBone),
+                    boneCount * sizeof(PerRenderableUibBone));
             for (size_t i = 0, c = bones->count; i < c; ++i) {
                 makeBone(&out[i], transforms[i]);
             }
@@ -499,7 +499,7 @@ void FRenderableManager::setBones(Instance ci,
     }
 }
 
-void FRenderableManager::makeBone(InternalBone* UTILS_RESTRICT out, math::mat4f const& t) noexcept {
+void FRenderableManager::makeBone(PerRenderableUibBone* UTILS_RESTRICT out, math::mat4f const& t) noexcept {
     mat4f m(t);
 
     // figure out the scales
@@ -510,15 +510,16 @@ void FRenderableManager::makeBone(InternalBone* UTILS_RESTRICT out, math::mat4f 
 
     // compute the inverse scales
     float4 is = { 1.0f/s.x, 1.0f/s.y, 1.0f/s.z, 0.0f };
+
     // normalize the matrix
     m[0] *= is[0];
     m[1] *= is[1];
     m[2] *= is[2];
 
-    out->rigidTransform = m.toQuaternion();
-    out->translation = m[3];
-    out->scales = s;
-    out->iscales = is;
+    out->s = s;
+    out->q = m.toQuaternion();
+    out->t = m[3];
+    out->ns = is / max(abs(is));
 }
 
 } // namespace details

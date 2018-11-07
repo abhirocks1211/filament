@@ -216,8 +216,9 @@ private:
             size_t count) const;
 
     void bindPerViewUniformsAndSamplers(FEngine::DriverApi& driver) const noexcept {
-        driver.bindUniformBuffer(BindingPoints::PER_VIEW, getUbh());
-        driver.bindSamplers(BindingPoints::PER_VIEW, getUsh());
+        driver.bindUniformBuffer(BindingPoints::PER_VIEW, mPerViewUbh);
+        driver.bindUniformBuffer(BindingPoints::LIGHTS, mLightUbh);
+        driver.bindSamplers(BindingPoints::PER_VIEW, mPerViewSbh);
     }
 
     // we don't inline this one, because the function is quite large and there is not much to
@@ -229,12 +230,13 @@ private:
     // these are accessed in the render loop, keep together
     Handle<HwSamplerBuffer> mPerViewSbh;
     Handle<HwUniformBuffer> mPerViewUbh;
+    Handle<HwUniformBuffer> mLightUbh;
+    Handle<HwUniformBuffer> mRenderableUbh;
 
-    UniformBuffer& getUb() const noexcept { return mPerViewUb; }
-    Handle<HwUniformBuffer> getUbh() const noexcept { return mPerViewUbh; }
-
-    SamplerBuffer& getUs() const noexcept { return mPerViewSb; }
     Handle<HwSamplerBuffer> getUsh() const noexcept { return mPerViewSbh; }
+    Handle<HwUniformBuffer> getUbh() const noexcept { return mPerViewUbh; }
+    Handle<HwUniformBuffer> getLightUbh() const noexcept { return mLightUbh; }
+
 
     FScene* mScene = nullptr;
     FCamera* mCullingCamera = nullptr;
@@ -270,12 +272,16 @@ private:
     mutable UniformBuffer mPerViewUb;
     mutable SamplerBuffer mPerViewSb;
 
+    SamplerBuffer& getUs() const noexcept { return mPerViewSb; }
+    UniformBuffer& getUb() const noexcept { return mPerViewUb; }
+
     utils::CString mName;
     const bool mClipSpace01;
 
     // the following values are set by prepare()
     Range mVisibleRenderables;
     Range mVisibleShadowCasters;
+    uint32_t mRenderableUBOSize = 0;
     mutable bool mHasDirectionalLight = false;
     mutable bool mHasDynamicLighting = false;
     mutable bool mHasShadowing = false;

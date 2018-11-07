@@ -71,7 +71,6 @@ constexpr size_t FROXEL_BUFFER_HEIGHT       = (FROXEL_BUFFER_ENTRY_COUNT_MAX + F
 
 constexpr size_t RECORD_BUFFER_WIDTH_SHIFT  = 5u;
 constexpr size_t RECORD_BUFFER_WIDTH        = 1u << RECORD_BUFFER_WIDTH_SHIFT;
-constexpr size_t RECORD_BUFFER_WIDTH_MASK   = RECORD_BUFFER_WIDTH - 1u;
 
 constexpr size_t RECORD_BUFFER_HEIGHT       = 2048;
 constexpr size_t RECORD_BUFFER_ENTRY_COUNT  = RECORD_BUFFER_WIDTH * RECORD_BUFFER_HEIGHT; // 64K
@@ -168,12 +167,12 @@ bool Froxelizer::prepare(
 
     // froxel buffer (~32 KiB)
     mFroxelBufferUser = {
-            driverApi.allocatePod<FroxelEntry>(FROXEL_BUFFER_ENTRY_COUNT_MAX, CACHELINE_SIZE),
+            driverApi.allocatePod<FroxelEntry>(FROXEL_BUFFER_ENTRY_COUNT_MAX),
             FROXEL_BUFFER_ENTRY_COUNT_MAX };
 
     // record buffer (~64 KiB)
     mRecordBufferUser = {
-            driverApi.allocatePod<RecordBufferType>(RECORD_BUFFER_ENTRY_COUNT, CACHELINE_SIZE),
+            driverApi.allocatePod<RecordBufferType>(RECORD_BUFFER_ENTRY_COUNT),
             RECORD_BUFFER_ENTRY_COUNT };
 
     /*
@@ -749,12 +748,7 @@ void Froxelizer::froxelizeAssignRecordsCompress() noexcept {
         } while(records[i].lights == b.lights);
     }
 out_of_memory:
-
-    // froxel buffer is always fully invalidated
-    mFroxelBuffer.invalidate();
-
-    // needed record buffer size may change at each frame
-    mRecordsBuffer.invalidate(0, (offset + RECORD_BUFFER_WIDTH_MASK) >> RECORD_BUFFER_WIDTH_SHIFT);
+    ;
 }
 
 static inline float2 project(mat4f const& p, float3 const& v) noexcept {

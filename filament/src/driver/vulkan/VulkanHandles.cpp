@@ -323,7 +323,8 @@ VulkanVertexBuffer::VulkanVertexBuffer(VulkanContext& context, VulkanStagePool& 
 }
 
 VulkanUniformBuffer::VulkanUniformBuffer(VulkanContext& context, VulkanStagePool& stagePool,
-        uint32_t numBytes) : HwUniformBuffer(numBytes), mContext(context), mStagePool(stagePool) {
+        uint32_t numBytes, driver::BufferUsage usage)
+        : mContext(context), mStagePool(stagePool) {
     // Create the VkBuffer.
     VkBufferCreateInfo bufferInfo {
         .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
@@ -483,7 +484,7 @@ VulkanTexture::~VulkanTexture() {
     vkFreeMemory(mContext.device, textureImageMemory, VKALLOC);
 }
 
-void VulkanTexture::load2DImage(const PixelBufferDescriptor& data, uint32_t width, uint32_t height,
+void VulkanTexture::update2DImage(const PixelBufferDescriptor& data, uint32_t width, uint32_t height,
         int miplevel) {
     assert(width <= this->width && height <= this->height);
     const void* cpuData = data.buffer;
@@ -520,7 +521,7 @@ void VulkanTexture::load2DImage(const PixelBufferDescriptor& data, uint32_t widt
     }
 }
 
-void VulkanTexture::loadCubeImage(const PixelBufferDescriptor& data, const FaceOffsets& faceOffsets,
+void VulkanTexture::updateCubeImage(const PixelBufferDescriptor& data, const FaceOffsets& faceOffsets,
         int miplevel) {
     const void* cpuData = data.buffer;
     const uint32_t numBytes = data.size;

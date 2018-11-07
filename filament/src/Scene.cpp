@@ -19,10 +19,11 @@
 #include "components/LightManager.h"
 #include "components/RenderableManager.h"
 
+#include <private/filament/UibGenerator.h>
+
 #include "details/Culler.h"
 #include "details/Engine.h"
 #include "details/IndirectLight.h"
-#include "details/GpuLightBuffer.h"
 #include "details/Skybox.h"
 
 #include <utils/compiler.h>
@@ -42,8 +43,7 @@ namespace details {
 
 FScene::FScene(FEngine& engine) :
         mEngine(engine),
-        mIndirectLight(engine.getDefaultIndirectLight()),
-        mGpuLightData(engine) {
+        mIndirectLight(engine.getDefaultIndirectLight()) {
 }
 
 FScene::~FScene() noexcept = default;
@@ -158,21 +158,9 @@ void FScene::prepare(const math::mat4f& worldOriginTansform) {
     }
 }
 
-void FScene::updateUBOs(utils::Range<uint32_t> visibleRenderables) noexcept {
+void FScene::updateUBOs(utils::Range<uint32_t> visibleRenderables, Handle<HwUniformBuffer> renderableUbh) noexcept {
     FEngine::DriverApi& driver = mEngine.getDriverApi();
-    Handle<HwUniformBuffer>& uniformBufferHandle = mUniformBufferHandle;
-    const size_t size = visibleRenderables.size() * sizeof(FRenderableManager::Transform);
-
-    // reallocate UBO if it's too small
-    if (mUboSize < size) {
-        // allocate 1/3 extra, with a minimum of 16 objects
-        const size_t count = std::max(size_t(16u), (4u * visibleRenderables.size() + 2u) / 3u);
-        mUboSize = uint32_t(count * sizeof(FRenderableManager::Transform));
-        driver.destroyUniformBuffer(uniformBufferHandle);
-        uniformBufferHandle = driver.createUniformBuffer(mUboSize, driver::BufferUsage::DYNAMIC);
-    } else {
-        // should we shrink the underlying UBO at some point?
-    }
+    const size_t size = visibleRenderables.size() * sizeof(PerRenderableUib);
 
     // allocate space into the command stream directly
     void* const buffer = driver.allocate(size);
@@ -180,36 +168,43 @@ void FScene::updateUBOs(utils::Range<uint32_t> visibleRenderables) noexcept {
     auto& sceneData = mRenderableData;
     for (uint32_t i : visibleRenderables) {
         mat4f const& model = sceneData.elementAt<WORLD_TRANSFORM>(i);
-        const size_t offset = i * sizeof(FRenderableManager::Transform);
+        const size_t offset = i * sizeof(PerRenderableUib);
 
         UniformBuffer::setUniform(buffer,
-                offset + offsetof(FRenderableManager::Transform, worldFromModelMatrix),
+                offset + offsetof(PerRenderableUib, worldFromModelMatrix),
                 model);
 
         // Using the inverse-transpose handles non-uniform scaling, but DOESN'T guarantee that
         // the transformed normals will have unit-length, therefore they need to be normalized
         // in the shader (that's already the case anyways, since normalization is needed after
         // interpolation).
+        //
+        // We pre-scale normals by the inverse of the largest scale factor to avoid
+        // large post-transform magnitudes in the shader, especially in the fragment shader, where
+        // we use medium precision.
+        //
         // Note: if the model matrix is known to be a rigid-transform, we could just use it directly.
+
+        mat3f m = transpose(inverse(model.upperLeft()));
+        m *= mat3f(1.0f / std::sqrt(max(float3{length2(m[0]), length2(m[1]), length2(m[2])})));
+
         UniformBuffer::setUniform(buffer,
-                offset + offsetof(FRenderableManager::Transform, worldFromModelNormalMatrix),
-                transpose(inverse(model.upperLeft())));
+                offset + offsetof(PerRenderableUib, worldFromModelNormalMatrix), m);
     }
 
     // TODO: handle static objects separately
-    driver.updateUniformBuffer(uniformBufferHandle, { buffer, size });
+    mRenderableViewUbh = renderableUbh;
+    driver.updateUniformBuffer(renderableUbh, { buffer, size });
 }
 
 void FScene::terminate(FEngine& engine) {
-    // free-up the lights buffer
-    mGpuLightData.terminate(engine);
-    // free-up UBOs
-    engine.getDriverApi().destroyUniformBuffer(mUniformBufferHandle);
+    // DO NOT destroy this UBO, it's owned by the View
+    mRenderableViewUbh.clear();
 }
 
-void FScene::prepareDynamicLights(const CameraInfo& camera, ArenaScope& rootArena) noexcept {
+void FScene::prepareDynamicLights(const CameraInfo& camera, ArenaScope& rootArena, Handle<HwUniformBuffer> lightUbh) noexcept {
+    FEngine::DriverApi& driver = mEngine.getDriverApi();
     FLightManager& lcm = mEngine.getLightManager();
-    GpuLightBuffer& gpuLightData = mGpuLightData;
     FScene::LightSoa& lightData = getLightData();
 
     /*
@@ -238,24 +233,27 @@ void FScene::prepareDynamicLights(const CameraInfo& camera, ArenaScope& rootAren
     // drop excess lights
     lightData.resize(std::min(lightData.size(), CONFIG_MAX_LIGHT_COUNT + DIRECTIONAL_LIGHTS_COUNT));
 
+    // number of point/spot lights
+    size_t positionalLightCount = lightData.size() - DIRECTIONAL_LIGHTS_COUNT;
+
     // compute the light ranges (needed when building light trees)
     float2* const zrange = lightData.data<FScene::SCREEN_SPACE_Z_RANGE>();
-    computeLightRanges(zrange, camera, spheres + DIRECTIONAL_LIGHTS_COUNT, lightData.size() - DIRECTIONAL_LIGHTS_COUNT);
+    computeLightRanges(zrange, camera, spheres + DIRECTIONAL_LIGHTS_COUNT, positionalLightCount);
+
+    LightsUib* const lp = driver.allocatePod<LightsUib>(positionalLightCount);
 
     auto const* UTILS_RESTRICT directions   = lightData.data<FScene::DIRECTION>();
     auto const* UTILS_RESTRICT instances    = lightData.data<FScene::LIGHT_INSTANCE>();
     for (size_t i = DIRECTIONAL_LIGHTS_COUNT, c = lightData.size(); i < c; ++i) {
-        GpuLightBuffer::LightIndex gpuIndex = GpuLightBuffer::LightIndex(i - DIRECTIONAL_LIGHTS_COUNT);
-        GpuLightBuffer::LightParameters& lp = gpuLightData.getLightParameters(gpuIndex);
+        const size_t gpuIndex = i - DIRECTIONAL_LIGHTS_COUNT;
         auto li = instances[i];
-        lp.positionFalloff      = { spheres[i].xyz, lcm.getSquaredFalloffInv(li) };
-        lp.colorIntensity       = { lcm.getColor(li), lcm.getIntensity(li) };
-        lp.directionIES         = { directions[i], 0 };
-        lp.spotScaleOffset.xy   = { lcm.getSpotParams(li).scaleOffset };
+        lp[gpuIndex].positionFalloff      = { spheres[i].xyz, lcm.getSquaredFalloffInv(li) };
+        lp[gpuIndex].colorIntensity       = { lcm.getColor(li), lcm.getIntensity(li) };
+        lp[gpuIndex].directionIES         = { directions[i], 0 };
+        lp[gpuIndex].spotScaleOffset.xy   = { lcm.getSpotParams(li).scaleOffset };
     }
 
-    gpuLightData.invalidate(0, lightData.size() - DIRECTIONAL_LIGHTS_COUNT);
-    gpuLightData.commit(mEngine);
+    driver.updateUniformBuffer(lightUbh, { lp, positionalLightCount * sizeof(LightsUib) });
 }
 
 // These methods need to exist so clang honors the __restrict__ keyword, which in turn

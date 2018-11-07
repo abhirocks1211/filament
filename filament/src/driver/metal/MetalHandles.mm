@@ -16,6 +16,10 @@
 
 #include "MetalHandles.h"
 
+#include "MetalEnums.h"
+
+#include <details/Texture.h> // for FTexture::getFormatSize
+
 #include <utils/Panic.h>
 
 namespace filament {
@@ -26,26 +30,8 @@ MetalTexture::MetalTexture(id<MTLDevice> device, driver::SamplerType target, uin
         TextureUsage usage) noexcept
     : HwTexture(target, levels, samples, width, height, depth) {
 
-    // todo: Just a few texture formats to get it working.
-    MTLPixelFormat pixelFormat = MTLPixelFormatInvalid;
-    switch (format) {
-        case TextureFormat::RG16UI:
-            pixelFormat = MTLPixelFormatRG16Uint;
-            bytesPerPixel = 4;
-            break;
-        case TextureFormat::R8UI:
-            pixelFormat = MTLPixelFormatR8Uint;
-            bytesPerPixel = 1;
-            break;
-        case TextureFormat::RG16F:
-            pixelFormat = MTLPixelFormatRG16Float;
-            bytesPerPixel = 4;
-            break;
-        case TextureFormat::RGBA8:
-            pixelFormat = MTLPixelFormatRGBA8Unorm;
-            bytesPerPixel = 4;
-            break;
-    }
+    MTLPixelFormat pixelFormat = getMetalFormat(format);
+    bytesPerPixel = static_cast<uint8_t>(details::FTexture::getFormatSize(format));
 
     ASSERT_POSTCONDITION(pixelFormat != MTLPixelFormatInvalid, "Pixel format not supported.");
 
@@ -98,9 +84,9 @@ void MetalTexture::loadCubeImage(const PixelBufferDescriptor& data, const FaceOf
         int miplevel) {
     NSUInteger faceWidth = width >> miplevel;
     NSUInteger bytesPerRow = bytesPerPixel * faceWidth;
+    MTLRegion region = MTLRegionMake2D(0, 0, faceWidth, faceWidth);
     for (NSUInteger slice = 0; slice < 6; slice++) {
         auto faceoffset = faceOffsets.offsets[slice];
-        MTLRegion region = MTLRegionMake2D(0, 0, faceWidth, faceWidth);
         [texture replaceRegion:region
                    mipmapLevel:static_cast<NSUInteger>(miplevel)
                          slice:slice

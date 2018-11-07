@@ -71,8 +71,7 @@ set(APP_SRCS
         app/IBL.cpp
         app/Image.cpp
         app/IcoSphere.cpp
-        app/Sphere.cpp
-        gltf_viewer.cpp)
+        app/Sphere.cpp)
 
 if (APPLE)
     list(APPEND APP_SRCS app/NativeWindowHelperCocoa.mm)

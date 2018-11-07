@@ -14,14 +14,9 @@
  * limitations under the License.
  */
 
-#include <memory>
-#include <map>
-#include <string>
-#include <vector>
-
-#include <getopt/getopt.h>
-
-#include <utils/Path.h>
+#include "app/Config.h"
+#include "app/FilamentApp.h"
+#include "app/MeshAssimp.h"
 
 #include <filament/Engine.h>
 #include <filament/LightManager.h>
@@ -33,21 +28,21 @@
 #include <filament/Texture.h>
 #include <filament/IndirectLight.h>
 
+#include <utils/Path.h>
+#include <utils/EntityManager.h>
+
 #include <math/mat3.h>
 #include <math/mat4.h>
 #include <math/vec3.h>
 
-#include "app/Config.h"
-#include "app/FilamentApp.h"
-#include "app/MeshAssimp.h"
+#include <getopt/getopt.h>
 
 #include <stb_image.h>
 
-#include <utils/EntityManager.h>
-
-#include <filamat/MaterialBuilder.h>
-
-#include "app/Cube.h"
+#include <memory>
+#include <map>
+#include <string>
+#include <vector>
 
 using namespace math;
 using namespace filament;
@@ -143,28 +138,17 @@ static void setup(Engine* engine, View* view, Scene* scene) {
     auto& rcm = engine->getRenderableManager();
     auto& tcm = engine->getTransformManager();
 
-    //Calculate normalize scale so that bounding box is [-1, 1]
-    float maxBound = 0;
-    maxBound = fmax(g_meshSet->maxBound.x - g_meshSet->minBound.x, g_meshSet->maxBound.y - g_meshSet->minBound.y);
-    maxBound = fmax(maxBound, g_meshSet->maxBound.z - g_meshSet->minBound.z);
-
-    float scaleFactor = 2.0f / maxBound;
-    mat4f scale = mat4f{ mat3f(2.0f / maxBound), float4(0.0f, 0.0f, 0.0f, 1.0f) };
+    // Compute the scale required to fit the model's bounding box into [-1, 1]
+    float maxExtent = 0;
+    maxExtent = std::max(g_meshSet->maxBound.x - g_meshSet->minBound.x, g_meshSet->maxBound.y - g_meshSet->minBound.y);
+    maxExtent = std::max(maxExtent, g_meshSet->maxBound.z - g_meshSet->minBound.z);
+    float scaleFactor = 2.0f / maxExtent;
 
     float3 center = -1 * (g_meshSet->maxBound + g_meshSet->minBound) / 2.0f;
     center.z -= 4.0f / scaleFactor;
 
     auto rooti = tcm.getInstance(g_meshSet->rootEntity);
     tcm.setTransform(rooti, mat4f::scale(float3(scaleFactor)) * mat4f::translate(center));
-
-//    //Draw bounding box (before normalized scale and translation to origin)
-//    filament::Material const* transparentMaterial = Material::Builder()
-//            .package((void*) TRANSPARENT_COLOR_PACKAGE, sizeof(TRANSPARENT_COLOR_PACKAGE))
-//            .build(*engine);
-//    Cube *bbcube = new Cube(*engine, transparentMaterial, {1,0,0});
-//    bbcube->mapAabb(*engine, Box().set(g_meshSet->minBound, g_meshSet->maxBound));
-//    scene->addEntity(bbcube->getWireFrameRenderable());
-//    scene->addEntity(bbcube->getSolidRenderable());
 
     for (auto renderable : g_meshSet->getRenderables()) {
         if (rcm.hasComponent(renderable)) {

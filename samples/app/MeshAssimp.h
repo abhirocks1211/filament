@@ -45,9 +45,6 @@ namespace filament {
 #include <filament/TransformManager.h>
 
 
-//#include <assimp/Importer.hpp>
-
-
 class MeshAssimp {
 public:
     using mat4f = math::mat4f;
@@ -68,9 +65,8 @@ public:
     //For use with normalizing coordinates
     math::float3 minBound = math::float3(1.0f);
     math::float3 maxBound = math::float3(-1.0f);
-
-    filament::TransformManager::Instance rootInstance = filament::TransformManager::Instance();
     utils::Entity rootEntity;
+
 private:
     struct Part {
         size_t offset;
@@ -124,14 +120,6 @@ private:
     std::vector<utils::Entity> mRenderables;
 
     std::vector<filament::Texture*> mTextures;
-
-//    void MeshAssimp::setTextureFromPath(const aiScene *scene,
-//                                        const aiString &texFile,
-//                                        const std::string &materialName,
-//                                        const std::string &texDir,
-//                                        std::map<std::string, filament::MaterialInstance *> &outMaterials,
-//                                        filament::TextureSampler sampler,
-//                                        char *parameterName);
 };
 
 #endif // TNT_FILAMENT_SAMPLE_MESH_ASSIMP_H

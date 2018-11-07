@@ -319,26 +319,26 @@ bool MetalDriver::isFrameTimeSupported() {
     return false;
 }
 
-void MetalDriver::loadVertexBuffer(Driver::VertexBufferHandle vbh, size_t index,
+void MetalDriver::updateVertexBuffer(Driver::VertexBufferHandle vbh, size_t index,
         Driver::BufferDescriptor&& data, uint32_t byteOffset, uint32_t byteSize) {
     auto* vb = handle_cast<MetalVertexBuffer>(mHandleMap, vbh);
     memcpy(vb->buffers[index].contents, data.buffer, data.size);
 }
 
-void MetalDriver::loadIndexBuffer(Driver::IndexBufferHandle ibh, Driver::BufferDescriptor&& data,
+void MetalDriver::updateIndexBuffer(Driver::IndexBufferHandle ibh, Driver::BufferDescriptor&& data,
         uint32_t byteOffset, uint32_t byteSize) {
     auto* ib = handle_cast<MetalIndexBuffer>(mHandleMap, ibh);
     memcpy(ib->buffer.contents, data.buffer, data.size);
 }
 
-void MetalDriver::load2DImage(Driver::TextureHandle th, uint32_t level, uint32_t xoffset,
+void MetalDriver::update2DImage(Driver::TextureHandle th, uint32_t level, uint32_t xoffset,
         uint32_t yoffset, uint32_t width, uint32_t height, Driver::PixelBufferDescriptor&& data) {
     auto tex = handle_cast<MetalTexture>(mHandleMap, th);
     tex->load2DImage(level, xoffset, yoffset, width, height, data);
     scheduleDestroy(std::move(data));
 }
 
-void MetalDriver::loadCubeImage(Driver::TextureHandle th, uint32_t level,
+void MetalDriver::updateCubeImage(Driver::TextureHandle th, uint32_t level,
         Driver::PixelBufferDescriptor&& data, Driver::FaceOffsets faceOffsets) {
     auto tex = handle_cast<MetalTexture>(mHandleMap, th);
     tex->loadCubeImage(data, faceOffsets, level);

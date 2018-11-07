@@ -73,7 +73,7 @@ struct MetalIndexBuffer : public HwIndexBuffer {
 };
 
 struct MetalUniformBuffer : public HwUniformBuffer {
-    MetalUniformBuffer(id<MTLDevice> device, size_t size) : HwUniformBuffer(size) {
+    MetalUniformBuffer(id<MTLDevice> device, size_t size) : HwUniformBuffer() {
         buffer = [device newBufferWithLength:size
         options:MTLResourceStorageModeShared];
     }

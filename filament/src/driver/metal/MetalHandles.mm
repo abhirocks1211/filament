@@ -49,17 +49,21 @@ MetalTexture::MetalTexture(id<MTLDevice> device, driver::SamplerType target, uin
 
     ASSERT_POSTCONDITION(pixelFormat != MTLPixelFormatInvalid, "Pixel format not supported.");
 
+    const BOOL mipmapped = levels > 1;
+
     MTLTextureDescriptor* descriptor;
     if (target == driver::SamplerType::SAMPLER_2D) {
         descriptor = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:pixelFormat
                                                                         width:width
                                                                        height:height
-                                                                    mipmapped:NO];
+                                                                    mipmapped:mipmapped];
+        descriptor.mipmapLevelCount = levels;
     } else if (target == driver::SamplerType::SAMPLER_CUBEMAP) {
         ASSERT_POSTCONDITION(width == height, "Cubemap faces must be square.");
         descriptor = [MTLTextureDescriptor textureCubeDescriptorWithPixelFormat:pixelFormat
                                                                            size:width
-                                                                      mipmapped:NO];
+                                                                      mipmapped:mipmapped];
+        descriptor.mipmapLevelCount = levels;
     } else {
         ASSERT_POSTCONDITION(false, "Sampler type not supported.");
     }
@@ -92,10 +96,11 @@ void MetalTexture::load2DImage(uint32_t level, uint32_t xoffset, uint32_t yoffse
 
 void MetalTexture::loadCubeImage(const PixelBufferDescriptor& data, const FaceOffsets& faceOffsets,
         int miplevel) {
-    NSUInteger bytesPerRow = bytesPerPixel * width;
+    NSUInteger faceWidth = width >> miplevel;
+    NSUInteger bytesPerRow = bytesPerPixel * faceWidth;
     for (NSUInteger slice = 0; slice < 6; slice++) {
         auto faceoffset = faceOffsets.offsets[slice];
-        MTLRegion region = MTLRegionMake2D(0, 0, width, width);
+        MTLRegion region = MTLRegionMake2D(0, 0, faceWidth, faceWidth);
         [texture replaceRegion:region
                    mipmapLevel:static_cast<NSUInteger>(miplevel)
                          slice:slice

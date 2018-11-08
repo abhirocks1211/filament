@@ -29,6 +29,8 @@ struct PipelineKey {
     MetalBinder::VertexDescription vertexDescription;
     id<MTLFunction> vertexFunction = nullptr;
     id<MTLFunction> fragmentFunction = nullptr;
+    MTLPixelFormat colorPixelFormat = MTLPixelFormatInvalid;
+    MTLPixelFormat depthPixelFormat = MTLPixelFormatInvalid;
 };
 
 struct PipelineValue {
@@ -42,7 +44,9 @@ struct PipelineEqual {
         return (
            left.vertexDescription == right.vertexDescription &&
            left.vertexFunction == right.vertexFunction &&
-           left.fragmentFunction == right.fragmentFunction
+           left.fragmentFunction == right.fragmentFunction &&
+           left.colorPixelFormat == right.colorPixelFormat &&
+           left.depthPixelFormat == right.depthPixelFormat
         );
     }
 };
@@ -88,6 +92,20 @@ void MetalBinder::setShaderFunctions(id<MTLFunction> vertexFunction,
 void MetalBinder::setVertexDescription(const VertexDescription& vertexDescription) noexcept {
     if (pImpl->mPipelineKey.vertexDescription != vertexDescription) {
         pImpl->mPipelineKey.vertexDescription = vertexDescription;
+        pImpl->mPipelineDirty = true;
+    }
+}
+
+void MetalBinder::setColorAttachmentPixelFormat(const MTLPixelFormat pixelFormat) noexcept {
+    if (pImpl->mPipelineKey.colorPixelFormat != pixelFormat) {
+        pImpl->mPipelineKey.colorPixelFormat = pixelFormat;
+        pImpl->mPipelineDirty = true;
+    }
+}
+
+void MetalBinder::setDepthAttachmentPixelFormat(const MTLPixelFormat pixelFormat) noexcept {
+    if (pImpl->mPipelineKey.depthPixelFormat != pixelFormat) {
+        pImpl->mPipelineKey.depthPixelFormat = pixelFormat;
         pImpl->mPipelineDirty = true;
     }
 }
@@ -142,8 +160,8 @@ void MetalBinder::getOrCreatePipelineState(
     descriptor.vertexDescriptor = vertex;
 
     // Attachments
-    descriptor.colorAttachments[0].pixelFormat = MTLPixelFormatBGRA8Unorm;
-    descriptor.depthAttachmentPixelFormat = MTLPixelFormatDepth32Float;
+    descriptor.colorAttachments[0].pixelFormat = pImpl->mPipelineKey.colorPixelFormat;
+    descriptor.depthAttachmentPixelFormat = pImpl->mPipelineKey.depthPixelFormat;
 
     NSError* error = nullptr;
     id<MTLRenderPipelineState> pipeline =

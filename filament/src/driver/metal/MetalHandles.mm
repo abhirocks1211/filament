@@ -55,12 +55,17 @@ MetalTexture::MetalTexture(id<MTLDevice> device, driver::SamplerType target, uin
     }
 
     MTLTextureUsage metalUsage;
+    constexpr NSUInteger MetalTextureUsageReadWrite =
+            MTLTextureUsageShaderRead | MTLTextureUsageShaderWrite;
     switch (usage) {
         case TextureUsage::DEFAULT:
-            metalUsage = MTLTextureUsageShaderRead;
+            metalUsage = MetalTextureUsageReadWrite;
             break;
 
         case TextureUsage::COLOR_ATTACHMENT:
+            metalUsage = MTLTextureUsageShaderRead | MTLTextureUsageRenderTarget;
+            break;
+
         case TextureUsage::DEPTH_ATTACHMENT:
             metalUsage = MTLTextureUsageRenderTarget;
             break;

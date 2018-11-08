@@ -61,6 +61,8 @@ struct MetalDriverImpl {
     // Surface-related properties.
     CAMetalLayer* mCurrentSurface = nullptr;
     id<CAMetalDrawable> mCurrentDrawable = nullptr;
+    MTLPixelFormat mCurrentSurfacePixelFormat = MTLPixelFormatInvalid;
+    MTLPixelFormat mCurrentDepthPixelFormat = MTLPixelFormatInvalid;
     id<MTLTexture> mDepthTexture = nullptr;
     MTLViewport mCurrentViewport = {};
     NSUInteger mSurfaceHeight = 0;
@@ -425,9 +427,12 @@ void MetalDriver::beginRenderPass(Driver::RenderTargetHandle rth,
             utils::slog.e << "Could not obtain drawable." << utils::io::endl;
             utils::debug_trap();
         }
+        // todo: refactor this a bit
         descriptor.colorAttachments[0].texture = pImpl->mCurrentDrawable.texture;
+        pImpl->mCurrentSurfacePixelFormat = pImpl->mCurrentDrawable.texture.pixelFormat;
     } else {
         descriptor.colorAttachments[0].texture = renderTarget->color;
+        pImpl->mCurrentSurfacePixelFormat = renderTarget->color.pixelFormat;
     }
 
     descriptor.colorAttachments[0].loadAction = MTLLoadActionClear;
@@ -439,8 +444,14 @@ void MetalDriver::beginRenderPass(Driver::RenderTargetHandle rth,
 
     if (renderTarget->isDefaultRenderTarget) {
         descriptor.depthAttachment.texture = pImpl->mDepthTexture;
+        pImpl->mCurrentDepthPixelFormat = pImpl->mDepthTexture.pixelFormat;
     } else {
         descriptor.depthAttachment.texture = renderTarget->depth;
+        if (renderTarget->depth) {
+            pImpl->mCurrentDepthPixelFormat = renderTarget->depth.pixelFormat;
+        } else {
+            pImpl->mCurrentDepthPixelFormat = MTLPixelFormatInvalid;
+        }
     }
 
     descriptor.depthAttachment.clearDepth = params.clearDepth;
@@ -590,6 +601,8 @@ void MetalDriver::draw(Driver::ProgramHandle ph, Driver::RasterState rs,
 
     pImpl->mBinder.setShaderFunctions(program->vertexFunction, program->fragmentFunction);
     pImpl->mBinder.setVertexDescription(primitive->vertexDescription);
+    pImpl->mBinder.setColorAttachmentPixelFormat(pImpl->mCurrentSurfacePixelFormat);
+    pImpl->mBinder.setDepthAttachmentPixelFormat(pImpl->mCurrentDepthPixelFormat);
 
     // Bind a valid pipeline state for this draw call.
     // todo: check if the pipeline state needs to be rebound

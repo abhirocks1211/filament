@@ -86,6 +86,8 @@ public:
     void setShaderFunctions(id<MTLFunction> vertexFunction,
             id<MTLFunction> fragmentFunction) noexcept;
     void setVertexDescription(const VertexDescription& vertexDescription) noexcept;
+    void setColorAttachmentPixelFormat(const MTLPixelFormat pixelFormat) noexcept;
+    void setDepthAttachmentPixelFormat(const MTLPixelFormat pixelFormat) noexcept;
     void getOrCreatePipelineState(id<MTLRenderPipelineState>& pipelineState) noexcept;
 
 private:

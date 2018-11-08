@@ -141,6 +141,10 @@ struct MetalProgram : public HwProgram {
         const auto& sources = program.getShadersSource();
         for (size_t i = 0; i < Program::NUM_SHADER_TYPES; i++) {
             const auto& source = sources[i];
+            // It's okay for some shaders to be empty, they shouldn't be used in any draw calls.
+            if (source.empty()) {
+                continue;
+            }
             NSString* objcSource = [NSString stringWithCString:source.c_str()
             encoding:NSUTF8StringEncoding];
             NSError* error = nil;

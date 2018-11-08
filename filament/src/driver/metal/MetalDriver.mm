@@ -56,7 +56,7 @@ struct MetalDriverImpl {
     bool mSamplersDirty = true;
     bool mTexturesDirty = true;
 
-    MetalSamplerBuffer* mSamplerBindings[NUM_SAMPLER_BINDINGS];
+    MetalSamplerBuffer* mSamplerBindings[NUM_SAMPLER_BINDINGS] = {};
 
     // Surface-related properties.
     CAMetalLayer* mCurrentSurface = nullptr;

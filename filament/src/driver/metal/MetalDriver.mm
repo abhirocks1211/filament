@@ -29,6 +29,8 @@
 #include <utils/Panic.h>
 #include <utils/trap.h>
 
+#pragma clang diagnostic push
+#pragma ide diagnostic ignored "HidingNonVirtualFunction"
 namespace filament {
 namespace driver {
 
@@ -667,3 +669,5 @@ void MetalDriver::draw(Driver::ProgramHandle ph, Driver::RasterState rs,
 template class ConcreteDispatcher<driver::MetalDriver>;
 
 } // namespace filament
+
+#pragma clang diagnostic pop

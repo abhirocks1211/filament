@@ -628,7 +628,7 @@ void MetalDriver::draw(Driver::ProgramHandle ph, Driver::RasterState rs,
 
     NSRange range {
         .length = NUM_SAMPLER_BINDINGS,
-        .location = NUM_UBUFFER_BINDINGS    // todo: rename
+        .location = SAMPLER_BINDINGS_START
     };
     if (pImpl->mTexturesDirty) {
         [pImpl->mCurrentCommandEncoder setFragmentTextures:pImpl->mBoundTextures

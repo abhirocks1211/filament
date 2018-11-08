@@ -59,6 +59,7 @@ struct MetalDriverImpl {
     MetalSamplerBuffer* mSamplerBindings[NUM_SAMPLER_BINDINGS];
 
     // Surface-related properties.
+    CAMetalLayer* mCurrentSurface = nullptr;
     id<CAMetalDrawable> mCurrentDrawable = nullptr;
     id<MTLTexture> mDepthTexture = nullptr;
     MTLViewport mCurrentViewport = {};
@@ -148,15 +149,42 @@ void MetalDriver::createProgram(Driver::ProgramHandle rph, Program&& program) {
     construct_handle<MetalProgram>(mHandleMap, rph, pImpl->mDevice, program);
 }
 
-void MetalDriver::createDefaultRenderTarget(Driver::RenderTargetHandle, int dummy) {
-
+void MetalDriver::createDefaultRenderTarget(Driver::RenderTargetHandle rth, int dummy) {
+    auto renderTarget = construct_handle<MetalRenderTarget>(mHandleMap, rth);
 }
 
-void MetalDriver::createRenderTarget(Driver::RenderTargetHandle,
+void MetalDriver::createRenderTarget(Driver::RenderTargetHandle rth,
         Driver::TargetBufferFlags targetBufferFlags, uint32_t width, uint32_t height,
         uint8_t samples, Driver::TextureFormat format, Driver::TargetBufferInfo color,
         Driver::TargetBufferInfo depth, Driver::TargetBufferInfo stencil) {
+    auto renderTarget = construct_handle<MetalRenderTarget>(mHandleMap, rth, width, height);
 
+    if (color.handle) {
+        auto colorTexture = handle_cast<MetalTexture>(mHandleMap, color.handle);
+        renderTarget->color = colorTexture->texture;
+    } else if (targetBufferFlags & TargetBufferFlags::COLOR) {
+        utils::slog.d << "Need color.";
+        assert(false);
+    }
+
+    if (depth.handle) {
+        auto depthTexture = handle_cast<MetalTexture>(mHandleMap, depth.handle);
+        renderTarget->depth = depthTexture->texture;
+    } else if (targetBufferFlags & TargetBufferFlags::DEPTH) {
+        // Create a depth texture.
+        MTLTextureDescriptor* depthTextureDesc =
+                [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatDepth32Float
+                                                                   width:width
+                                                                  height:height
+                                                               mipmapped:NO];
+        depthTextureDesc.usage = MTLTextureUsageRenderTarget;
+        depthTextureDesc.resourceOptions = MTLResourceStorageModePrivate;
+        renderTarget->depth = [pImpl->mDevice newTextureWithDescriptor:depthTextureDesc];
+    }
+
+    ASSERT_POSTCONDITION(
+            !stencil.handle && !(targetBufferFlags & TargetBufferFlags::STENCIL),
+            "Stencil buffer not supported.");
 }
 
 void MetalDriver::createFence(Driver::FenceHandle, int dummy) {
@@ -223,11 +251,11 @@ Driver::ProgramHandle MetalDriver::createProgramSynchronous() noexcept {
 }
 
 Driver::RenderTargetHandle MetalDriver::createDefaultRenderTargetSynchronous() noexcept {
-    return {};
+    return alloc_handle<MetalRenderTarget, HwRenderTarget>();
 }
 
 Driver::RenderTargetHandle MetalDriver::createRenderTargetSynchronous() noexcept {
-    return {};
+    return alloc_handle<MetalRenderTarget, HwRenderTarget>();
 }
 
 Driver::FenceHandle MetalDriver::createFenceSynchronous() noexcept {
@@ -312,11 +340,12 @@ Driver::FenceStatus MetalDriver::wait(Driver::FenceHandle fh, uint64_t timeout) 
 }
 
 bool MetalDriver::isTextureFormatSupported(Driver::TextureFormat format) {
-    return true;
+    return getMetalFormat(format) != MTLPixelFormatInvalid;
 }
 
 bool MetalDriver::isRenderTargetFormatSupported(Driver::TextureFormat format) {
-    return true;
+    // todo: There's probably a stricter set of supported render target formats.
+    return getMetalFormat(format) != MTLPixelFormatInvalid;
 }
 
 bool MetalDriver::isFrameTimeSupported() {
@@ -377,20 +406,43 @@ void MetalDriver::updateSamplerBuffer(Driver::SamplerBufferHandle sbh,
 
 void MetalDriver::beginRenderPass(Driver::RenderTargetHandle rth,
         const Driver::RenderPassParams& params) {
-    ASSERT_PRECONDITION(pImpl->mCurrentDrawable != nullptr, "mCurrentDrawable is null.");
-
     // Metal clears the entire attachment without respect to viewport or scissor.
     // todo: might need to clear the scissor area manually via a draw call if we need that
     // functionality.
 
+    auto renderTarget = handle_cast<MetalRenderTarget>(mHandleMap, rth);
+
     MTLRenderPassDescriptor* descriptor = [MTLRenderPassDescriptor renderPassDescriptor];
-    descriptor.colorAttachments[0].texture = pImpl->mCurrentDrawable.texture;
+
+    // Color
+
+    if (renderTarget->isDefaultRenderTarget) {
+        // Lazily acquire the next drawable, if we haven't already acquired it for this frame.
+        if (!pImpl->mCurrentDrawable) {
+            pImpl->mCurrentDrawable = [pImpl->mCurrentSurface nextDrawable];
+        }
+        if (pImpl->mCurrentDrawable == nil) {
+            utils::slog.e << "Could not obtain drawable." << utils::io::endl;
+            utils::debug_trap();
+        }
+        descriptor.colorAttachments[0].texture = pImpl->mCurrentDrawable.texture;
+    } else {
+        descriptor.colorAttachments[0].texture = renderTarget->color;
+    }
+
     descriptor.colorAttachments[0].loadAction = MTLLoadActionClear;
     descriptor.colorAttachments[0].clearColor = MTLClearColorMake(
             params.clearColor.r, params.clearColor.g, params.clearColor.b, params.clearColor.a
     );
 
-    descriptor.depthAttachment.texture = pImpl->mDepthTexture;
+    // Depth
+
+    if (renderTarget->isDefaultRenderTarget) {
+        descriptor.depthAttachment.texture = pImpl->mDepthTexture;
+    } else {
+        descriptor.depthAttachment.texture = renderTarget->depth;
+    }
+
     descriptor.depthAttachment.clearDepth = params.clearDepth;
 
     pImpl->mCurrentCommandEncoder =
@@ -455,17 +507,14 @@ void MetalDriver::makeCurrent(Driver::SwapChainHandle schDraw, Driver::SwapChain
     ASSERT_PRECONDITION_NON_FATAL(schDraw == schRead,
                                   "Metal driver does not support distinct draw/read swap chains.");
     auto* swapChain = handle_cast<MetalSwapChain>(mHandleMap, schDraw);
-    pImpl->mCurrentDrawable = [swapChain->layer nextDrawable];
 
-    if (pImpl->mCurrentDrawable == nil) {
-        utils::slog.e << "Could not obtain drawable." << utils::io::endl;
-        utils::debug_trap();
-    }
+    pImpl->mCurrentSurface = swapChain->layer;
 }
 
 void MetalDriver::commit(Driver::SwapChainHandle sch) {
     [pImpl->mCurrentCommandBuffer presentDrawable:pImpl->mCurrentDrawable];
     [pImpl->mCurrentCommandBuffer commit];
+    pImpl->mCurrentDrawable = nil;
 }
 
 void MetalDriver::viewport(ssize_t left, ssize_t bottom, size_t width, size_t height) {

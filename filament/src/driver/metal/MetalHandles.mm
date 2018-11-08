@@ -54,6 +54,19 @@ MetalTexture::MetalTexture(id<MTLDevice> device, driver::SamplerType target, uin
         ASSERT_POSTCONDITION(false, "Sampler type not supported.");
     }
 
+    MTLTextureUsage metalUsage;
+    switch (usage) {
+        case TextureUsage::DEFAULT:
+            metalUsage = MTLTextureUsageShaderRead;
+            break;
+
+        case TextureUsage::COLOR_ATTACHMENT:
+        case TextureUsage::DEPTH_ATTACHMENT:
+            metalUsage = MTLTextureUsageRenderTarget;
+            break;
+    }
+    descriptor.usage = metalUsage;
+
     texture = [device newTextureWithDescriptor:descriptor];
 }
 

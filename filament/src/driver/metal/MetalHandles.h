@@ -192,6 +192,17 @@ struct MetalSamplerBuffer : public HwSamplerBuffer {
 
 };
 
+struct MetalRenderTarget : private HwRenderTarget {
+
+    MetalRenderTarget(uint32_t width, uint32_t height) : HwRenderTarget(width, height) {}
+    MetalRenderTarget() : HwRenderTarget(0, 0), isDefaultRenderTarget(true) {}
+
+    bool isDefaultRenderTarget = false;
+    id<MTLTexture> color = nil;
+    id<MTLTexture> depth = nil;
+
+};
+
 } // namespace driver
 } // namespace filament
 

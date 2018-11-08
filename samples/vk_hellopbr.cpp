@@ -51,7 +51,7 @@ int main(int argc, char** argv) {
         auto& rcm = engine->getRenderableManager();
         auto& em = utils::EntityManager::get();
 
-        view->setPostProcessingEnabled(false);
+        view->setPostProcessingEnabled(true);
 
         // Add geometry into the scene.
         app.meshes = new MeshAssimp(*engine);

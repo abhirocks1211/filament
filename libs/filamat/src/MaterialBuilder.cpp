@@ -34,12 +34,10 @@
 #include "eiff/MaterialInterfaceBlockChunk.h"
 #include "eiff/MaterialGlslChunk.h"
 #include "eiff/MaterialSpirvChunk.h"
-#include "eiff/MaterialMetalChunk.h"
 #include "eiff/ChunkContainer.h"
 #include "eiff/SimpleFieldChunk.h"
 #include "eiff/DictionaryGlslChunk.h"
 #include "eiff/DictionarySpirvChunk.h"
-#include "eiff/DictionaryMetalChunk.h"
 
 using namespace utils;
 

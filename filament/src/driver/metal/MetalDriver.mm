@@ -508,7 +508,7 @@ void MetalDriver::setRenderPrimitiveRange(Driver::RenderPrimitiveHandle rph,
         Driver::PrimitiveType pt, uint32_t offset, uint32_t minIndex, uint32_t maxIndex,
         uint32_t count) {
     auto primitive = handle_cast<MetalRenderPrimitive>(mHandleMap, rph);
-    // primitive->setPrimitiveType(pt);
+    primitive->type = pt;
     primitive->offset = offset * primitive->indexBuffer->elementSize;
     primitive->count = count;
     primitive->minIndex = minIndex;
@@ -743,7 +743,7 @@ void MetalDriver::draw(Driver::ProgramHandle ph, Driver::RasterState rs,
 
     MetalIndexBuffer* indexBuffer = primitive->indexBuffer;
 
-    [pImpl->mCurrentCommandEncoder drawIndexedPrimitives:MTLPrimitiveTypeTriangle
+    [pImpl->mCurrentCommandEncoder drawIndexedPrimitives:getMetalPrimitiveType(primitive->type)
                                               indexCount:primitive->count
                                                indexType:getIndexType(indexBuffer->elementSize)
                                              indexBuffer:indexBuffer->buffer

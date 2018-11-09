@@ -288,6 +288,16 @@ static inline MTLCullMode getMetalCullMode(CullingMode cullMode) {
     }
 }
 
+static inline MTLPrimitiveType getMetalPrimitiveType(PrimitiveType type) {
+    switch (type) {
+        case PrimitiveType::POINTS: return MTLPrimitiveTypePoint;
+        case PrimitiveType::LINES: return MTLPrimitiveTypeLine;
+        case PrimitiveType::TRIANGLES: return MTLPrimitiveTypeTriangle;
+        case PrimitiveType::NONE:
+            ASSERT_POSTCONDITION(false, "NONE is not a valid primitive type.");
+    }
+}
+
 } // namespace driver
 } // namespace filament
 

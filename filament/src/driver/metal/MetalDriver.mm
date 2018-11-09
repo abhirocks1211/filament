@@ -56,6 +56,9 @@ struct MetalDriverImpl {
     bool mSamplersDirty = true;
     bool mTexturesDirty = true;
 
+    CullModeStateTracker mCullModeState;
+    ViewportStateTracker mViewportState;
+
     MetalSamplerBuffer* mSamplerBindings[NUM_SAMPLER_BINDINGS] = {};
 
     // Surface-related properties.
@@ -462,12 +465,15 @@ void MetalDriver::beginRenderPass(Driver::RenderTargetHandle rth,
     viewport(params.left, params.bottom, params.width, params.height);
 
     // Metal requires a new command encoder for each render pass, and they cannot be reused.
-    // We must bind the depth-stencil state for each command encoder, so we dirty the state here
+    // We must bind certain states for each command encoder, so we dirty the states here
     // to force a rebinding at the first the draw call of this pass.
     for (auto& i : pImpl->mUniformState) {
         i.invalidate();
     }
+    [pImpl->mCurrentCommandEncoder setFrontFacingWinding:MTLWindingCounterClockwise];
     pImpl->mDepthStencilState.invalidate();
+    pImpl->mCullModeState.invalidate();
+    pImpl->mViewportState.invalidate();
     pImpl->mSamplersDirty = true;
     pImpl->mTexturesDirty = true;
 }
@@ -531,14 +537,14 @@ void MetalDriver::commit(Driver::SwapChainHandle sch) {
 void MetalDriver::viewport(ssize_t left, ssize_t bottom, size_t width, size_t height) {
     ASSERT_PRECONDITION(pImpl->mCurrentCommandEncoder != nullptr, "mCurrentCommandEncoder is null");
     // Flip the viewport, because Metal's screen space is vertically flipped that of Filament's.
-    pImpl->mCurrentViewport = MTLViewport {
+    pImpl->mViewportState.updateState(MTLViewport {
         .originX = static_cast<double>(left),
         .originY = pImpl->mSurfaceHeight - static_cast<double>(bottom) - static_cast<double>(height),
         .height = static_cast<double>(height),
         .width = static_cast<double>(width),
         .znear = 0.0,
         .zfar = 1.0
-    };
+    });
 }
 
 void MetalDriver::bindUniformBuffer(size_t index, Driver::UniformBufferHandle ubh) {
@@ -614,9 +620,17 @@ void MetalDriver::draw(Driver::ProgramHandle ph, Driver::RasterState rs,
         .destinationAlphaBlendFactor = getMetalBlendFactor(rs.blendFunctionDstAlpha)
     });
 
-    // todo: only update if needed
-    [pImpl->mCurrentCommandEncoder setCullMode:getMetalCullMode(rs.culling)];
-    [pImpl->mCurrentCommandEncoder setFrontFacingWinding:MTLWindingCounterClockwise];
+    // Cull mode
+    MTLCullMode cullMode = getMetalCullMode(rs.culling);
+    pImpl->mCullModeState.updateState(cullMode);
+    if (pImpl->mCullModeState.stateChanged()) {
+        [pImpl->mCurrentCommandEncoder setCullMode:cullMode];
+    }
+
+    // Viewport
+    if (pImpl->mViewportState.stateChanged()) {
+        [pImpl->mCurrentCommandEncoder setViewport:pImpl->mViewportState.getState()];
+    }
 
     // Bind a valid pipeline state for this draw call.
     // todo: check if the pipeline state needs to be rebound
@@ -624,9 +638,6 @@ void MetalDriver::draw(Driver::ProgramHandle ph, Driver::RasterState rs,
     pImpl->mBinder.getOrCreatePipelineState(pipeline);
     assert(pipeline != nullptr);
     [pImpl->mCurrentCommandEncoder setRenderPipelineState:pipeline];
-
-    // Set the viewport state.
-    [pImpl->mCurrentCommandEncoder setViewport:pImpl->mCurrentViewport];
 
     // Set the depth-stencil state, if a state change is needed.
     DepthStencilState depthState {

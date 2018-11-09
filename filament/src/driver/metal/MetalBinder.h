@@ -40,6 +40,10 @@ static constexpr uint32_t NUM_SAMPLER_BINDINGS = 8;
 
 struct MetalBinderImpl;
 
+// Forward declarations necessary here, definitions at end of file.
+inline bool operator==(const MTLViewport& lhs, const MTLViewport& rhs);
+inline bool operator!=(const MTLViewport& lhs, const MTLViewport& rhs);
+
 class MetalBinder {
 
 public:
@@ -122,6 +126,7 @@ private:
     std::unique_ptr<MetalBinderImpl> pImpl;
 
 };
+
 
 template<typename StateType,
          typename MetalType,
@@ -252,6 +257,27 @@ inline bool operator==(const driver::SamplerParams& lhs, const driver::SamplerPa
 
 using SamplerStateCache = StateCache<driver::SamplerParams, id<MTLSamplerState>,
         SamplerStateCreator>;
+
+// Raster-related states
+
+using CullModeStateTracker = StateTracker<MTLCullMode>;
+using WindingStateTracker = StateTracker<MTLWinding>;
+using ViewportStateTracker = StateTracker<MTLViewport>;
+
+inline bool operator==(const MTLViewport& lhs, const MTLViewport& rhs) {
+    return (
+            lhs.width == rhs.width &&
+            lhs.height == rhs.height &&
+            lhs.originX == rhs.originX &&
+            lhs.originY == rhs.originY &&
+            lhs.zfar == rhs.zfar &&
+            lhs.znear == rhs.znear
+    );
+}
+
+inline bool operator!=(const MTLViewport& lhs, const MTLViewport& rhs) {
+    return !operator==(lhs, rhs);
+}
 
 } // namespace driver
 } // namespace filament

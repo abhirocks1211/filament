@@ -135,7 +135,7 @@ Package PostprocessMaterialBuilder::build() {
                     filament::PostProcessStage(k), firstSampler);
             if (mPostprocessorCallback != nullptr) {
                 bool ok = mPostprocessorCallback(fs, filament::driver::ShaderType::FRAGMENT,
-                        shaderModel, &fs, pSpirv, &msl);
+                        shaderModel, &fs, pSpirv, pMsl);
                 if (!ok) {
                     // An error occured while postProcessing, aborting.
                     errorOccured = true;

@@ -252,6 +252,42 @@ static constexpr MTLPixelFormat getMetalFormat(TextureFormat format) {
     }
 }
 
+static inline MTLBlendOperation getMetalBlendOperation(BlendEquation equation) {
+    switch (equation) {
+        case BlendEquation::ADD: return MTLBlendOperationAdd;
+        case BlendEquation::SUBTRACT: return MTLBlendOperationSubtract;
+        case BlendEquation::REVERSE_SUBTRACT: return MTLBlendOperationReverseSubtract;
+        case BlendEquation::MIN: return MTLBlendOperationMin;
+        case BlendEquation::MAX: return MTLBlendOperationMax;
+    }
+}
+
+static inline MTLBlendFactor getMetalBlendFactor(BlendFunction function) {
+    switch (function) {
+        case BlendFunction::ZERO: return MTLBlendFactorZero;
+        case BlendFunction::ONE: return MTLBlendFactorOne;
+        case BlendFunction::SRC_COLOR: return MTLBlendFactorSourceColor;
+        case BlendFunction::ONE_MINUS_SRC_COLOR: return MTLBlendFactorOneMinusSourceColor;
+        case BlendFunction::DST_COLOR: return MTLBlendFactorDestinationColor;
+        case BlendFunction::ONE_MINUS_DST_COLOR: return MTLBlendFactorOneMinusDestinationColor;
+        case BlendFunction::SRC_ALPHA: return MTLBlendFactorSourceAlpha;
+        case BlendFunction::ONE_MINUS_SRC_ALPHA: return MTLBlendFactorOneMinusSourceAlpha;
+        case BlendFunction::DST_ALPHA: return MTLBlendFactorDestinationAlpha;
+        case BlendFunction::ONE_MINUS_DST_ALPHA: return MTLBlendFactorOneMinusDestinationAlpha;
+        case BlendFunction::SRC_ALPHA_SATURATE: return MTLBlendFactorSourceAlphaSaturated;
+    }
+}
+
+static inline MTLCullMode getMetalCullMode(CullingMode cullMode) {
+    switch (cullMode) {
+        case CullingMode::NONE: return MTLCullModeNone;
+        case CullingMode::FRONT: return MTLCullModeFront;
+        case CullingMode::BACK: return MTLCullModeBack;
+        case CullingMode::FRONT_AND_BACK:
+            ASSERT_POSTCONDITION(false, "FRONT_AND_BACK culling is not supported in Metal.");
+    }
+}
+
 } // namespace driver
 } // namespace filament
 

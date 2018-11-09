@@ -149,8 +149,8 @@ struct MetalProgram : public HwProgram {
             encoding:NSUTF8StringEncoding];
             NSError* error = nil;
             id<MTLLibrary> library = [device newLibraryWithSource:objcSource
-            options:nil
-            error:&error];
+                                                          options:nil
+                                                            error:&error];
             if (error) {
                 auto description =
                 [error.localizedDescription cStringUsingEncoding:NSUTF8StringEncoding];

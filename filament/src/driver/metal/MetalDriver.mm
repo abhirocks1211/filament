@@ -604,6 +604,20 @@ void MetalDriver::draw(Driver::ProgramHandle ph, Driver::RasterState rs,
     pImpl->mBinder.setColorAttachmentPixelFormat(pImpl->mCurrentSurfacePixelFormat);
     pImpl->mBinder.setDepthAttachmentPixelFormat(pImpl->mCurrentDepthPixelFormat);
 
+    pImpl->mBinder.setBlendState(MetalBinder::BlendState {
+        .blendingEnabled = rs.hasBlending(),
+        .rgbBlendOperation = getMetalBlendOperation(rs.blendEquationRGB),
+        .alphaBlendOperation = getMetalBlendOperation(rs.blendEquationAlpha),
+        .sourceRGBBlendFactor = getMetalBlendFactor(rs.blendFunctionSrcRGB),
+        .sourceAlphaBlendFactor = getMetalBlendFactor(rs.blendFunctionSrcAlpha),
+        .destinationRGBBlendFactor = getMetalBlendFactor(rs.blendFunctionDstRGB),
+        .destinationAlphaBlendFactor = getMetalBlendFactor(rs.blendFunctionDstAlpha)
+    });
+
+    // todo: only update if needed
+    [pImpl->mCurrentCommandEncoder setCullMode:getMetalCullMode(rs.culling)];
+    [pImpl->mCurrentCommandEncoder setFrontFacingWinding:MTLWindingCounterClockwise];
+
     // Bind a valid pipeline state for this draw call.
     // todo: check if the pipeline state needs to be rebound
     id<MTLRenderPipelineState> pipeline = nullptr;

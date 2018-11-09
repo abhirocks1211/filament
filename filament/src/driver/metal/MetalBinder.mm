@@ -31,6 +31,7 @@ struct PipelineKey {
     id<MTLFunction> fragmentFunction = nullptr;
     MTLPixelFormat colorPixelFormat = MTLPixelFormatInvalid;
     MTLPixelFormat depthPixelFormat = MTLPixelFormatInvalid;
+    MetalBinder::BlendState blendState = {};
 };
 
 struct PipelineValue {
@@ -46,7 +47,8 @@ struct PipelineEqual {
            left.vertexFunction == right.vertexFunction &&
            left.fragmentFunction == right.fragmentFunction &&
            left.colorPixelFormat == right.colorPixelFormat &&
-           left.depthPixelFormat == right.depthPixelFormat
+           left.depthPixelFormat == right.depthPixelFormat &&
+           left.blendState == right.blendState
         );
     }
 };
@@ -110,6 +112,13 @@ void MetalBinder::setDepthAttachmentPixelFormat(const MTLPixelFormat pixelFormat
     }
 }
 
+void MetalBinder::setBlendState(const BlendState& blendState) noexcept {
+    if (pImpl->mPipelineKey.blendState != blendState) {
+        pImpl->mPipelineKey.blendState = blendState;
+        pImpl->mPipelineDirty = true;
+    }
+}
+
 void MetalBinder::getOrCreatePipelineState(
         id<MTLRenderPipelineState> &pipelineState) noexcept {
     assert(pImpl->mDevice != nullptr);
@@ -159,8 +168,19 @@ void MetalBinder::getOrCreatePipelineState(
 
     descriptor.vertexDescriptor = vertex;
 
-    // Attachments
+    // Color attachments
     descriptor.colorAttachments[0].pixelFormat = pImpl->mPipelineKey.colorPixelFormat;
+
+    const auto& bs = pImpl->mPipelineKey.blendState;
+    descriptor.colorAttachments[0].blendingEnabled = bs.blendingEnabled;
+    descriptor.colorAttachments[0].alphaBlendOperation = bs.alphaBlendOperation;
+    descriptor.colorAttachments[0].rgbBlendOperation = bs.rgbBlendOperation;
+    descriptor.colorAttachments[0].destinationAlphaBlendFactor = bs.destinationAlphaBlendFactor;
+    descriptor.colorAttachments[0].destinationRGBBlendFactor = bs.destinationRGBBlendFactor;
+    descriptor.colorAttachments[0].sourceAlphaBlendFactor = bs.sourceAlphaBlendFactor;
+    descriptor.colorAttachments[0].sourceRGBBlendFactor = bs.sourceRGBBlendFactor;
+
+    // Depth attachment
     descriptor.depthAttachmentPixelFormat = pImpl->mPipelineKey.depthPixelFormat;
 
     NSError* error = nullptr;
@@ -262,7 +282,6 @@ constexpr inline MTLCompareFunction getCompareFunction(SamplerCompareFunc compar
 
 id<MTLSamplerState> SamplerStateCreator::operator()(id<MTLDevice> device,
         const driver::SamplerParams& state) noexcept {
-    assert(state.depthStencil == false);
     MTLSamplerDescriptor* samplerDescriptor = [[MTLSamplerDescriptor new] autorelease];
     samplerDescriptor.minFilter = getFilter(state.filterMin);
     samplerDescriptor.magFilter = getFilter(state.filterMag);

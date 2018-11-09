@@ -83,11 +83,38 @@ public:
         }
     };
 
+    struct BlendState {
+        bool blendingEnabled;
+        MTLBlendOperation alphaBlendOperation;
+        MTLBlendOperation rgbBlendOperation;
+        MTLBlendFactor destinationAlphaBlendFactor;
+        MTLBlendFactor destinationRGBBlendFactor;
+        MTLBlendFactor sourceAlphaBlendFactor;
+        MTLBlendFactor sourceRGBBlendFactor;
+
+        bool operator==(const BlendState& rhs) const noexcept {
+            return (
+                    this->blendingEnabled == rhs.blendingEnabled &&
+                    this->alphaBlendOperation == rhs.alphaBlendOperation &&
+                    this->rgbBlendOperation == rhs.rgbBlendOperation &&
+                    this->destinationAlphaBlendFactor == rhs.destinationAlphaBlendFactor &&
+                    this->destinationRGBBlendFactor == rhs.destinationRGBBlendFactor &&
+                    this->sourceAlphaBlendFactor == rhs.sourceAlphaBlendFactor &&
+                    this->sourceRGBBlendFactor == rhs.sourceRGBBlendFactor
+            );
+        }
+
+        bool operator!=(const BlendState& rhs) const noexcept {
+            return !operator==(rhs);
+        }
+    };
+
     void setShaderFunctions(id<MTLFunction> vertexFunction,
             id<MTLFunction> fragmentFunction) noexcept;
     void setVertexDescription(const VertexDescription& vertexDescription) noexcept;
     void setColorAttachmentPixelFormat(const MTLPixelFormat pixelFormat) noexcept;
     void setDepthAttachmentPixelFormat(const MTLPixelFormat pixelFormat) noexcept;
+    void setBlendState(const BlendState& blendState) noexcept;
     void getOrCreatePipelineState(id<MTLRenderPipelineState>& pipelineState) noexcept;
 
 private:

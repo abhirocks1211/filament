@@ -25,6 +25,35 @@
 namespace filament {
 namespace driver {
 
+static inline MTLTextureUsage getMetalTextureUsage(TextureUsage usage) {
+    switch (usage) {
+        case TextureUsage::DEFAULT:
+            return MTLTextureUsageShaderRead | MTLTextureUsageShaderWrite;
+
+        case TextureUsage::COLOR_ATTACHMENT:
+            return MTLTextureUsageShaderRead | MTLTextureUsageRenderTarget;
+
+        case TextureUsage::DEPTH_ATTACHMENT:
+            return MTLTextureUsageShaderRead | MTLTextureUsageRenderTarget;
+    }
+}
+
+static inline MTLStorageMode getMetalStorageMode(TextureFormat format) {
+    switch (format) {
+        // Depth textures must have a private storage mode.
+        case TextureFormat::DEPTH16:
+        case TextureFormat::DEPTH24:
+        case TextureFormat::DEPTH32F:
+        case TextureFormat::DEPTH24_STENCIL8:
+        case TextureFormat::DEPTH32F_STENCIL8:
+            return MTLStorageModePrivate;
+
+        default:
+            return MTLStorageModeManaged;
+
+    }
+}
+
 MetalTexture::MetalTexture(id<MTLDevice> device, driver::SamplerType target, uint8_t levels,
         TextureFormat format, uint8_t samples, uint32_t width, uint32_t height, uint32_t depth,
         TextureUsage usage) noexcept
@@ -54,23 +83,8 @@ MetalTexture::MetalTexture(id<MTLDevice> device, driver::SamplerType target, uin
         ASSERT_POSTCONDITION(false, "Sampler type not supported.");
     }
 
-    MTLTextureUsage metalUsage;
-    constexpr NSUInteger MetalTextureUsageReadWrite =
-            MTLTextureUsageShaderRead | MTLTextureUsageShaderWrite;
-    switch (usage) {
-        case TextureUsage::DEFAULT:
-            metalUsage = MetalTextureUsageReadWrite;
-            break;
-
-        case TextureUsage::COLOR_ATTACHMENT:
-            metalUsage = MTLTextureUsageShaderRead | MTLTextureUsageRenderTarget;
-            break;
-
-        case TextureUsage::DEPTH_ATTACHMENT:
-            metalUsage = MTLTextureUsageRenderTarget;
-            break;
-    }
-    descriptor.usage = metalUsage;
+    descriptor.usage = getMetalTextureUsage(usage);
+    descriptor.storageMode = getMetalStorageMode(format);
 
     texture = [device newTextureWithDescriptor:descriptor];
 }

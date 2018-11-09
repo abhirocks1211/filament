@@ -52,6 +52,111 @@ static inline MTLStorageMode getMetalStorageMode(TextureFormat format) {
             return MTLStorageModeManaged;
 
     }
+
+}
+MetalVertexBuffer::MetalVertexBuffer(id<MTLDevice> device, uint8_t bufferCount, uint8_t attributeCount,
+            uint32_t vertexCount, Driver::AttributeArray const& attributes)
+    : HwVertexBuffer(bufferCount, attributeCount, vertexCount, attributes) {
+    buffers.reserve(bufferCount);
+
+    for (uint8_t bufferIndex = 0; bufferIndex < bufferCount; ++bufferIndex) {
+        // Calculate buffer size.
+        uint32_t size = 0;
+        for (auto const& item : attributes) {
+            if (item.buffer == bufferIndex) {
+                uint32_t end = item.offset + vertexCount * item.stride;
+                size = std::max(size, end);
+            }
+        }
+
+        id<MTLBuffer> buffer = [device newBufferWithLength:size
+                                                   options:MTLResourceStorageModeShared];
+        buffers.push_back(buffer);
+    }
+}
+
+MetalIndexBuffer::MetalIndexBuffer(id<MTLDevice> device, uint8_t elementSize, uint32_t indexCount)
+    : HwIndexBuffer(elementSize, indexCount) {
+    buffer = [device newBufferWithLength:(elementSize * indexCount)
+                                 options:MTLResourceStorageModeShared];
+}
+
+MetalUniformBuffer::MetalUniformBuffer(id<MTLDevice> device, size_t size) : HwUniformBuffer() {
+    buffer = [device newBufferWithLength:size
+                                 options:MTLResourceStorageModeShared];
+}
+
+
+void MetalRenderPrimitive::setBuffers(MetalVertexBuffer* vertexBuffer, MetalIndexBuffer*
+        indexBuffer, uint32_t enabledAttributes) {
+    this->vertexBuffer = vertexBuffer;
+    this->indexBuffer = indexBuffer;
+
+    const size_t attributeCount = vertexBuffer->attributes.size();
+
+    buffers.clear();
+    buffers.reserve(attributeCount);
+    offsets.clear();
+    offsets.reserve(attributeCount);
+
+    // Each attribute gets its own vertex buffer.
+
+    uint32_t bufferIndex = 0;
+    for (uint32_t attributeIndex = 0; attributeIndex < attributeCount; attributeIndex++) {
+        if (!(enabledAttributes & (1U << attributeIndex))) {
+            continue;
+        }
+        const auto& attribute = vertexBuffer->attributes[attributeIndex];
+
+        buffers.push_back(vertexBuffer->buffers[attribute.buffer]);
+        offsets.push_back(attribute.offset);
+
+        vertexDescription.attributes[attributeIndex] = {
+                .format = getMetalFormat(attribute.type,
+                                         attribute.flags & Driver::Attribute::FLAG_NORMALIZED),
+                .buffer = bufferIndex,
+                .offset = 0
+        };
+        vertexDescription.layouts[bufferIndex] = {
+                .stride = attribute.stride
+        };
+
+        bufferIndex++;
+    };
+}
+
+
+MetalProgram::MetalProgram(id<MTLDevice> device, const Program& program) noexcept
+    : HwProgram(program.getName()) {
+
+    using MetalFunctionPtr = id<MTLFunction>*;
+
+    MetalFunctionPtr shaderFunctions[2] = { &vertexFunction, &fragmentFunction };
+
+    const auto& sources = program.getShadersSource();
+    for (size_t i = 0; i < Program::NUM_SHADER_TYPES; i++) {
+        const auto& source = sources[i];
+        // It's okay for some shaders to be empty, they shouldn't be used in any draw calls.
+        if (source.empty()) {
+            continue;
+        }
+        NSString* objcSource = [NSString stringWithCString:source.c_str()
+                                                  encoding:NSUTF8StringEncoding];
+        NSError* error = nil;
+        id<MTLLibrary> library = [device newLibraryWithSource:objcSource
+                                                      options:nil
+                                                        error:&error];
+        if (error) {
+            auto description =
+                    [error.localizedDescription cStringUsingEncoding:NSUTF8StringEncoding];
+            utils::slog.w << description << utils::io::endl;
+        }
+        ASSERT_POSTCONDITION(library != nil, "Unable to compile Metal shading library.");
+
+        *shaderFunctions[i] = [library newFunctionWithName:@"main0"];
+    }
+
+    samplerBindings = *program.getSamplerBindings();
 }
 
 MetalTexture::MetalTexture(id<MTLDevice> device, driver::SamplerType target, uint8_t levels,

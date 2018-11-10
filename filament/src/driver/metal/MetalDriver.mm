@@ -33,6 +33,7 @@
 #pragma ide diagnostic ignored "HidingNonVirtualFunction"
 namespace filament {
 namespace driver {
+namespace metal {
 
 struct MetalDriverImpl {
     id<MTLDevice> mDevice = nullptr;
@@ -42,9 +43,10 @@ struct MetalDriverImpl {
     id<MTLCommandBuffer> mCurrentCommandBuffer = nullptr;
     id<MTLRenderCommandEncoder> mCurrentCommandEncoder = nullptr;
 
-    UniformBufferStateTracker mUniformState[VERTEX_BUFFER_START];
+    PipelineStateTracker mPipelineState;
+    PipelineStateCache mPipelineStateCache;
 
-    MetalBinder mBinder;
+    UniformBufferStateTracker mUniformState[VERTEX_BUFFER_START];
 
     DepthStencilStateTracker mDepthStencilState;
     DepthStencilStateCache mDepthStencilStateCache;
@@ -67,7 +69,6 @@ struct MetalDriverImpl {
     MTLPixelFormat mCurrentSurfacePixelFormat = MTLPixelFormatInvalid;
     MTLPixelFormat mCurrentDepthPixelFormat = MTLPixelFormatInvalid;
     id<MTLTexture> mDepthTexture = nullptr;
-    MTLViewport mCurrentViewport = {};
     NSUInteger mSurfaceHeight = 0;
 };
 
@@ -83,7 +84,7 @@ MetalDriver::MetalDriver(driver::MetalPlatform* platform) noexcept
 
     pImpl->mDevice = MTLCreateSystemDefaultDevice();
     pImpl->mCommandQueue = [pImpl->mDevice newCommandQueue];
-    pImpl->mBinder.setDevice(pImpl->mDevice);
+    pImpl->mPipelineStateCache.setDevice(pImpl->mDevice);
     pImpl->mDepthStencilStateCache.setDevice(pImpl->mDevice);
     pImpl->mSamplerStateCache.setDevice(pImpl->mDevice);
 }
@@ -471,6 +472,7 @@ void MetalDriver::beginRenderPass(Driver::RenderTargetHandle rth,
         i.invalidate();
     }
     [pImpl->mCurrentCommandEncoder setFrontFacingWinding:MTLWindingCounterClockwise];
+    pImpl->mPipelineState.invalidate();
     pImpl->mDepthStencilState.invalidate();
     pImpl->mCullModeState.invalidate();
     pImpl->mViewportState.invalidate();
@@ -605,20 +607,30 @@ void MetalDriver::draw(Driver::ProgramHandle ph, Driver::RasterState rs,
     auto primitive = handle_cast<MetalRenderPrimitive>(mHandleMap, rph);
     auto program = handle_cast<MetalProgram>(mHandleMap, ph);
 
-    pImpl->mBinder.setShaderFunctions(program->vertexFunction, program->fragmentFunction);
-    pImpl->mBinder.setVertexDescription(primitive->vertexDescription);
-    pImpl->mBinder.setColorAttachmentPixelFormat(pImpl->mCurrentSurfacePixelFormat);
-    pImpl->mBinder.setDepthAttachmentPixelFormat(pImpl->mCurrentDepthPixelFormat);
-
-    pImpl->mBinder.setBlendState(MetalBinder::BlendState {
-        .blendingEnabled = rs.hasBlending(),
-        .rgbBlendOperation = getMetalBlendOperation(rs.blendEquationRGB),
-        .alphaBlendOperation = getMetalBlendOperation(rs.blendEquationAlpha),
-        .sourceRGBBlendFactor = getMetalBlendFactor(rs.blendFunctionSrcRGB),
-        .sourceAlphaBlendFactor = getMetalBlendFactor(rs.blendFunctionSrcAlpha),
-        .destinationRGBBlendFactor = getMetalBlendFactor(rs.blendFunctionDstRGB),
-        .destinationAlphaBlendFactor = getMetalBlendFactor(rs.blendFunctionDstAlpha)
-    });
+    // Pipeline state
+    PipelineState pipelineState {
+        .vertexFunction = program->vertexFunction,
+        .fragmentFunction = program->fragmentFunction,
+        .vertexDescription = primitive->vertexDescription,
+        .colorAttachmentPixelFormat = pImpl->mCurrentSurfacePixelFormat,
+        .depthAttachmentPixelFormat = pImpl->mCurrentDepthPixelFormat,
+        .blendState = BlendState {
+            .blendingEnabled = rs.hasBlending(),
+            .rgbBlendOperation = getMetalBlendOperation(rs.blendEquationRGB),
+            .alphaBlendOperation = getMetalBlendOperation(rs.blendEquationAlpha),
+            .sourceRGBBlendFactor = getMetalBlendFactor(rs.blendFunctionSrcRGB),
+            .sourceAlphaBlendFactor = getMetalBlendFactor(rs.blendFunctionSrcAlpha),
+            .destinationRGBBlendFactor = getMetalBlendFactor(rs.blendFunctionDstRGB),
+            .destinationAlphaBlendFactor = getMetalBlendFactor(rs.blendFunctionDstAlpha)
+        }
+    };
+    pImpl->mPipelineState.updateState(pipelineState);
+    if (pImpl->mPipelineState.stateChanged()) {
+        id<MTLRenderPipelineState> pipeline =
+                pImpl->mPipelineStateCache.getOrCreateState(pipelineState);
+        assert(pipeline != nil);
+        [pImpl->mCurrentCommandEncoder setRenderPipelineState:pipeline];
+    }
 
     // Cull mode
     MTLCullMode cullMode = getMetalCullMode(rs.culling);
@@ -631,13 +643,6 @@ void MetalDriver::draw(Driver::ProgramHandle ph, Driver::RasterState rs,
     if (pImpl->mViewportState.stateChanged()) {
         [pImpl->mCurrentCommandEncoder setViewport:pImpl->mViewportState.getState()];
     }
-
-    // Bind a valid pipeline state for this draw call.
-    // todo: check if the pipeline state needs to be rebound
-    id<MTLRenderPipelineState> pipeline = nullptr;
-    pImpl->mBinder.getOrCreatePipelineState(pipeline);
-    assert(pipeline != nullptr);
-    [pImpl->mCurrentCommandEncoder setRenderPipelineState:pipeline];
 
     // Set the depth-stencil state, if a state change is needed.
     DepthStencilState depthState {
@@ -750,10 +755,11 @@ void MetalDriver::draw(Driver::ProgramHandle ph, Driver::RasterState rs,
                                        indexBufferOffset:0];
 }
 
+} // namespace metal
 } // namespace driver
 
 // explicit instantiation of the Dispatcher
-template class ConcreteDispatcher<driver::MetalDriver>;
+template class ConcreteDispatcher<driver::metal::MetalDriver>;
 
 } // namespace filament
 

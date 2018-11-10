@@ -30,7 +30,7 @@ namespace filament {
 using namespace driver;
 
 Driver* PlatformCocoaMetal::createDriver(void* sharedContext) noexcept {
-    return MetalDriver::create(this);
+    return metal::MetalDriver::create(this);
 }
 
 } // namespace filament

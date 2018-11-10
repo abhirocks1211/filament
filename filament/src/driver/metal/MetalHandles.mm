@@ -24,6 +24,7 @@
 
 namespace filament {
 namespace driver {
+namespace metal {
 
 static inline MTLTextureUsage getMetalTextureUsage(TextureUsage usage) {
     switch (usage) {
@@ -233,5 +234,6 @@ void MetalTexture::loadCubeImage(const PixelBufferDescriptor& data, const FaceOf
     }
 }
 
+} // namespace metal
 } // namespace driver
 } // namespace filament

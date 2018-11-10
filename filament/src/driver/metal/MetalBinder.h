@@ -30,6 +30,12 @@
 namespace filament {
 namespace driver {
 
+inline bool operator==(const driver::SamplerParams& lhs, const driver::SamplerParams& rhs) {
+    return lhs.u == rhs.u;
+}
+
+namespace metal {
+
 static constexpr uint32_t VERTEX_BUFFER_START = BindingPoints::COUNT;
 static constexpr uint32_t MAX_VERTEX_ATTRIBUTES = filament::ATTRIBUTE_INDEX_COUNT;
 static constexpr uint32_t NUM_UBUFFER_BINDINGS = filament::BindingPoints::COUNT;
@@ -44,89 +50,63 @@ struct MetalBinderImpl;
 inline bool operator==(const MTLViewport& lhs, const MTLViewport& rhs);
 inline bool operator!=(const MTLViewport& lhs, const MTLViewport& rhs);
 
-class MetalBinder {
-
-public:
-
-    MetalBinder();
-    ~MetalBinder();
-
-    void setDevice(id<MTLDevice> device);
-
-    // Pipeline State
-
-    struct VertexDescription {
-        struct Attribute {
-            MTLVertexFormat format;
-            uint32_t buffer;
-            uint32_t offset;
-        };
-        struct Layout {
-            uint32_t stride;
-        };
-        Attribute attributes[MAX_VERTEX_ATTRIBUTES];
-        Layout layouts[MAX_VERTEX_ATTRIBUTES];
-
-        bool operator==(const VertexDescription& rhs) const noexcept {
-            bool result = true;
-            for (uint32_t i = 0; i < MAX_VERTEX_ATTRIBUTES; i++) {
-                result &= (
-                   this->attributes[i].format == rhs.attributes[i].format &&
-                   this->attributes[i].buffer == rhs.attributes[i].buffer &&
-                   this->attributes[i].offset == rhs.attributes[i].offset
-                );
-            }
-            for (uint32_t i = 0; i < MAX_VERTEX_ATTRIBUTES; i++) {
-                result &= this->layouts[i].stride == rhs.layouts[i].stride;
-            }
-            return result;
-        }
-
-        bool operator!=(const VertexDescription& rhs) const noexcept {
-            return !operator==(rhs);
-        }
+struct VertexDescription {
+    struct Attribute {
+        MTLVertexFormat format;
+        uint32_t buffer;
+        uint32_t offset;
     };
+    struct Layout {
+        uint32_t stride;
+    };
+    Attribute attributes[MAX_VERTEX_ATTRIBUTES];
+    Layout layouts[MAX_VERTEX_ATTRIBUTES];
 
-    struct BlendState {
-        bool blendingEnabled;
-        MTLBlendOperation alphaBlendOperation;
-        MTLBlendOperation rgbBlendOperation;
-        MTLBlendFactor destinationAlphaBlendFactor;
-        MTLBlendFactor destinationRGBBlendFactor;
-        MTLBlendFactor sourceAlphaBlendFactor;
-        MTLBlendFactor sourceRGBBlendFactor;
-
-        bool operator==(const BlendState& rhs) const noexcept {
-            return (
-                    this->blendingEnabled == rhs.blendingEnabled &&
-                    this->alphaBlendOperation == rhs.alphaBlendOperation &&
-                    this->rgbBlendOperation == rhs.rgbBlendOperation &&
-                    this->destinationAlphaBlendFactor == rhs.destinationAlphaBlendFactor &&
-                    this->destinationRGBBlendFactor == rhs.destinationRGBBlendFactor &&
-                    this->sourceAlphaBlendFactor == rhs.sourceAlphaBlendFactor &&
-                    this->sourceRGBBlendFactor == rhs.sourceRGBBlendFactor
+    bool operator==(const VertexDescription& rhs) const noexcept {
+        bool result = true;
+        for (uint32_t i = 0; i < MAX_VERTEX_ATTRIBUTES; i++) {
+            result &= (
+                    this->attributes[i].format == rhs.attributes[i].format &&
+                    this->attributes[i].buffer == rhs.attributes[i].buffer &&
+                    this->attributes[i].offset == rhs.attributes[i].offset
             );
         }
-
-        bool operator!=(const BlendState& rhs) const noexcept {
-            return !operator==(rhs);
+        for (uint32_t i = 0; i < MAX_VERTEX_ATTRIBUTES; i++) {
+            result &= this->layouts[i].stride == rhs.layouts[i].stride;
         }
-    };
+        return result;
+    }
 
-    void setShaderFunctions(id<MTLFunction> vertexFunction,
-            id<MTLFunction> fragmentFunction) noexcept;
-    void setVertexDescription(const VertexDescription& vertexDescription) noexcept;
-    void setColorAttachmentPixelFormat(const MTLPixelFormat pixelFormat) noexcept;
-    void setDepthAttachmentPixelFormat(const MTLPixelFormat pixelFormat) noexcept;
-    void setBlendState(const BlendState& blendState) noexcept;
-    void getOrCreatePipelineState(id<MTLRenderPipelineState>& pipelineState) noexcept;
-
-private:
-
-    std::unique_ptr<MetalBinderImpl> pImpl;
-
+    bool operator!=(const VertexDescription& rhs) const noexcept {
+        return !operator==(rhs);
+    }
 };
 
+struct BlendState {
+    bool blendingEnabled;
+    MTLBlendOperation alphaBlendOperation;
+    MTLBlendOperation rgbBlendOperation;
+    MTLBlendFactor destinationAlphaBlendFactor;
+    MTLBlendFactor destinationRGBBlendFactor;
+    MTLBlendFactor sourceAlphaBlendFactor;
+    MTLBlendFactor sourceRGBBlendFactor;
+
+    bool operator==(const BlendState& rhs) const noexcept {
+        return (
+                this->blendingEnabled == rhs.blendingEnabled &&
+                this->alphaBlendOperation == rhs.alphaBlendOperation &&
+                this->rgbBlendOperation == rhs.rgbBlendOperation &&
+                this->destinationAlphaBlendFactor == rhs.destinationAlphaBlendFactor &&
+                this->destinationRGBBlendFactor == rhs.destinationRGBBlendFactor &&
+                this->sourceAlphaBlendFactor == rhs.sourceAlphaBlendFactor &&
+                this->sourceRGBBlendFactor == rhs.sourceRGBBlendFactor
+        );
+    }
+
+    bool operator!=(const BlendState& rhs) const noexcept {
+        return !operator==(rhs);
+    }
+};
 
 template<typename StateType,
          typename MetalType,
@@ -198,6 +178,42 @@ private:
 
 };
 
+// Pipeline state
+
+struct PipelineState {
+    id<MTLFunction> vertexFunction;
+    id<MTLFunction> fragmentFunction;
+    VertexDescription vertexDescription;
+    MTLPixelFormat colorAttachmentPixelFormat;
+    MTLPixelFormat depthAttachmentPixelFormat;
+    BlendState blendState;
+
+    bool operator==(const PipelineState& rhs) const noexcept {
+        return (
+                this->vertexFunction == rhs.vertexFunction &&
+                this->fragmentFunction == rhs.fragmentFunction &&
+                this->vertexDescription == rhs.vertexDescription &&
+                this->colorAttachmentPixelFormat == rhs.colorAttachmentPixelFormat &&
+                this->depthAttachmentPixelFormat == rhs.depthAttachmentPixelFormat &&
+                this->blendState == rhs.blendState
+        );
+    }
+
+    bool operator!=(const PipelineState& rhs) const noexcept {
+        return !operator==(rhs);
+    }
+};
+
+struct PipelineStateCreator {
+    id<MTLRenderPipelineState> operator()(id<MTLDevice> device, const PipelineState& state)
+            noexcept;
+};
+
+using PipelineStateTracker = StateTracker<PipelineState>;
+
+using PipelineStateCache = StateCache<PipelineState, id<MTLRenderPipelineState>,
+        PipelineStateCreator>;
+
 // Depth-stencil State
 
 struct DepthStencilState {
@@ -251,10 +267,6 @@ struct SamplerStateCreator {
             noexcept;
 };
 
-inline bool operator==(const driver::SamplerParams& lhs, const driver::SamplerParams& rhs) {
-    return lhs.u == rhs.u;
-}
-
 using SamplerStateCache = StateCache<driver::SamplerParams, id<MTLSamplerState>,
         SamplerStateCreator>;
 
@@ -279,6 +291,7 @@ inline bool operator!=(const MTLViewport& lhs, const MTLViewport& rhs) {
     return !operator==(lhs, rhs);
 }
 
+} // namespace metal
 } // namespace driver
 } // namespace filament
 

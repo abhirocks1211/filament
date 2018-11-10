@@ -22,132 +22,21 @@
 
 namespace filament {
 namespace driver {
+namespace metal {
 
-namespace Metal {
 
-struct PipelineKey {
-    MetalBinder::VertexDescription vertexDescription;
-    id<MTLFunction> vertexFunction = nullptr;
-    id<MTLFunction> fragmentFunction = nullptr;
-    MTLPixelFormat colorPixelFormat = MTLPixelFormatInvalid;
-    MTLPixelFormat depthPixelFormat = MTLPixelFormatInvalid;
-    MetalBinder::BlendState blendState = {};
-};
-
-struct PipelineValue {
-    id<MTLRenderPipelineState> pipelineState;
-};
-
-using PipelineHashFn = utils::hash::MurmurHashFn<PipelineKey>;
-
-struct PipelineEqual {
-    bool operator()(const PipelineKey& left, const PipelineKey& right) const {
-        return (
-           left.vertexDescription == right.vertexDescription &&
-           left.vertexFunction == right.vertexFunction &&
-           left.fragmentFunction == right.fragmentFunction &&
-           left.colorPixelFormat == right.colorPixelFormat &&
-           left.depthPixelFormat == right.depthPixelFormat &&
-           left.blendState == right.blendState
-        );
-    }
-};
-
-} // namespace Metal
-
-struct MetalBinderImpl {
-    id<MTLDevice> mDevice = nullptr;
-
-    id<MTLRenderPipelineState> mCurrentPipelineState = nullptr;
-
-    // A cache of pipelines.
-    tsl::robin_map<Metal::PipelineKey, Metal::PipelineValue,
-            Metal::PipelineHashFn, Metal::PipelineEqual> mPipelines;
-
-    // Current state of pipeline bindings.
-    Metal::PipelineKey mPipelineKey = {};
-
-    // If mPipelineDirty is true, then mCurrentPipelineState is invalid and need to either create a
-    // new pipeline, or retrieve a valid one from the cache.
-    bool mPipelineDirty = true;
-};
-
-MetalBinder::MetalBinder() : pImpl(std::make_unique<MetalBinderImpl>()) {
-}
-
-MetalBinder::~MetalBinder() = default;
-
-void MetalBinder::setDevice(id<MTLDevice> device) {
-    pImpl->mDevice = device;
-}
-
-void MetalBinder::setShaderFunctions(id<MTLFunction> vertexFunction,
-        id<MTLFunction> fragmentFunction) noexcept {
-    if (pImpl->mPipelineKey.vertexFunction != vertexFunction ||
-            pImpl->mPipelineKey.fragmentFunction != fragmentFunction) {
-        pImpl->mPipelineKey.vertexFunction = vertexFunction;
-        pImpl->mPipelineKey.fragmentFunction = fragmentFunction;
-        pImpl->mPipelineDirty = true;
-    }
-}
-
-void MetalBinder::setVertexDescription(const VertexDescription& vertexDescription) noexcept {
-    if (pImpl->mPipelineKey.vertexDescription != vertexDescription) {
-        pImpl->mPipelineKey.vertexDescription = vertexDescription;
-        pImpl->mPipelineDirty = true;
-    }
-}
-
-void MetalBinder::setColorAttachmentPixelFormat(const MTLPixelFormat pixelFormat) noexcept {
-    if (pImpl->mPipelineKey.colorPixelFormat != pixelFormat) {
-        pImpl->mPipelineKey.colorPixelFormat = pixelFormat;
-        pImpl->mPipelineDirty = true;
-    }
-}
-
-void MetalBinder::setDepthAttachmentPixelFormat(const MTLPixelFormat pixelFormat) noexcept {
-    if (pImpl->mPipelineKey.depthPixelFormat != pixelFormat) {
-        pImpl->mPipelineKey.depthPixelFormat = pixelFormat;
-        pImpl->mPipelineDirty = true;
-    }
-}
-
-void MetalBinder::setBlendState(const BlendState& blendState) noexcept {
-    if (pImpl->mPipelineKey.blendState != blendState) {
-        pImpl->mPipelineKey.blendState = blendState;
-        pImpl->mPipelineDirty = true;
-    }
-}
-
-void MetalBinder::getOrCreatePipelineState(
-        id<MTLRenderPipelineState> &pipelineState) noexcept {
-    assert(pImpl->mDevice != nullptr);
-
-    if (!pImpl->mPipelineDirty && pImpl->mCurrentPipelineState != nullptr) {
-        pipelineState = pImpl->mCurrentPipelineState;
-        return;
-    }
-
-    // The pipeline is dirty, so check if a valid one exists in the cache.
-    auto iter = pImpl->mPipelines.find(pImpl->mPipelineKey);
-    if (UTILS_LIKELY(iter != pImpl->mPipelines.end())) {
-        auto foundPipelineState = iter.value().pipelineState;
-        pImpl->mCurrentPipelineState = foundPipelineState;
-        pipelineState = foundPipelineState;
-        return;
-    }
-
-    // Create a new pipeline and store it in the cache.
+id<MTLRenderPipelineState> PipelineStateCreator::operator()(id<MTLDevice> device,
+        const PipelineState& state) noexcept {
     MTLRenderPipelineDescriptor* descriptor = [MTLRenderPipelineDescriptor new];
 
     // Shader Functions
-    descriptor.vertexFunction = pImpl->mPipelineKey.vertexFunction;
-    descriptor.fragmentFunction = pImpl->mPipelineKey.fragmentFunction;
+    descriptor.vertexFunction = state.vertexFunction;
+    descriptor.fragmentFunction = state.fragmentFunction;
 
     // Vertex attributes
     MTLVertexDescriptor* vertex = [MTLVertexDescriptor vertexDescriptor];
 
-    const auto& vertexDescription = pImpl->mPipelineKey.vertexDescription;
+    const auto& vertexDescription = state.vertexDescription;
 
     for (uint32_t i = 0; i < MAX_VERTEX_ATTRIBUTES; i++) {
         if (vertexDescription.attributes[i].format > MTLVertexFormatInvalid) {
@@ -169,9 +58,9 @@ void MetalBinder::getOrCreatePipelineState(
     descriptor.vertexDescriptor = vertex;
 
     // Color attachments
-    descriptor.colorAttachments[0].pixelFormat = pImpl->mPipelineKey.colorPixelFormat;
+    descriptor.colorAttachments[0].pixelFormat = state.colorAttachmentPixelFormat;
 
-    const auto& bs = pImpl->mPipelineKey.blendState;
+    const auto& bs = state.blendState;
     descriptor.colorAttachments[0].blendingEnabled = bs.blendingEnabled;
     descriptor.colorAttachments[0].alphaBlendOperation = bs.alphaBlendOperation;
     descriptor.colorAttachments[0].rgbBlendOperation = bs.rgbBlendOperation;
@@ -181,24 +70,16 @@ void MetalBinder::getOrCreatePipelineState(
     descriptor.colorAttachments[0].sourceRGBBlendFactor = bs.sourceRGBBlendFactor;
 
     // Depth attachment
-    descriptor.depthAttachmentPixelFormat = pImpl->mPipelineKey.depthPixelFormat;
+    descriptor.depthAttachmentPixelFormat = state.depthAttachmentPixelFormat;
 
     NSError* error = nullptr;
-    id<MTLRenderPipelineState> pipeline =
-            [pImpl->mDevice newRenderPipelineStateWithDescriptor:descriptor
-                                                           error:&error];
+    id<MTLRenderPipelineState> pipeline = [device newRenderPipelineStateWithDescriptor:descriptor
+                                                                                 error:&error];
     assert(error == nullptr);
 
     [descriptor release];
 
-    pImpl->mPipelines.emplace(std::make_pair(
-        pImpl->mPipelineKey,
-        Metal::PipelineValue { pipeline }
-    ));
-
-    pipelineState = pipeline;
-    pImpl->mCurrentPipelineState = pipeline;
-    pImpl->mPipelineDirty = false;
+    return pipeline;
 }
 
 id<MTLDepthStencilState> DepthStateCreator::operator()(id<MTLDevice> device,
@@ -296,5 +177,6 @@ id<MTLSamplerState> SamplerStateCreator::operator()(id<MTLDevice> device,
     return [device newSamplerStateWithDescriptor:samplerDescriptor];
 }
 
+} // namespace metal
 } // namespace driver
 } // namespace filament

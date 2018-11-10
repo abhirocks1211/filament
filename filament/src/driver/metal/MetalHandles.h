@@ -31,6 +31,7 @@
 
 namespace filament {
 namespace driver {
+namespace metal {
 
 struct MetalSwapChain : public HwSwapChain {
     CAMetalLayer* layer = nullptr;
@@ -64,7 +65,7 @@ struct MetalRenderPrimitive : public HwRenderPrimitive {
     MetalIndexBuffer* indexBuffer = nullptr;
 
     // This struct is used to create the pipeline description to describe vertex assembly.
-    MetalBinder::VertexDescription vertexDescription = {};
+    VertexDescription vertexDescription = {};
 
     std::vector<id<MTLBuffer>> buffers;
     std::vector<NSUInteger> offsets;
@@ -112,6 +113,7 @@ struct MetalRenderTarget : private HwRenderTarget {
 
 };
 
+} // namespace metal
 } // namespace driver
 } // namespace filament
 

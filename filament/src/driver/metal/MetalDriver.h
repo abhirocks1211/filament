@@ -27,6 +27,7 @@
 
 namespace filament {
 namespace driver {
+namespace metal {
 
 struct MetalDriverImpl;
 
@@ -133,6 +134,7 @@ private:
 
 };
 
+} // namespace metal
 } // namespace driver
 } // namespace filament
 

@@ -171,24 +171,24 @@ struct State {
     T const * data() const { return state.data(); }
 };
 
-
-
 //TODO: Remove redundant method from sample_full_pbr
-void loadTex(Engine* engine, const std::string& filePath, Texture** map, bool sRGB = true) {
+void loadTex(Engine* engine, const std::string& filePath, Texture** map, bool sRGBA = false) {
     if (!filePath.empty()) {
         Path path(filePath);
         if (path.exists()) {
             int w, h, n;
-            unsigned char* data = stbi_load(path.getAbsolutePath().c_str(), &w, &h, &n, 4);
+            int numChannels = sRGBA ? 4 : 3;
+            unsigned char* data = stbi_load(path.getAbsolutePath().c_str(), &w, &h, &n, numChannels);
             if (data != nullptr) {
                 *map = Texture::Builder()
                         .width(uint32_t(w))
                         .height(uint32_t(h))
                         .levels(0xff)
-                        .format(sRGB ? driver::TextureFormat::SRGB8_A8 : driver::TextureFormat::RGBA8)
+                        .format(sRGBA ? driver::TextureFormat::SRGB8_A8 : driver::TextureFormat::RGB8)
                         .build(*engine);
-                Texture::PixelBufferDescriptor buffer(data, size_t(w * h * 4),
-                                                      Texture::Format::RGBA, Texture::Type::UBYTE,
+                Texture::PixelBufferDescriptor buffer(data, size_t(w * h * numChannels),
+                                                      sRGBA ? Texture::Format::RGBA : Texture::Format::RGB,
+                                                      Texture::Type::UBYTE,
                                                       (driver::BufferDescriptor::Callback) &stbi_image_free);
                 (*map)->setImage(*engine, 0, std::move(buffer));
                 (*map)->generateMipmaps(*engine);
@@ -201,19 +201,23 @@ void loadTex(Engine* engine, const std::string& filePath, Texture** map, bool sR
     }
 }
 
-void loadEmbeddedTex(Engine* engine, aiTexture *embeddedTex, Texture** map, bool sRGB = true){
+void loadEmbeddedTex(Engine* engine, aiTexture *embeddedTex, Texture** map, bool sRGBA = false){
     int w, h, n;
-    unsigned char *data = stbi_load_from_memory((unsigned char *) embeddedTex->pcData, embeddedTex->mWidth, &w, &h, &n, 3);
+    int numChannels = sRGBA ? 4 : 3;
+    unsigned char *data = stbi_load_from_memory((unsigned char *) embeddedTex->pcData,
+            embeddedTex->mWidth, &w, &h, &n, numChannels);
+
     *map = Texture::Builder()
             .width(uint32_t(w))
             .height(uint32_t(h))
             .levels(0xff)
-            .format(sRGB ? driver::TextureFormat::SRGB8 : driver::TextureFormat::RGB8)
+            .format(sRGBA ? driver::TextureFormat::SRGB8_A8 : driver::TextureFormat::RGB8)
             .build(*engine);
 
-    Texture::PixelBufferDescriptor defaultBuffer(data, size_t(w * h * 3),
-                                                 Texture::Format::RGB, Texture::Type::UBYTE
-            ,(driver::BufferDescriptor::Callback) &free);
+    Texture::PixelBufferDescriptor defaultBuffer(data, size_t(w * h * numChannels),
+                                                 sRGBA ? Texture::Format::RGBA : Texture::Format::RGB,
+                                                 Texture::Type::UBYTE,
+                                                 (driver::BufferDescriptor::Callback) &free);
     (*map)->setImage(*engine, 0, std::move(defaultBuffer));
     (*map)->generateMipmaps(*engine);
 }
@@ -264,21 +268,16 @@ void setTextureFromPath(const aiScene *scene,
                                  TextureSampler::MagFilter::LINEAR, TextureSampler::WrapMode::REPEAT);
     }
 
-//    sampler.setAnisotropy(0.0f);
-
     Texture* textureMap = nullptr;
     int embeddedId = getEmbeddedTexId(texFile);
 
+    //TODO: change this in refactor
+    bool isBaseColorMap = (strcmp(parameterName, "baseColorMap") == 0);
+
     if (embeddedId != -1){
-        std::cout << "embedded texture " << embeddedId << std::endl;
-        loadEmbeddedTex(engine, scene->mTextures[embeddedId], &textureMap);
+        loadEmbeddedTex(engine, scene->mTextures[embeddedId], &textureMap, isBaseColorMap);
     } else {
-        //TODO: change this in refactor
-        if (parameterName == "baseColorMap") {
-            loadTex(engine, texDir + texFile.C_Str(), &textureMap, true);
-        } else {
-            loadTex(engine, texDir + texFile.C_Str(), &textureMap, false);
-        }
+        loadTex(engine, texDir + texFile.C_Str(), &textureMap, isBaseColorMap);
     }
 
     textures.push_back(textureMap);
@@ -287,7 +286,6 @@ void setTextureFromPath(const aiScene *scene,
         outMaterials[materialName]->setParameter(
                 parameterName, textureMap, sampler);
     }
-    std::cout << texDir + texFile.C_Str() << std::endl;
 }
 
 float3 transformPoint(float3 point, mat4f transform){
@@ -518,8 +516,6 @@ bool MeshAssimp::setFromFile(const Path& file,
 
         mat4f const& current = transpose(*reinterpret_cast<mat4f const*>(&node->mTransformation));
 
-        std::cout << "node " << node->mName.C_Str() << std::endl;
-
         size_t totalIndices = 0;
         outParents.push_back(parentIndex);
         outMeshes.push_back(Mesh{});
@@ -535,11 +531,6 @@ bool MeshAssimp::setFromFile(const Path& file,
 
         for (size_t i = 0; i < node->mNumMeshes; i++) {
             aiMesh const* mesh = scene->mMeshes[node->mMeshes[i]];
-            if (mesh->HasBones()){
-                for (int i = 0; i < mesh->mNumBones ; i++){
-                    std::cout << "bone with name " << mesh->mBones[i]->mName.C_Str() << std::endl;
-                }
-            }
 
             float3 const* positions  = reinterpret_cast<float3 const*>(mesh->mVertices);
             float3 const* tangents   = reinterpret_cast<float3 const*>(mesh->mTangents);
@@ -596,7 +587,6 @@ bool MeshAssimp::setFromFile(const Path& file,
 //                        std::cout << material->mProperties[i]->mKey.C_Str() << std::endl;
 //                    }
 
-                    int texIndex = 0;
                     aiString baseColorPath;
                     aiString AOPath;
                     aiString MRPath;
@@ -619,7 +609,6 @@ bool MeshAssimp::setFromFile(const Path& file,
                     std::string dirName = file.getParent();
                     TextureSampler defaultSampler(TextureSampler::MinFilter::LINEAR_MIPMAP_LINEAR,
                                            TextureSampler::MagFilter::LINEAR, TextureSampler::WrapMode::REPEAT);
-//                    defaultSampler.setAnisotropy(0.0f);
 
                     if (outMaterials.find(materialName) == outMaterials.end()) {
 
@@ -665,12 +654,8 @@ bool MeshAssimp::setFromFile(const Path& file,
                         float roughnessFactor = 1.0;
 
                         //TODO: is occlusion strength available on Assimp now?
-//                        if(material->Get("$mat.gltf.occlusionTexture.strength", 0, 0, occlusionStrength) == AI_SUCCESS){
-//                            std::cout << "hey" << std::endl;
-//                        }
 
                         // Load texture images for gltf files
-                        // TODO: lots of repeated code here...
                         if (material->GetTexture(aiTextureType_DIFFUSE, 1, &baseColorPath, nullptr, nullptr,
                                                  nullptr, nullptr, mapMode) == AI_SUCCESS) {
                             setTextureFromPath(scene, &mEngine, mTextures, baseColorPath, materialName, dirName, outMaterials, mapMode, "baseColorMap");
@@ -782,8 +767,6 @@ bool MeshAssimp::setFromFile(const Path& file,
             parentIndex = static_cast<int>(outMeshes.size()) - 1;
             deep++;
             depth = std::max(deep, depth);
-            // std::cout << depth << ": num children = " << node->mNumChildren
-            //      << ", parent = " << parentIndex << std::endl;
             for (size_t i = 0, c = node->mNumChildren; i < c; i++) {
                 processNode(node->mChildren[i], parentIndex);
             }

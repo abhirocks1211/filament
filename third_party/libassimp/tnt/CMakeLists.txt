@@ -60,6 +60,7 @@ set(PRIVATE_HDRS
     ${PRIVATE_HDR_DIR}/ConvertToLHProcess.h
     ${PRIVATE_HDR_DIR}/DeboneProcess.h
     ${PRIVATE_HDR_DIR}/DefaultProgressHandler.h
+    ${PRIVATE_HDR_DIR}/DropFaceNormalsProcess.h
     ${PRIVATE_HDR_DIR}/EmbedTexturesProcess.h
     ${PRIVATE_HDR_DIR}/FBXCommon.h
     ${PRIVATE_HDR_DIR}/FBXCompileConfig.h
@@ -155,6 +156,7 @@ set(SRCS
     ${SRC_DIR}/code/DefaultIOStream.cpp
     ${SRC_DIR}/code/DefaultIOSystem.cpp
     ${SRC_DIR}/code/DefaultLogger.cpp
+    ${SRC_DIR}/code/DropFaceNormalsProcess.cpp
     ${SRC_DIR}/code/EmbedTexturesProcess.cpp
     ${SRC_DIR}/code/Exporter.cpp
     ${SRC_DIR}/code/FBXAnimation.cpp

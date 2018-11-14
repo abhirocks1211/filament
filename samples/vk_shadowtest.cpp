@@ -62,7 +62,7 @@ static const Config config {
     .iblDirectory = IBL_FOLDER,
     .scale = 1,
     .splitView = false,
-    .backend = Backend::METAL,
+    .backend = Backend::OPENGL,
 };
 
 int main(int argc, char** argv) {
@@ -103,6 +103,8 @@ int main(int argc, char** argv) {
         view->setClearColor({0.5f,0.75f,1.0f,1.0f});
         app.plane = createGroundPlane(engine);
         scene->addEntity(app.plane.renderable);
+        
+        tcm.setTransform(ti, app.transform * mat4f::rotate(0.0f, float3{0, 1, 0}));
     };
 
     auto cleanup = [&app](Engine* engine, View*, Scene*) {
@@ -119,9 +121,9 @@ int main(int argc, char** argv) {
     };
 
     FilamentApp::get().animate([&app](Engine* engine, View* view, double now) {
-        auto& tcm = engine->getTransformManager();
-        auto ti = tcm.getInstance(app.meshes->getRenderables()[0]);
-        tcm.setTransform(ti, app.transform * mat4f::rotate(now, float3{0, 1, 0}));
+//        auto& tcm = engine->getTransformManager();
+//        auto ti = tcm.getInstance(app.meshes->getRenderables()[0]);
+//        tcm.setTransform(ti, app.transform * mat4f::rotate(now, float3{0, 1, 0}));
     });
 
     FilamentApp::get().run(config, setup, cleanup);

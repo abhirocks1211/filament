@@ -40,11 +40,11 @@ namespace details {
 static constexpr bool USE_DEPTH_CLAMP = false;
 
 // currently disabled because it creates shadow acnee problems at a distance
-static constexpr bool ENABLE_LISPSM = true;
+static constexpr bool ENABLE_LISPSM = false;
 
 ShadowMap::ShadowMap(FEngine& engine) noexcept :
         mEngine(engine),
-        mClipSpaceFlipped(engine.getBackend() == Backend::VULKAN) {
+        mClipSpaceFlipped(false) {
     mCamera = mEngine.createCamera(EntityManager::get().create());
     mDebugCamera = mEngine.createCamera(EntityManager::get().create());
     FDebugRegistry& debugRegistry = engine.getDebugRegistry();
@@ -234,14 +234,14 @@ void ShadowMap::computeShadowCameraDirectional(
         // meaningless. Just use identity.
         // (LdotV == (Mv*V).z, because L = {0,0,1} in light-space)
         mat4f L;
-        const float3 wsCameraFwd(camera.getForwardVector());
-        const float3 lsCameraFwd = mat4f::project(Mv, wsCameraFwd);
-        if (UTILS_LIKELY(std::abs(lsCameraFwd.z) < 0.9997f)) { // this is |dot(L, V)|
-            L[0].xyz = normalize(cross(lsCameraFwd, float3{ 0, 0, 1 }));
-            L[1].xyz = cross(float3{ 0, 0, 1 }, L[0].xyz);
-            L[2].xyz = { 0, 0, 1 };
-        }
-        L = transpose(L);
+//        const float3 wsCameraFwd(camera.getForwardVector());
+//        const float3 lsCameraFwd = mat4f::project(Mv, wsCameraFwd);
+//        if (UTILS_LIKELY(std::abs(lsCameraFwd.z) < 0.9997f)) { // this is |dot(L, V)|
+//            L[0].xyz = normalize(cross(lsCameraFwd, float3{ 0, 0, 1 }));
+//            L[1].xyz = cross(float3{ 0, 0, 1 }, L[0].xyz);
+//            L[2].xyz = { 0, 0, 1 };
+//        }
+//        L = transpose(L);
 
         // lights space matrix used for finding the near and far planes
         const mat4f LMv(L * Mv);
@@ -356,7 +356,7 @@ void ShadowMap::computeShadowCameraDirectional(
 
         // temporal aliasing stabilization
         // 3) snap the light frustum (width & height) to texels, to stabilize the shadow map
-        snapLightFrustum(s, o, mShadowMapDimension);
+        // snapLightFrustum(s, o, mShadowMapDimension);
 
         // construct the Focus transform (scale + offset)
         const mat4f F(mat4f::row_major_init {

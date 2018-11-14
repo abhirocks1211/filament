@@ -60,8 +60,24 @@ static constexpr uint8_t GLTF2_PACKAGE[] = {
     #include "generated/material/gltf2.inc"
 };
 
-static constexpr uint8_t GLTF2DS_PACKAGE[] = {
+static constexpr uint8_t GLTF2_DS_PACKAGE[] = {
     #include "generated/material/gltf2DoubleSided.inc"
+};
+
+static constexpr uint8_t GLTF2_TRANS_PACKAGE[] = {
+    #include "generated/material/gltf2Trans.inc"
+};
+
+static constexpr uint8_t GLTF2_DS_TRANS_PACKAGE[] = {
+    #include "generated/material/gltf2DoubleSidedTrans.inc"
+};
+
+static constexpr uint8_t GLTF2_MASKED_PACKAGE[] = {
+    #include "generated/material/gltf2Masked.inc"
+};
+
+static constexpr uint8_t GLTF2_DS_MASKED_PACKAGE[] = {
+    #include "generated/material/gltf2DoubleSidedMasked.inc"
 };
 
 Texture* MeshAssimp::createOneByOneTexture(std::array<int, 4> pixel){
@@ -92,6 +108,30 @@ MeshAssimp::MeshAssimp(Engine& engine) : mEngine(engine) {
     //Initialize some things here
     mDefaultMap = createOneByOneTexture({255, 255, 255, 255});
     mDefaultNormalMap = createOneByOneTexture({128, 128, 255, 255});
+
+    mGltfMaterial = Material::Builder()
+            .package((void*) GLTF2_PACKAGE, sizeof(GLTF2_PACKAGE))
+            .build(mEngine);
+
+    mGltfMaterialDS = Material::Builder()
+            .package((void*) GLTF2_DS_PACKAGE, sizeof(GLTF2_DS_PACKAGE))
+            .build(mEngine);
+
+    mGltfMaterialTrans = Material::Builder()
+            .package((void*) GLTF2_TRANS_PACKAGE, sizeof(GLTF2_TRANS_PACKAGE))
+            .build(mEngine);
+
+    mGltfMaterialDSTrans = Material::Builder()
+            .package((void*) GLTF2_DS_TRANS_PACKAGE, sizeof(GLTF2_DS_TRANS_PACKAGE))
+            .build(mEngine);
+
+    mGltfMaterialMasked = Material::Builder()
+            .package((void*) GLTF2_MASKED_PACKAGE, sizeof(GLTF2_MASKED_PACKAGE))
+            .build(mEngine);
+
+    mGltfMaterialDSMasked = Material::Builder()
+            .package((void*) GLTF2_DS_MASKED_PACKAGE, sizeof(GLTF2_DS_MASKED_PACKAGE))
+            .build(mEngine);
 }
 
 MeshAssimp::~MeshAssimp() {
@@ -101,6 +141,10 @@ MeshAssimp::~MeshAssimp() {
     mEngine.destroy(mDefaultTransparentColorMaterial);
     mEngine.destroy(mGltfMaterial);
     mEngine.destroy(mGltfMaterialDS);
+    mEngine.destroy(mGltfMaterialTrans);
+    mEngine.destroy(mGltfMaterialDSTrans);
+    mEngine.destroy(mGltfMaterialMasked);
+    mEngine.destroy(mGltfMaterialDSMasked);
     mEngine.destroy(mDefaultNormalMap);
     mEngine.destroy(mDefaultMap);
     for (Entity renderable : mRenderables) {
@@ -127,22 +171,24 @@ struct State {
     T const * data() const { return state.data(); }
 };
 
+
+
 //TODO: Remove redundant method from sample_full_pbr
 void loadTex(Engine* engine, const std::string& filePath, Texture** map, bool sRGB = true) {
     if (!filePath.empty()) {
         Path path(filePath);
         if (path.exists()) {
             int w, h, n;
-            unsigned char* data = stbi_load(path.getAbsolutePath().c_str(), &w, &h, &n, 3);
+            unsigned char* data = stbi_load(path.getAbsolutePath().c_str(), &w, &h, &n, 4);
             if (data != nullptr) {
                 *map = Texture::Builder()
                         .width(uint32_t(w))
                         .height(uint32_t(h))
                         .levels(0xff)
-                        .format(sRGB ? driver::TextureFormat::SRGB8 : driver::TextureFormat::RGB8)
+                        .format(sRGB ? driver::TextureFormat::SRGB8_A8 : driver::TextureFormat::RGBA8)
                         .build(*engine);
-                Texture::PixelBufferDescriptor buffer(data, size_t(w * h * 3),
-                                                      Texture::Format::RGB, Texture::Type::UBYTE,
+                Texture::PixelBufferDescriptor buffer(data, size_t(w * h * 4),
+                                                      Texture::Format::RGBA, Texture::Type::UBYTE,
                                                       (driver::BufferDescriptor::Callback) &stbi_image_free);
                 (*map)->setImage(*engine, 0, std::move(buffer));
                 (*map)->generateMipmaps(*engine);
@@ -472,6 +518,8 @@ bool MeshAssimp::setFromFile(const Path& file,
 
         mat4f const& current = transpose(*reinterpret_cast<mat4f const*>(&node->mTransformation));
 
+        std::cout << "node " << node->mName.C_Str() << std::endl;
+
         size_t totalIndices = 0;
         outParents.push_back(parentIndex);
         outMeshes.push_back(Mesh{});
@@ -479,27 +527,19 @@ bool MeshAssimp::setFromFile(const Path& file,
         outMeshes.back().transform = current;
 
         mat4f parentTransform = parentIndex >= 0 ? outMeshes[parentIndex].accTransform : mat4f();
-//        std::cout << "parTrans" << std::endl << parentTransform << std::endl;
         outMeshes.back().accTransform = parentTransform * current;
-//        if(node->mNumMeshes > 0) {
-//            std::cout << "currTrans" << std::endl << current << std::endl;
-//            std::cout << "accTrans" << std::endl << outMeshes.back().accTransform << std::endl;
-//        }
 
         // Bias and scale factor when storing tangent frames in normalized short4
         const float bias = 1.0f / 32767.0f;
         const float factor = (float) (sqrt(1.0 - (double) bias * (double) bias));
 
-        mGltfMaterial = Material::Builder()
-                .package((void*) GLTF2_PACKAGE, sizeof(GLTF2_PACKAGE))
-                .build(mEngine);
-
-        mGltfMaterialDS = Material::Builder()
-                .package((void*) GLTF2DS_PACKAGE, sizeof(GLTF2DS_PACKAGE))
-                .build(mEngine);
-
         for (size_t i = 0; i < node->mNumMeshes; i++) {
             aiMesh const* mesh = scene->mMeshes[node->mMeshes[i]];
+            if (mesh->HasBones()){
+                for (int i = 0; i < mesh->mNumBones ; i++){
+                    std::cout << "bone with name " << mesh->mBones[i]->mName.C_Str() << std::endl;
+                }
+            }
 
             float3 const* positions  = reinterpret_cast<float3 const*>(mesh->mVertices);
             float3 const* tangents   = reinterpret_cast<float3 const*>(mesh->mTangents);
@@ -583,15 +623,37 @@ bool MeshAssimp::setFromFile(const Path& file,
 
                     if (outMaterials.find(materialName) == outMaterials.end()) {
 
-                        bool isDoubleSided = false;
-                        if (material->Get("$mat.twosided", 0, 0, isDoubleSided) == AI_SUCCESS){
-                            if (isDoubleSided){
-                                outMaterials[materialName] = mGltfMaterialDS->createInstance();
+                        bool materialIsDoubleSided = false;
+                        material->Get("$mat.twosided", 0, 0, materialIsDoubleSided);
+
+                        aiString alphaMode;
+
+                        if (materialIsDoubleSided){
+                            material->Get("$mat.gltf.alphaMode", 0, 0, alphaMode);
+
+                            if (strcmp(alphaMode.C_Str(), "BLEND") == 0) {
+                                outMaterials[materialName] = mGltfMaterialDSTrans->createInstance();
+                            } else if (strcmp(alphaMode.C_Str(), "MASK") == 0) {
+                                outMaterials[materialName] = mGltfMaterialDSMasked->createInstance();
+                                float maskThreshold = 0.5;
+                                material->Get("$mat.gltf.alphaCutoff", 0, 0, maskThreshold);
+                                outMaterials[materialName]->setParameter("maskThreshold", maskThreshold);
                             } else {
-                                outMaterials[materialName] = mGltfMaterial->createInstance();
+                                outMaterials[materialName] = mGltfMaterialDS->createInstance();
                             }
                         } else {
-                            outMaterials[materialName] = mGltfMaterial->createInstance();
+                             material->Get("$mat.gltf.alphaMode", 0, 0, alphaMode);
+
+                             if (strcmp(alphaMode.C_Str(), "BLEND") == 0) {
+                                 outMaterials[materialName] = mGltfMaterialTrans->createInstance();
+                             } else if (strcmp(alphaMode.C_Str(), "MASK") == 0) {
+                                 outMaterials[materialName] = mGltfMaterialMasked->createInstance();
+                                 float maskThreshold = 0.5;
+                                 material->Get("$mat.gltf.alphaCutoff", 0, 0, maskThreshold);
+                                 outMaterials[materialName]->setParameter("maskThreshold", maskThreshold);
+                             } else {
+                                 outMaterials[materialName] = mGltfMaterial->createInstance();
+                             }
                         }
 
                         // Load property values for gltf files

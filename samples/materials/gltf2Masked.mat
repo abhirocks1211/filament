@@ -4,6 +4,9 @@ material {
         uv0
     ],
     shadingModel : lit,
+    blending : masked,
+    maskThreshold : 0.5,
+    transparency : default,
     parameters : [
         {
             type : sampler2d,
@@ -48,6 +51,10 @@ material {
         {
             type : float3,
             name : emissiveFactor
+        },
+        {
+            type : float,
+            name : maskCutoff
         }
     ],
 }
@@ -66,5 +73,7 @@ fragment {
         material.ambientOcclusion = texture(materialParams_aoMap, getUV0()).r;
         material.emissive = texture(materialParams_emissiveMap, getUV0());
         material.emissive.rgb *= materialParams.emissiveFactor.rgb;
+
+//        material.maskThreshold = materialParams.maskCutoff;
     }
 }

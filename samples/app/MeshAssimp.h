@@ -99,7 +99,6 @@ private:
             );
 
     filament::Texture* createOneByOneTexture(std::array<int, 4> pixel);
-
     filament::Engine& mEngine;
     filament::VertexBuffer* mVertexBuffer = nullptr;
     filament::IndexBuffer* mIndexBuffer = nullptr;
@@ -108,6 +107,13 @@ private:
     filament::Material* mDefaultTransparentColorMaterial = nullptr;
     filament::Material* mGltfMaterial = nullptr; // Single sided gltf material
     filament::Material* mGltfMaterialDS = nullptr; // Double sided gltf material
+    filament::Material* mGltfMaterialTrans = nullptr; // Transparent gltf material
+    filament::Material* mGltfMaterialDSTrans = nullptr; // Double sided Transparent gltf material
+
+    filament::Material* mGltfMaterialMasked = nullptr; // Transparent gltf material
+    filament::Material* mGltfMaterialDSMasked = nullptr; // Double sided Transparent gltf material
+
+
 
 
     filament::Texture* mDefaultMap = nullptr;

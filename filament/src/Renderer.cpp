@@ -360,14 +360,13 @@ void FRenderer::endFrame() {
     // WARNING: while doing this we can't access any component manager
     auto& js = engine.getJobSystem();
 
-    auto job = jobs::createJob(js, nullptr, &FEngine::gc, &engine); // gc all managers
-    js.run(job);
+    auto job = js.runAndRetain(jobs::createJob(js, nullptr, &FEngine::gc, &engine)); // gc all managers
 
     rtp.gc();           // gc post-processing targets (this can generate driver commands)
     engine.flush();     // flush command stream
 
     // make sure we're done with the gcs
-    js.wait(job);
+    js.waitAndRelease(job);
 
 
 #if EXTRA_TIMING_INFO

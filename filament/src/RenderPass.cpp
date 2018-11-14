@@ -63,7 +63,7 @@ void RenderPass::render(
 
     // compute how much maximum storage we need for this pass
     uint32_t growBy = FScene::getPrimitiveCount(soa, vr.last);
-    // double the color pass for transparents that need to render twice
+    // double the color pass for transparent objects that need to render twice
     const bool colorPass  = bool(commandTypeFlags & CommandTypeFlags::COLOR);
     const bool depthPass  = bool(commandTypeFlags & (CommandTypeFlags::DEPTH | CommandTypeFlags::SHADOW));
     growBy *= uint32_t(colorPass * 2 + depthPass);
@@ -120,6 +120,7 @@ void RenderPass::recordDriverCommands(
     SYSTRACE_CALL();
 
     if (!commands.empty()) {
+        Driver::PipelineState pipeline;
         Handle<HwUniformBuffer> uboHandle = scene.getRenderableUBO();
         FMaterialInstance const* UTILS_RESTRICT previousMi = nullptr;
         FMaterial const* UTILS_RESTRICT ma = nullptr;
@@ -145,8 +146,10 @@ void RenderPass::recordDriverCommands(
                 ma = mi->getMaterial();
             }
 
-            Handle<HwProgram> const ph = ma->getProgram(info.materialVariant.key);
-            driver.draw(ph, info.rasterState, info.primitiveHandle);
+            pipeline.program = ma->getProgram(info.materialVariant.key);
+            pipeline.rasterState = info.rasterState;
+            pipeline.polygonOffset = mi->getPolygonOffset();
+            driver.draw(pipeline, info.primitiveHandle);
         }
 
         SYSTRACE_VALUE32("commandCount", c - commands.cbegin());
@@ -487,7 +490,7 @@ void FRenderer::ColorPass::beginRenderPass(
         driver::DriverApi& driver, Viewport const& viewport, const CameraInfo& camera) noexcept {
     // wait for froxelization to finish
     // (this could even be a special command between the depth and color passes)
-    js.wait(jobFroxelize);
+    js.waitAndRelease(jobFroxelize);
     view.commitFroxels(driver);
 
     // We won't need the depth or stencil buffers after this pass.
@@ -549,7 +552,7 @@ void FRenderer::ColorPass::renderColorPass(FEngine& engine, JobSystem& js,
     // start the froxelization immediately, it has no dependencies
     JobSystem::Job* jobFroxelize = js.createJob(nullptr,
             [&engine, &view](JobSystem&, JobSystem::Job*) { view.froxelize(engine); });
-    js.run(jobFroxelize);
+    jobFroxelize = js.runAndRetain(jobFroxelize);
 
     CameraInfo const& cameraInfo = view.getCameraInfo();
     auto& soa = view.getScene()->getRenderableData();
@@ -571,7 +574,7 @@ void FRenderer::ColorPass::renderColorPass(FEngine& engine, JobSystem& js,
     switch (view.getDepthPrepass()) {
         case View::DepthPrepass::DEFAULT:
             // TODO: better default strategy (can even change on a per-frame basis)
-#ifdef ANDROID
+#if defined(ANDROID) || defined(__EMSCRIPTEN__)
             commandType = COLOR;
 #else
             commandType = DEPTH_AND_COLOR;

@@ -16,7 +16,7 @@ set(CPP_SRC
 
 set(COPTS "${COPTS} -DEMSCRIPTEN_HAS_UNBOUND_TYPE_NAMES=0")
 
-# Uncomment the following line to check for leaks with test_leaks.html
+# Uncomment the following line to check for leaks with leaks.html
 # set(LOPTS "${LOPTS} --memoryprofiler")
 
 set(LOPTS "${LOPTS} --bind")
@@ -24,6 +24,7 @@ set(LOPTS "${LOPTS} -s FILESYSTEM=0")
 set(LOPTS "${LOPTS} -s ALLOW_MEMORY_GROWTH=1")
 set(LOPTS "${LOPTS} -s MODULARIZE_INSTANCE=1")
 set(LOPTS "${LOPTS} -s EXPORT_NAME=Filament")
+set(LOPTS "${LOPTS} -s ERROR_ON_UNDEFINED_SYMBOLS=0")
 foreach (JS_FILENAME ${JAVASCRIPT_SRC})
   set(LOPTS "${LOPTS} --post-js ${JS_FILENAME}")
 endforeach()
@@ -38,3 +39,17 @@ set_target_properties(filament-js PROPERTIES
     OUTPUT_NAME filament)
 
 target_link_libraries(filament-js PRIVATE filament math utils image filameshio stb)
+
+# Copy package.json (et al) into the output folder to allow "npm publish" to gather the
+# artifacts that it needs.
+
+set(RESOURCES )
+foreach (RESOURCE package.json README.md)
+    add_custom_command(
+        OUTPUT ${PROJECT_BINARY_DIR}/${RESOURCE}
+        DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/${RESOURCE}
+        COMMAND cmake -E copy ${CMAKE_CURRENT_SOURCE_DIR}/${RESOURCE} ${PROJECT_BINARY_DIR})
+    list(APPEND RESOURCES ${PROJECT_BINARY_DIR}/${RESOURCE})
+endforeach()
+
+add_custom_target(npm_package ALL DEPENDS ${RESOURCES})

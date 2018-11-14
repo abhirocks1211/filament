@@ -204,12 +204,24 @@ public:
         };
     };
 
+    struct PolygonOffset {
+        float slope = 0;        // factor in GL-speak
+        float constant = 0;     // units in GL-speak
+    };
+
+    struct PipelineState {
+        ProgramHandle program;
+        RasterState rasterState;
+        PolygonOffset polygonOffset;
+    };
+
     static SamplerFormat getSamplerFormat(TextureFormat format) noexcept;
     static SamplerPrecision getSamplerPrecision(TextureFormat format) noexcept;
     static size_t getElementTypeSize(ElementType type) noexcept;
 
     // This is here to be compatible with CommandStream (nice for debugging)
-    inline void queueCommand(const std::function<void()>& command) {
+    template<typename CALLABLE>
+    inline void queueCommand(CALLABLE command) {
         command();
     }
 

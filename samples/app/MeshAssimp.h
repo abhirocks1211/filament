@@ -98,10 +98,7 @@ private:
             std::vector<int>&      outParents,
             std::map<std::string, filament::MaterialInstance*>& outMaterials
             );
-
-    void loadTexture(const std::string& filePath, filament::Texture** map, bool sRGB, bool hasAlpha);
-
-
+    
     filament::Texture* createOneByOneTexture(uint32_t textureData);
     filament::Engine& mEngine;
     filament::VertexBuffer* mVertexBuffer = nullptr;
@@ -122,7 +119,6 @@ private:
     float mDefaultMetallic = 0.0;
     float mDefaultRoughness = 0.4;
     filament::sRGBColor mDefaultEmissive = filament::sRGBColor({0.0f, 0.0f, 0.0f});
-
 
     std::vector<utils::Entity> mRenderables;
 

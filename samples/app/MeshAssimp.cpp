@@ -854,10 +854,8 @@ bool MeshAssimp::setFromFile(const Path& file,
                 }
             }
         }
-
         return true;
     }
-
     return false;
 }
 

@@ -44,8 +44,6 @@ namespace filament {
 #include <filament/TextureSampler.h>
 #include <filament/TransformManager.h>
 
-class aiScene;
-
 class MeshAssimp {
 public:
     using mat4f = math::mat4f;
@@ -98,7 +96,7 @@ private:
             std::vector<int>&      outParents,
             std::map<std::string, filament::MaterialInstance*>& outMaterials
             );
-    
+
     filament::Texture* createOneByOneTexture(uint32_t textureData);
     filament::Engine& mEngine;
     filament::VertexBuffer* mVertexBuffer = nullptr;

@@ -44,6 +44,7 @@ namespace filament {
 #include <filament/TextureSampler.h>
 #include <filament/TransformManager.h>
 
+class aiScene;
 
 class MeshAssimp {
 public:
@@ -98,23 +99,23 @@ private:
             std::map<std::string, filament::MaterialInstance*>& outMaterials
             );
 
-    filament::Texture* createOneByOneTexture(std::array<int, 4> pixel);
+    void loadTexture(const std::string& filePath, filament::Texture** map, bool sRGB, bool hasAlpha);
+
+
+    filament::Texture* createOneByOneTexture(uint32_t textureData);
     filament::Engine& mEngine;
     filament::VertexBuffer* mVertexBuffer = nullptr;
     filament::IndexBuffer* mIndexBuffer = nullptr;
 
     filament::Material* mDefaultColorMaterial = nullptr;
     filament::Material* mDefaultTransparentColorMaterial = nullptr;
+
     filament::Material* mGltfMaterial = nullptr; // Single sided gltf material
     filament::Material* mGltfMaterialDS = nullptr; // Double sided gltf material
     filament::Material* mGltfMaterialTrans = nullptr; // Transparent gltf material
     filament::Material* mGltfMaterialDSTrans = nullptr; // Double sided Transparent gltf material
-
     filament::Material* mGltfMaterialMasked = nullptr; // Transparent gltf material
     filament::Material* mGltfMaterialDSMasked = nullptr; // Double sided Transparent gltf material
-
-
-
 
     filament::Texture* mDefaultMap = nullptr;
     filament::Texture* mDefaultNormalMap = nullptr;

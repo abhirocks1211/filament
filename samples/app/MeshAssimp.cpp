@@ -80,55 +80,48 @@ static constexpr uint8_t GLTF2_DS_MASKED_PACKAGE[] = {
     #include "generated/material/gltf2DoubleSidedMasked.inc"
 };
 
-Texture* MeshAssimp::createOneByOneTexture(std::array<int, 4> pixel){
-    Texture *texPtr;
+Texture* MeshAssimp::createOneByOneTexture(uint32_t pixel) {
+    uint32_t *textureData = (uint32_t *) malloc(sizeof(uint32_t));
+    *textureData = pixel;
 
-    unsigned char *texData = (unsigned char *) malloc(4 * sizeof(unsigned char*));
-    texData[0] = static_cast<unsigned char>(pixel[0]);
-    texData[1] = static_cast<unsigned char>(pixel[1]);
-    texData[2] = static_cast<unsigned char>(pixel[2]);
-    texData[3] = static_cast<unsigned char>(pixel[3]);
-
-    texPtr = Texture::Builder()
+    Texture *texturePtr = Texture::Builder()
             .width(uint32_t(1))
             .height(uint32_t(1))
             .levels(0xff)
             .format(driver::TextureFormat::RGB8)
             .build(mEngine);
-    Texture::PixelBufferDescriptor defaultNormalBuffer(texData, size_t(1 * 1 * 3),
-                                                       Texture::Format::RGB, Texture::Type::UBYTE
-            ,(driver::BufferDescriptor::Callback) &free);
-    texPtr->setImage(mEngine, 0, std::move(defaultNormalBuffer));
-    texPtr->generateMipmaps(mEngine);
 
-    return texPtr;
+    Texture::PixelBufferDescriptor defaultNormalBuffer(textureData,
+            size_t(1 * 1 * 3),
+            Texture::Format::RGB,
+            Texture::Type::UBYTE,
+            (driver::BufferDescriptor::Callback) &free);
+
+    texturePtr->setImage(mEngine, 0, std::move(defaultNormalBuffer));
+    texturePtr->generateMipmaps(mEngine);
+
+    return texturePtr;
 }
 
 MeshAssimp::MeshAssimp(Engine& engine) : mEngine(engine) {
     //Initialize some things here
-    mDefaultMap = createOneByOneTexture({255, 255, 255, 255});
-    mDefaultNormalMap = createOneByOneTexture({128, 128, 255, 255});
-
+    mDefaultMap = createOneByOneTexture(0xffffffff);
+    mDefaultNormalMap = createOneByOneTexture(0xffff8080);
     mGltfMaterial = Material::Builder()
             .package((void*) GLTF2_PACKAGE, sizeof(GLTF2_PACKAGE))
             .build(mEngine);
-
     mGltfMaterialDS = Material::Builder()
             .package((void*) GLTF2_DS_PACKAGE, sizeof(GLTF2_DS_PACKAGE))
             .build(mEngine);
-
     mGltfMaterialTrans = Material::Builder()
             .package((void*) GLTF2_TRANS_PACKAGE, sizeof(GLTF2_TRANS_PACKAGE))
             .build(mEngine);
-
     mGltfMaterialDSTrans = Material::Builder()
             .package((void*) GLTF2_DS_TRANS_PACKAGE, sizeof(GLTF2_DS_TRANS_PACKAGE))
             .build(mEngine);
-
     mGltfMaterialMasked = Material::Builder()
             .package((void*) GLTF2_MASKED_PACKAGE, sizeof(GLTF2_MASKED_PACKAGE))
             .build(mEngine);
-
     mGltfMaterialDSMasked = Material::Builder()
             .package((void*) GLTF2_DS_MASKED_PACKAGE, sizeof(GLTF2_DS_MASKED_PACKAGE))
             .build(mEngine);
@@ -147,6 +140,7 @@ MeshAssimp::~MeshAssimp() {
     mEngine.destroy(mGltfMaterialDSMasked);
     mEngine.destroy(mDefaultNormalMap);
     mEngine.destroy(mDefaultMap);
+
     for (Entity renderable : mRenderables) {
         mEngine.destroy(renderable);
     }
@@ -172,24 +166,37 @@ struct State {
 };
 
 //TODO: Remove redundant method from sample_full_pbr
-void loadTex(Engine* engine, const std::string& filePath, Texture** map, bool sRGBA = false) {
+static void loadTexture(Engine *engine, const std::string &filePath, Texture **map, bool sRGB, bool hasAlpha) {
     if (!filePath.empty()) {
         Path path(filePath);
         if (path.exists()) {
             int w, h, n;
-            int numChannels = sRGBA ? 4 : 3;
-            unsigned char* data = stbi_load(path.getAbsolutePath().c_str(), &w, &h, &n, numChannels);
+            int numChannels = hasAlpha ? 4 : 3;
+
+            driver::TextureFormat inputFormat;
+            if (sRGB) {
+                inputFormat = hasAlpha ? driver::TextureFormat::SRGB8_A8 : driver::TextureFormat::SRGB8;
+            } else {
+                inputFormat = hasAlpha ? driver::TextureFormat::RGBA8 : driver::TextureFormat::RGB8;
+            }
+
+            Texture::Format outputFormat = hasAlpha ? Texture::Format::RGBA : Texture::Format::RGB;
+
+            uint8_t *data = stbi_load(path.getAbsolutePath().c_str(), &w, &h, &n, numChannels);
             if (data != nullptr) {
                 *map = Texture::Builder()
                         .width(uint32_t(w))
                         .height(uint32_t(h))
                         .levels(0xff)
-                        .format(sRGBA ? driver::TextureFormat::SRGB8_A8 : driver::TextureFormat::RGB8)
+                        .format(inputFormat)
                         .build(*engine);
-                Texture::PixelBufferDescriptor buffer(data, size_t(w * h * numChannels),
-                                                      sRGBA ? Texture::Format::RGBA : Texture::Format::RGB,
-                                                      Texture::Type::UBYTE,
-                                                      (driver::BufferDescriptor::Callback) &stbi_image_free);
+
+                Texture::PixelBufferDescriptor buffer(data,
+                        size_t(w * h * numChannels),
+                        outputFormat,
+                        Texture::Type::UBYTE,
+                        (driver::BufferDescriptor::Callback) &stbi_image_free);
+
                 (*map)->setImage(*engine, 0, std::move(buffer));
                 (*map)->generateMipmaps(*engine);
             } else {
@@ -201,32 +208,45 @@ void loadTex(Engine* engine, const std::string& filePath, Texture** map, bool sR
     }
 }
 
-void loadEmbeddedTex(Engine* engine, aiTexture *embeddedTex, Texture** map, bool sRGBA = false){
+void loadEmbeddedTexture(Engine *engine, aiTexture *embeddedTex, Texture **map, bool sRGB, bool hasAlpha) {
     int w, h, n;
-    int numChannels = sRGBA ? 4 : 3;
-    unsigned char *data = stbi_load_from_memory((unsigned char *) embeddedTex->pcData,
+
+    int numChannels = hasAlpha ? 4 : 3;
+
+    driver::TextureFormat inputFormat;
+    if (sRGB) {
+        inputFormat = hasAlpha ? driver::TextureFormat::SRGB8_A8 : driver::TextureFormat::SRGB8;
+    } else {
+        inputFormat = hasAlpha ? driver::TextureFormat::RGBA8 : driver::TextureFormat::RGB8;
+    }
+
+    Texture::Format outputFormat = hasAlpha ? Texture::Format::RGBA : Texture::Format::RGB;
+
+    uint8_t *data = stbi_load_from_memory((unsigned char *) embeddedTex->pcData,
             embeddedTex->mWidth, &w, &h, &n, numChannels);
 
     *map = Texture::Builder()
             .width(uint32_t(w))
             .height(uint32_t(h))
             .levels(0xff)
-            .format(sRGBA ? driver::TextureFormat::SRGB8_A8 : driver::TextureFormat::RGB8)
+            .format(inputFormat)
             .build(*engine);
 
-    Texture::PixelBufferDescriptor defaultBuffer(data, size_t(w * h * numChannels),
-                                                 sRGBA ? Texture::Format::RGBA : Texture::Format::RGB,
-                                                 Texture::Type::UBYTE,
-                                                 (driver::BufferDescriptor::Callback) &free);
+    Texture::PixelBufferDescriptor defaultBuffer(data,
+            size_t(w * h * numChannels),
+            outputFormat,
+            Texture::Type::UBYTE,
+            (driver::BufferDescriptor::Callback) &free);
+
     (*map)->setImage(*engine, 0, std::move(defaultBuffer));
     (*map)->generateMipmaps(*engine);
 }
 
 // Takes a texture filename and returns the index of the embedded texture, -1 if the texture is not embedded
-int getEmbeddedTexId(aiString path){
+int getEmbeddedTextureId(const aiString& path) {
     const char *pathStr = path.C_Str();
-    if (path.length >= 2 && pathStr[0] == '*'){
-        for (int i; i < path.length; i++){
+    if (path.length >= 2 && pathStr[0] == '*') {
+        for (int i; i < path.length; i++) {
             if (!isdigit(pathStr[i]))
                 return -1;
         }
@@ -235,7 +255,7 @@ int getEmbeddedTexId(aiString path){
     return -1;
 }
 
-TextureSampler::WrapMode aiToFilamentMapMode(aiTextureMapMode mapMode){
+TextureSampler::WrapMode aiToFilamentMapMode(aiTextureMapMode mapMode) {
     switch(mapMode) {
         case aiTextureMapMode_Clamp :
             return TextureSampler::WrapMode::CLAMP_TO_EDGE;
@@ -253,9 +273,9 @@ void setTextureFromPath(const aiScene *scene,
                         const aiString &texFile,
                         const std::string &materialName,
                         const std::string &texDir,
-                        std::map<std::string, MaterialInstance *> &outMaterials,
                         aiTextureMapMode *mapMode,
-                        char *parameterName){
+                        const char *parameterName,
+                        std::map<std::string, MaterialInstance *> &outMaterials) {
     TextureSampler sampler;
     if (mapMode) {
         sampler = TextureSampler(TextureSampler::MinFilter::LINEAR_MIPMAP_LINEAR,
@@ -269,15 +289,16 @@ void setTextureFromPath(const aiScene *scene,
     }
 
     Texture* textureMap = nullptr;
-    int embeddedId = getEmbeddedTexId(texFile);
+    int embeddedId = getEmbeddedTextureId(texFile);
 
     //TODO: change this in refactor
-    bool isBaseColorMap = (strcmp(parameterName, "baseColorMap") == 0);
+    bool isSRGB = strcmp(parameterName, "baseColorMap") == 0 || strcmp(parameterName, "emissiveMap") == 0;
+    bool hasAlpha = strcmp(parameterName, "baseColorMap") == 0;
 
-    if (embeddedId != -1){
-        loadEmbeddedTex(engine, scene->mTextures[embeddedId], &textureMap, isBaseColorMap);
+    if (embeddedId != -1) {
+        loadEmbeddedTexture(engine, scene->mTextures[embeddedId], &textureMap, isSRGB, hasAlpha);
     } else {
-        loadTex(engine, texDir + texFile.C_Str(), &textureMap, isBaseColorMap);
+        loadTexture(engine, texDir + texFile.C_Str(), &textureMap, isSRGB, hasAlpha);
     }
 
     textures.push_back(textureMap);
@@ -288,15 +309,13 @@ void setTextureFromPath(const aiScene *scene,
     }
 }
 
-float3 transformPoint(float3 point, mat4f transform){
-    float4 point4 = float4(point.x, point.y, point.z, 1.0f);
-    float4 transformed = transform * point4;
-    return float3(transformed.x, transformed.y, transformed.z);
+float3 transformPoint(const float3 point, const mat4f transform) {
+    return (transform * float4(point, 1.0f)).xyz;
 }
 
 template<typename VECTOR, typename INDEX>
 Box computeTransformedAABB(VECTOR const* vertices, INDEX const* indices, size_t count,
-                           mat4f transform) noexcept {
+                           const mat4f& transform) noexcept {
     size_t stride = sizeof(VECTOR);
     math::float3 bmin(std::numeric_limits<float>::max());
     math::float3 bmax(std::numeric_limits<float>::lowest());
@@ -403,9 +422,7 @@ void MeshAssimp::addFromFile(const Path& path,
 
             if (overrideMaterial) {
                 builder.material(partIndex, materials[AI_DEFAULT_MATERIAL_NAME]);
-
             } else {
-
                 auto pos = materials.find(part.material);
 
                 if (pos != materials.end()) {
@@ -427,7 +444,6 @@ void MeshAssimp::addFromFile(const Path& path,
                     materials[part.material] = colorMaterial;
                 }
             }
-
             partIndex++;
         }
 
@@ -478,10 +494,10 @@ bool MeshAssimp::setFromFile(const Path& file,
 
     scene = importer.ApplyPostProcessing(aiProcess_CalcTangentSpace);
 
-    if (!scene){
+    if (!scene) {
         std::cout << "no scene" << std::endl;
     }
-    if (!scene->mRootNode){
+    if (!scene->mRootNode) {
         std::cout << "no root node" << std::endl;
     }
 
@@ -532,6 +548,12 @@ bool MeshAssimp::setFromFile(const Path& file,
         for (size_t i = 0; i < node->mNumMeshes; i++) {
             aiMesh const* mesh = scene->mMeshes[node->mMeshes[i]];
 
+            if (mesh->HasBones()) {
+                for (int i = 0; i < mesh->mNumBones ; i++) {
+                    std::cout << "bone with name " << mesh->mBones[i]->mName.C_Str() << std::endl;
+                }
+            }
+
             float3 const* positions  = reinterpret_cast<float3 const*>(mesh->mVertices);
             float3 const* tangents   = reinterpret_cast<float3 const*>(mesh->mTangents);
             float3 const* bitangents = reinterpret_cast<float3 const*>(mesh->mBitangents);
@@ -546,9 +568,9 @@ bool MeshAssimp::setFromFile(const Path& file,
                 if (numFaces > 0) {
                     size_t indicesOffset = outPositions.size();
 
-                    for (size_t j = 0; j < numVertices; j++){
+                    for (size_t j = 0; j < numVertices; j++) {
                         float3 normal = normals[j];
-                        float3 texCoord = (texCoords) ? texCoords[j] : float3{0.0};
+                        float3 texCoord = texCoords ? texCoords[j] : float3{0.0};
                         float3 tangent;
                         float3 bitangent;
 
@@ -582,11 +604,6 @@ bool MeshAssimp::setFromFile(const Path& file,
                     uint32_t materialId = mesh->mMaterialIndex;
                     aiMaterial const* material = scene->mMaterials[materialId];
 
-                    //For some reason, uncommenting this messes up some of the models
-//                    for (i=0; i < material->mNumProperties; i++) {
-//                        std::cout << material->mProperties[i]->mKey.C_Str() << std::endl;
-//                    }
-
                     aiString baseColorPath;
                     aiString AOPath;
                     aiString MRPath;
@@ -598,7 +615,7 @@ bool MeshAssimp::setFromFile(const Path& file,
                     std::string materialName;
                     if (material->Get(AI_MATKEY_NAME, name) != AI_SUCCESS) {
                         static int matCount = 0;
-                        while (outMaterials.find("_mat_" + std::to_string(matCount)) != outMaterials.end()){
+                        while (outMaterials.find("_mat_" + std::to_string(matCount)) != outMaterials.end()) {
                             matCount ++;
                         }
                         materialName = "_mat_" + std::to_string(matCount);
@@ -617,7 +634,7 @@ bool MeshAssimp::setFromFile(const Path& file,
 
                         aiString alphaMode;
 
-                        if (materialIsDoubleSided){
+                        if (materialIsDoubleSided) {
                             material->Get("$mat.gltf.alphaMode", 0, 0, alphaMode);
 
                             if (strcmp(alphaMode.C_Str(), "BLEND") == 0) {
@@ -658,14 +675,14 @@ bool MeshAssimp::setFromFile(const Path& file,
                         // Load texture images for gltf files
                         if (material->GetTexture(aiTextureType_DIFFUSE, 1, &baseColorPath, nullptr, nullptr,
                                                  nullptr, nullptr, mapMode) == AI_SUCCESS) {
-                            setTextureFromPath(scene, &mEngine, mTextures, baseColorPath, materialName, dirName, outMaterials, mapMode, "baseColorMap");
+                            setTextureFromPath(scene, &mEngine, mTextures, baseColorPath, materialName, dirName, mapMode, "baseColorMap", outMaterials);
                         } else {
                             outMaterials[materialName]->setParameter("baseColorMap", mDefaultMap, defaultSampler);
                         }
 
                         if (material->GetTexture(aiTextureType_UNKNOWN, 0, &MRPath, nullptr, nullptr,
                                                  nullptr, nullptr, mapMode) == AI_SUCCESS) {
-                            setTextureFromPath(scene, &mEngine, mTextures, MRPath, materialName, dirName, outMaterials, mapMode, "metallicRoughnessMap");
+                            setTextureFromPath(scene, &mEngine, mTextures, MRPath, materialName, dirName, mapMode, "metallicRoughnessMap", outMaterials);
 
                         } else {
                             outMaterials[materialName]->setParameter("metallicRoughnessMap", mDefaultMap, defaultSampler);
@@ -675,7 +692,7 @@ bool MeshAssimp::setFromFile(const Path& file,
 
                         if (material->GetTexture(aiTextureType_LIGHTMAP, 0, &AOPath, nullptr, nullptr,
                                                  nullptr, nullptr, mapMode) == AI_SUCCESS) {
-                            setTextureFromPath(scene, &mEngine, mTextures, AOPath, materialName, dirName, outMaterials, mapMode, "aoMap");
+                            setTextureFromPath(scene, &mEngine, mTextures, AOPath, materialName, dirName, mapMode, "aoMap", outMaterials);
 
                         } else {
                             outMaterials[materialName]->setParameter("aoMap", mDefaultMap, defaultSampler);
@@ -683,14 +700,14 @@ bool MeshAssimp::setFromFile(const Path& file,
 
                         if (material->GetTexture(aiTextureType_NORMALS, 0, &normalPath, nullptr, nullptr,
                                                  nullptr, nullptr, mapMode) == AI_SUCCESS) {
-                            setTextureFromPath(scene, &mEngine, mTextures, normalPath, materialName, dirName, outMaterials, mapMode, "normalMap");
+                            setTextureFromPath(scene, &mEngine, mTextures, normalPath, materialName, dirName, mapMode, "normalMap", outMaterials);
                         } else {
                             outMaterials[materialName]->setParameter("normalMap", mDefaultNormalMap, defaultSampler);
                         }
 
                         if (material->GetTexture(aiTextureType_EMISSIVE, 0, &emissivePath, nullptr, nullptr,
                                                  nullptr, nullptr, mapMode) == AI_SUCCESS) {
-                            setTextureFromPath(scene, &mEngine, mTextures, emissivePath, materialName, dirName, outMaterials, mapMode, "emissiveMap");
+                            setTextureFromPath(scene, &mEngine, mTextures, emissivePath, materialName, dirName, mapMode, "emissiveMap", outMaterials);
 
                         }  else {
                             outMaterials[materialName]->setParameter("emissiveMap", mDefaultMap, defaultSampler);
@@ -698,17 +715,17 @@ bool MeshAssimp::setFromFile(const Path& file,
                         }
 
                         //If the gltf has texture factors, override the default factor values
-                        if(material->Get("$mat.gltf.pbrMetallicRoughness.metallicFactor", 0, 0, metallicFactor) == AI_SUCCESS){
+                        if(material->Get("$mat.gltf.pbrMetallicRoughness.metallicFactor", 0, 0, metallicFactor) == AI_SUCCESS) {
                             outMaterials[materialName]->setParameter("metallicFactor", metallicFactor);
                         }
-                        if (material->Get("$mat.gltf.pbrMetallicRoughness.roughnessFactor", 0, 0, roughnessFactor) == AI_SUCCESS){
+                        if (material->Get("$mat.gltf.pbrMetallicRoughness.roughnessFactor", 0, 0, roughnessFactor) == AI_SUCCESS) {
                             outMaterials[materialName]->setParameter("roughnessFactor", roughnessFactor);
                         }
-                        if(material->Get(AI_MATKEY_COLOR_EMISSIVE, emissiveFactor) == AI_SUCCESS){
+                        if(material->Get(AI_MATKEY_COLOR_EMISSIVE, emissiveFactor) == AI_SUCCESS) {
                             emissiveFactorCast = *reinterpret_cast<sRGBColor*>(&emissiveFactor);
                             outMaterials[materialName]->setParameter("emissiveFactor", emissiveFactorCast);
                         }
-                        if(material->Get("$mat.gltf.pbrMetallicRoughness.baseColorFactor", 0, 0, baseColorFactor) == AI_SUCCESS){
+                        if(material->Get("$mat.gltf.pbrMetallicRoughness.baseColorFactor", 0, 0, baseColorFactor) == AI_SUCCESS) {
                             baseColorFactorCast = *reinterpret_cast<sRGBColorA*>(&baseColorFactor);
                             outMaterials[materialName]->setParameter("baseColorFactor", baseColorFactorCast);
                         }
@@ -807,7 +824,7 @@ bool MeshAssimp::setFromFile(const Path& file,
             float3 aabbMin = transformedAabb.getMin();
             float3 aabbMax = transformedAabb.getMax();
 
-            if(!isinf(aabbMin.x) && !isinf(aabbMax.x)) {
+            if (!isinf(aabbMin.x) && !isinf(aabbMax.x)) {
                 if (minBound.x > maxBound.x) {
                     minBound.x = aabbMin.x;
                     maxBound.x = aabbMax.x;
@@ -817,7 +834,7 @@ bool MeshAssimp::setFromFile(const Path& file,
                 }
             }
 
-            if(!isinf(aabbMin.y) && !isinf(aabbMax.y)) {
+            if (!isinf(aabbMin.y) && !isinf(aabbMax.y)) {
                 if (minBound.y > maxBound.y) {
                     minBound.y = aabbMin.y;
                     maxBound.y = aabbMax.y;
@@ -827,7 +844,7 @@ bool MeshAssimp::setFromFile(const Path& file,
                 }
             }
 
-            if(!isinf(aabbMin.z) && !isinf(aabbMax.z)) {
+            if (!isinf(aabbMin.z) && !isinf(aabbMax.z)) {
                 if (minBound.z > maxBound.z) {
                     minBound.z = aabbMin.z;
                     maxBound.z = aabbMax.z;

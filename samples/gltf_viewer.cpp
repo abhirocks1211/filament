@@ -59,7 +59,6 @@ static Entity g_light;
 static Config g_config;
 
 static void printUsage(char* name) {
-    std::string exec_name(Path(name).getName());
     std::string usage(
             "gltf_viewer displays gltf models using the filament renderer\n"
             "Usage:\n"
@@ -72,10 +71,6 @@ static void printUsage(char* name) {
             "   --split-view, -v\n"
             "       Splits the window into 4 views\n\n"
     );
-    const std::string from("gltf_viewer");
-    for (size_t pos = usage.find(from); pos != std::string::npos; pos = usage.find(from, pos)) {
-        usage.replace(pos, from.length(), exec_name);
-    }
     std::cout << usage;
 }
 

@@ -594,6 +594,26 @@ void OpenGLDriver::depthFunc(GLenum func) noexcept {
     });
 }
 
+void OpenGLDriver::polygonOffset(GLfloat factor, GLfloat units) noexcept {
+    // if we're in the shadow-pass, the default polygon offset is factor = unit = 1
+    // TODO: this should be controlled by filament, instead of being a feature of the driver
+    if (factor == 0 && units == 0) {
+        TargetBufferFlags clearFlags = (TargetBufferFlags)mRenderPassParams.clear;
+        if ((clearFlags & TargetBufferFlags::SHADOW) == TargetBufferFlags::SHADOW) {
+            factor = units = 1.0f;
+        }
+    }
+
+    update_state(state.polygonOffset, { factor, units }, [&]() {
+        if (factor != 0 || units != 0) {
+            glPolygonOffset(factor, units);
+            enable(GL_POLYGON_OFFSET_FILL);
+        } else {
+            disable(GL_POLYGON_OFFSET_FILL);
+        }
+    });
+}
+
 void OpenGLDriver::setRasterStateSlow(Driver::RasterState rs) noexcept {
     mRasterState = rs;
 
@@ -1221,8 +1241,8 @@ void OpenGLDriver::createStreamFromTextureId(Driver::StreamHandle sh,
     s->gl.externalTextureId = static_cast<GLuint>(externalTextureId);
     glGenTextures(GLStream::ROUND_ROBIN_TEXTURE_COUNT, s->user_thread.read);
     glGenTextures(GLStream::ROUND_ROBIN_TEXTURE_COUNT, s->user_thread.write);
-    for (size_t i = 0; i < GLStream::ROUND_ROBIN_TEXTURE_COUNT; i++) {
-        s->user_thread.infos[i].ets = mPlatform.createExternalTextureStorage();
+    for (auto& info : s->user_thread.infos) {
+        info.ets = mPlatform.createExternalTextureStorage();
     }
 }
 
@@ -1617,48 +1637,58 @@ void OpenGLDriver::updateBuffer(GLenum target,
     assert(buffer->id);
 
     bindBuffer(target, buffer->id);
-    if (buffer->usage == driver::BufferUsage::STREAM && HAS_MAPBUFFERS) {
-        uint32_t offset = buffer->base + buffer->size;
-        offset = (offset + (alignment - 1u)) & ~(alignment - 1u);
+    if (buffer->usage == driver::BufferUsage::STREAM) {
 
-        if (offset + p.size > buffer->capacity) {
-            // if we've reached the end of the buffer, we orphan it and allocate a new one.
-            // this is assuming the driver actually does that as opposed to stalling. This is
-            // the case for Mali and Adreno -- we could use fences instead.
-            offset = 0;
-            glBufferData(target, buffer->capacity, nullptr, getBufferUsage(buffer->usage));
-        }
-retry:
-        void* vaddr = glMapBufferRange(target, offset, p.size,
-                GL_MAP_WRITE_BIT |
-                GL_MAP_INVALIDATE_RANGE_BIT |
-                GL_MAP_UNSYNCHRONIZED_BIT);
-        if (vaddr) {
-            memcpy(vaddr, p.buffer, p.size);
-            if (glUnmapBuffer(target) == GL_FALSE) {
-                // it should be extremely rare, but must be handled
-                goto retry;
-            }
-        } else {
-            // handle mapping error, revert to glBufferSubData()
-            glBufferSubData(target, offset, p.size, p.buffer);
-        }
-        buffer->base = offset;
         buffer->size = (uint32_t)p.size;
 
-        CHECK_GL_ERROR(utils::slog.e)
-    } else {
-        if (p.size == buffer->capacity) {
-            // it looks like it's generally faster (or not worse) to use glBufferData()
-            glBufferData(target, buffer->capacity, p.buffer, getBufferUsage(buffer->usage));
-        } else {
-            // glBufferSubData() could be catastrophically inefficient if several are issued
-            // during the same frame. Currently, we're not doing that though.
-            glBufferSubData(target, 0, p.size, p.buffer);
-        }
+        // If MapBufferRange is supported, then attempt to use that instead of BufferSubData, which
+        // can be quite inefficient on some platforms. Note that WebGL does not support
+        // MapBufferRange, but we still allow STREAM semantics for the web platform.
+        if (HAS_MAPBUFFERS) {
+            uint32_t offset = buffer->base + buffer->size;
+            offset = (offset + (alignment - 1u)) & ~(alignment - 1u);
 
-        CHECK_GL_ERROR(utils::slog.e)
+            if (offset + p.size > buffer->capacity) {
+                // if we've reached the end of the buffer, we orphan it and allocate a new one.
+                // this is assuming the driver actually does that as opposed to stalling. This is
+                // the case for Mali and Adreno -- we could use fences instead.
+                offset = 0;
+                glBufferData(target, buffer->capacity, nullptr, getBufferUsage(buffer->usage));
+            }
+    retry:
+            void* vaddr = glMapBufferRange(target, offset, p.size,
+                    GL_MAP_WRITE_BIT |
+                    GL_MAP_INVALIDATE_RANGE_BIT |
+                    GL_MAP_UNSYNCHRONIZED_BIT);
+            if (vaddr) {
+                memcpy(vaddr, p.buffer, p.size);
+                if (glUnmapBuffer(target) == GL_FALSE) {
+                    // According to the spec, UnmapBuffer can return FALSE in rare conditions (e.g.
+                    // during a screen mode change). Note that is not a GL error, and we can handle
+                    // it by simply making a second attempt.
+                    goto retry;
+                }
+            } else {
+                // handle mapping error, revert to glBufferSubData()
+                glBufferSubData(target, offset, p.size, p.buffer);
+            }
+            buffer->base = offset;
+
+            CHECK_GL_ERROR(utils::slog.e)
+            return;
+        }
     }
+
+    if (p.size == buffer->capacity) {
+        // it looks like it's generally faster (or not worse) to use glBufferData()
+        glBufferData(target, buffer->capacity, p.buffer, getBufferUsage(buffer->usage));
+    } else {
+        // glBufferSubData() could be catastrophically inefficient if several are issued
+        // during the same frame. Currently, we're not doing that though.
+        glBufferSubData(target, 0, p.size, p.buffer);
+    }
+
+    CHECK_GL_ERROR(utils::slog.e)
 }
 
 
@@ -1667,7 +1697,7 @@ void OpenGLDriver::updateSamplerBuffer(Driver::SamplerBufferHandle sbh,
     DEBUG_MARKER()
 
     GLSamplerBuffer* sb = handle_cast<GLSamplerBuffer *>(sbh);
-    *sb->sb = std::move(samplerBuffer);
+    *sb->sb = std::move(samplerBuffer); // NOLINT(performance-move-const-arg)
 }
 
 void OpenGLDriver::update2DImage(Driver::TextureHandle th,
@@ -1965,16 +1995,10 @@ void OpenGLDriver::beginRenderPass(Driver::RenderTargetHandle rth,
     if (UTILS_UNLIKELY(state.draw_fbo != rt->gl.fbo)) {
         bindFramebuffer(GL_FRAMEBUFFER, rt->gl.fbo);
 
-        if ((clearFlags & TargetBufferFlags::SHADOW) == TargetBufferFlags::SHADOW) {
-            enable(GL_POLYGON_OFFSET_FILL);
-        } else {
-            disable(GL_POLYGON_OFFSET_FILL);
-        }
-
         // glInvalidateFramebuffer appeared on GLES 3.0 and GL4.3, for simplicity we just
         // ignore it on GL (rather than having to do a runtime check).
         if (GLES31_HEADERS && !bugs.disable_invalidate_framebuffer) {
-            std::array<GLenum, 3> attachments;
+            std::array<GLenum, 3> attachments; // NOLINT(cppcoreguidelines-pro-type-member-init)
             GLsizei attachmentCount = getAttachments(attachments, rt, discardFlags);
             if (attachmentCount) {
 #if DEBUG_MARKER_LEVEL == DEBUG_MARKER_SYSTRACE
@@ -2025,7 +2049,7 @@ void OpenGLDriver::endRenderPass(int) {
         GLRenderTarget* rt = handle_cast<GLRenderTarget*>(mRenderPassTarget);
         bindFramebuffer(GL_FRAMEBUFFER, rt->gl.fbo);
 
-        std::array<GLenum, 3> attachments;
+        std::array<GLenum, 3> attachments; // NOLINT(cppcoreguidelines-pro-type-member-init)
         GLsizei attachmentCount = getAttachments(attachments, rt, discardFlags);
         if (attachmentCount) {
 #if DEBUG_MARKER_LEVEL == DEBUG_MARKER_SYSTRACE
@@ -2057,7 +2081,7 @@ void OpenGLDriver::discardSubRenderTargetBuffers(Driver::RenderTargetHandle rth,
         if (left < right && bottom < top) {
             bindFramebuffer(GL_FRAMEBUFFER, rt->gl.fbo);
 
-            std::array<GLenum, 3> attachments;
+            std::array<GLenum, 3> attachments; // NOLINT(cppcoreguidelines-pro-type-member-init)
             GLsizei attachmentCount = getAttachments(attachments, rt, buffers);
             if (attachmentCount) {
                 glInvalidateSubFramebuffer(GL_FRAMEBUFFER, attachmentCount, attachments.data(),
@@ -2424,6 +2448,7 @@ void OpenGLDriver::bindUniformBufferRange(size_t index, Driver::UniformBufferHan
     DEBUG_MARKER()
 
     GLUniformBuffer* ub = handle_cast<GLUniformBuffer*>(ubh);
+    // TODO: Is this assert really needed? Note that size is only populated for STREAM buffers.
     assert(size <= ub->gl.ubo.size);
     assert(ub->gl.ubo.base + offset + size <= ub->gl.ubo.capacity);
     bindBufferRange(GL_UNIFORM_BUFFER, GLuint(index), ub->gl.ubo.id, ub->gl.ubo.base + offset, size);
@@ -2706,18 +2731,19 @@ void OpenGLDriver::blit(TargetBufferFlags buffers,
 }
 
 void OpenGLDriver::draw(
-        Driver::ProgramHandle ph,
-        Driver::RasterState rs,
+        Driver::PipelineState state,
         Driver::RenderPrimitiveHandle rph) {
     DEBUG_MARKER()
 
-    OpenGLProgram* p = handle_cast<OpenGLProgram*>(ph);
+    OpenGLProgram* p = handle_cast<OpenGLProgram*>(state.program);
     useProgram(p);
 
     const GLRenderPrimitive* rp = handle_cast<const GLRenderPrimitive *>(rph);
     bindVertexArray(rp);
 
-    setRasterState(rs);
+    setRasterState(state.rasterState);
+
+    polygonOffset(state.polygonOffset.slope, state.polygonOffset.constant);
 
     glDrawRangeElements(GLenum(rp->type), rp->minIndex, rp->maxIndex, rp->count,
             rp->gl.indicesType, reinterpret_cast<const void*>(rp->offset));

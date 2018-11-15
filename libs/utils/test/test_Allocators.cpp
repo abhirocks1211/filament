@@ -14,10 +14,11 @@
  * limitations under the License.
  */
 
-#include <vector>
 #include <algorithm>
-#include <functional>
 #include <bitset>
+#include <functional>
+#include <utility>
+#include <vector>
 
 #include <gtest/gtest.h>
 
@@ -169,6 +170,7 @@ TEST(AllocatorTest, CppAllocator) {
 
     using CppArena = Arena<PoolAllocator<8, 8, sizeof(void*)>, LockingPolicy::NoLock, Tracking>;
     static int count = 0;
+    count = 0;
     struct Foo {
         ~Foo() {
             ++count;
@@ -212,7 +214,7 @@ TEST(AllocatorTest, ScopedStackArena) {
     void* p = nullptr;
 
     struct Foo {
-        Foo(std::function<void(void)> f) : dtor(f) { }
+        explicit Foo(std::function<void(void)> f) : dtor(std::move(f)) { }
         ~Foo() { dtor(); }
     private:
         std::function<void(void)> dtor;

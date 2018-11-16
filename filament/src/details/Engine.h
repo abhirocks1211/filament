@@ -368,8 +368,8 @@ public:
     // these are the debug properties used by FDebug. They're accessed directly by modules who need them.
     struct {
         struct {
-            bool far_uses_shadowcasters = false;
-            bool focus_shadowcasters = false;
+            bool far_uses_shadowcasters = true;
+            bool focus_shadowcasters = true;
             bool lispsm = true;
             float dzn = -1.0f;
             float dzf =  1.0f;

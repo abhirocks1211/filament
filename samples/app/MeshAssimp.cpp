@@ -80,6 +80,14 @@ static constexpr uint8_t GLTF2_DS_MASKED_PACKAGE[] = {
     #include "generated/material/gltf2DoubleSidedMasked.inc"
 };
 
+static constexpr uint8_t GLTF2_UNLIT_PACKAGE[] = {
+    #include "generated/material/gltf2Unlit.inc"
+};
+
+static constexpr uint8_t GLTF2_DS_UNLIT_PACKAGE[] = {
+    #include "generated/material/gltf2DoubleSidedUnlit.inc"
+};
+
 Texture* MeshAssimp::createOneByOneTexture(uint32_t pixel) {
     uint32_t *textureData = (uint32_t *) malloc(sizeof(uint32_t));
     *textureData = pixel;
@@ -125,6 +133,12 @@ MeshAssimp::MeshAssimp(Engine& engine) : mEngine(engine) {
     mGltfMaterialDSMasked = Material::Builder()
             .package((void*) GLTF2_DS_MASKED_PACKAGE, sizeof(GLTF2_DS_MASKED_PACKAGE))
             .build(mEngine);
+    mGltfMaterialUnlit = Material::Builder()
+            .package((void*) GLTF2_UNLIT_PACKAGE, sizeof(GLTF2_UNLIT_PACKAGE))
+            .build(mEngine);
+    mGltfMaterialDSUnlit = Material::Builder()
+            .package((void*) GLTF2_DS_UNLIT_PACKAGE, sizeof(GLTF2_DS_UNLIT_PACKAGE))
+            .build(mEngine);
 }
 
 MeshAssimp::~MeshAssimp() {
@@ -138,6 +152,8 @@ MeshAssimp::~MeshAssimp() {
     mEngine.destroy(mGltfMaterialDSTrans);
     mEngine.destroy(mGltfMaterialMasked);
     mEngine.destroy(mGltfMaterialDSMasked);
+    mEngine.destroy(mGltfMaterialUnlit);
+    mEngine.destroy(mGltfMaterialDSUnlit);
     mEngine.destroy(mDefaultNormalMap);
     mEngine.destroy(mDefaultMap);
 
@@ -604,6 +620,11 @@ bool MeshAssimp::setFromFile(const Path& file,
                     uint32_t materialId = mesh->mMaterialIndex;
                     aiMaterial const* material = scene->mMaterials[materialId];
 
+                    //For Debugging (uncommenting this messes up some of the models)
+                    for (i=0; i < material->mNumProperties; i++) {
+                        std::cout << material->mProperties[i]->mKey.C_Str() << std::endl;
+                    }
+
                     aiString baseColorPath;
                     aiString AOPath;
                     aiString MRPath;
@@ -632,9 +653,18 @@ bool MeshAssimp::setFromFile(const Path& file,
                         bool materialIsDoubleSided = false;
                         material->Get("$mat.twosided", 0, 0, materialIsDoubleSided);
 
+                        bool materialIsUnlit = false;
+                        material->Get("$mat.gltf.unlit", 0, 0, materialIsUnlit);
+
                         aiString alphaMode;
 
-                        if (materialIsDoubleSided) {
+                        if (materialIsUnlit) {
+                            if (materialIsDoubleSided){
+                                outMaterials[materialName] = mGltfMaterialDSUnlit->createInstance();
+                            } else {
+                                outMaterials[materialName] = mGltfMaterialUnlit->createInstance();
+                            }
+                        } else if (materialIsDoubleSided) {
                             material->Get("$mat.gltf.alphaMode", 0, 0, alphaMode);
 
                             if (strcmp(alphaMode.C_Str(), "BLEND") == 0) {

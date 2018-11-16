@@ -111,7 +111,8 @@ private:
     filament::Material* mGltfMaterialDSTrans = nullptr; // Double sided Transparent gltf material
     filament::Material* mGltfMaterialMasked = nullptr; // Transparent gltf material
     filament::Material* mGltfMaterialDSMasked = nullptr; // Double sided Transparent gltf material
-
+    filament::Material* mGltfMaterialUnlit = nullptr;
+    filament::Material* mGltfMaterialDSUnlit = nullptr;
     filament::Texture* mDefaultMap = nullptr;
     filament::Texture* mDefaultNormalMap = nullptr;
     float mDefaultMetallic = 0.0;

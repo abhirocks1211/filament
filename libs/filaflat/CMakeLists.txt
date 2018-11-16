@@ -29,6 +29,10 @@ target_include_directories(${TARGET} PUBLIC ${PUBLIC_HDR_DIR})
 
 target_link_libraries(${TARGET} filabridge utils)
 
+if (FILAMENT_SUPPORTS_VULKAN)
+    target_link_libraries(${TARGET} smol-v)
+endif()
+
 # ==================================================================================================
 # Compiler flags
 # ==================================================================================================

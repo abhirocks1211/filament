@@ -82,9 +82,16 @@ MetalIndexBuffer::MetalIndexBuffer(id<MTLDevice> device, uint8_t elementSize, ui
                                  options:MTLResourceStorageModeShared];
 }
 
-MetalUniformBuffer::MetalUniformBuffer(id<MTLDevice> device, size_t size) : HwUniformBuffer() {
-    buffer = [device newBufferWithLength:size
-                                 options:MTLResourceStorageModeShared];
+MetalUniformBuffer::MetalUniformBuffer(id<MTLDevice> device, size_t size) : HwUniformBuffer(),
+        size(size) {
+    if (size <= 4 * 1024) {   // 4K
+        buffer = nil;
+        cpuBuffer = malloc(size);
+    } else {
+        buffer = [device newBufferWithLength:size
+                                     options:MTLResourceStorageModeShared];
+        cpuBuffer = nullptr;
+    }
 }
 
 

@@ -53,8 +53,14 @@ struct MetalIndexBuffer : public HwIndexBuffer {
 struct MetalUniformBuffer : public HwUniformBuffer {
     MetalUniformBuffer(id<MTLDevice> device, size_t size);
 
-    size_t offset = 0;
-    id<MTLBuffer> buffer;
+    size_t offset = 0;  // todo: this isn't being used
+    size_t size = 0;
+
+    // If the buffer is less than 4K in size, we don't use an explicit buffer and instead use
+    // inline command encoder functions like setVertexBytes:length:atIndex:.
+
+    id <MTLBuffer> buffer;
+    void* cpuBuffer;
 };
 
 struct MetalRenderPrimitive : public HwRenderPrimitive {

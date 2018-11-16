@@ -399,7 +399,12 @@ void MetalDriver::generateMipmaps(Driver::TextureHandle th) {
 void MetalDriver::updateUniformBuffer(Driver::UniformBufferHandle ubh,
         Driver::BufferDescriptor&& data) {
     auto buffer = handle_cast<MetalUniformBuffer>(mHandleMap, ubh);
-    memcpy(buffer->buffer.contents, data.buffer, data.size);
+    if (buffer->buffer) {
+        memcpy(buffer->buffer.contents, data.buffer, data.size);
+    } else {
+        assert(buffer->cpuBuffer);
+        memcpy(buffer->cpuBuffer, data.buffer, data.size);
+    }
     scheduleDestroy(std::move(data));
 }
 
@@ -660,7 +665,7 @@ void MetalDriver::draw(Driver::ProgramHandle ph, Driver::RasterState rs,
     // Bind any uniform buffers that have changed since the last draw call.
     for (uint32_t i = 0; i < VERTEX_BUFFER_START; i++) {
         auto& thisUniform = pImpl->mUniformState[i];
-        if (thisUniform.stateChanged() ) {
+        if (thisUniform.stateChanged()) {
             const auto& uniformState = thisUniform.getState();
             if (!uniformState.bound) {
                 continue;
@@ -672,13 +677,24 @@ void MetalDriver::draw(Driver::ProgramHandle ph, Driver::RasterState rs,
             // We have no way of knowing which uniform buffers will be used by which shader stage
             // so for now, bind the uniform buffer to both the vertex and fragment stages.
 
-            [pImpl->mCurrentCommandEncoder setVertexBuffer:uniform->buffer
-                                                    offset:uniformState.offset
-                                                   atIndex:i];
+            if (uniform->buffer) {
+                [pImpl->mCurrentCommandEncoder setVertexBuffer:uniform->buffer
+                                                        offset:uniformState.offset
+                                                       atIndex:i];
 
-            [pImpl->mCurrentCommandEncoder setFragmentBuffer:uniform->buffer
-                                                      offset:uniformState.offset
-                                                     atIndex:i];
+                [pImpl->mCurrentCommandEncoder setFragmentBuffer:uniform->buffer
+                                                          offset:uniformState.offset
+                                                         atIndex:i];
+            } else {
+                assert(uniform->cpuBuffer);
+                uint8_t* bytes = static_cast<uint8_t*>(uniform->cpuBuffer) + uniformState.offset;
+                [pImpl->mCurrentCommandEncoder setVertexBytes:bytes
+                                                       length:(uniform->size - uniformState.offset)
+                                                      atIndex:i];
+                [pImpl->mCurrentCommandEncoder setFragmentBytes:bytes
+                                                         length:(uniform->size - uniformState.offset)
+                                                        atIndex:i];
+            }
         }
     }
 

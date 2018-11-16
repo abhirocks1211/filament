@@ -646,7 +646,7 @@ void MetalDriver::draw(Driver::ProgramHandle ph, Driver::RasterState rs,
 
     // Viewport
     if (pImpl->mViewportState.stateChanged()) {
-        [pImpl->mCurrentCommandEncoder setViewport:pImpl->mViewportState.getState()];
+        // [pImpl->mCurrentCommandEncoder setViewport:pImpl->mViewportState.getState()];
     }
 
     // Set the depth-stencil state, if a state change is needed.

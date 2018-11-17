@@ -564,12 +564,6 @@ bool MeshAssimp::setFromFile(const Path& file,
         for (size_t i = 0; i < node->mNumMeshes; i++) {
             aiMesh const* mesh = scene->mMeshes[node->mMeshes[i]];
 
-            if (mesh->HasBones()) {
-                for (int i = 0; i < mesh->mNumBones ; i++) {
-                    std::cout << "bone with name " << mesh->mBones[i]->mName.C_Str() << std::endl;
-                }
-            }
-
             float3 const* positions  = reinterpret_cast<float3 const*>(mesh->mVertices);
             float3 const* tangents   = reinterpret_cast<float3 const*>(mesh->mTangents);
             float3 const* bitangents = reinterpret_cast<float3 const*>(mesh->mBitangents);
@@ -619,11 +613,6 @@ bool MeshAssimp::setFromFile(const Path& file,
 
                     uint32_t materialId = mesh->mMaterialIndex;
                     aiMaterial const* material = scene->mMaterials[materialId];
-
-                    //For Debugging (uncommenting this messes up some of the models)
-                    for (i=0; i < material->mNumProperties; i++) {
-                        std::cout << material->mProperties[i]->mKey.C_Str() << std::endl;
-                    }
 
                     aiString baseColorPath;
                     aiString AOPath;

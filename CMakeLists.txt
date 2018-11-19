@@ -306,6 +306,7 @@ if (NOT ANDROID AND NOT WEBGL AND NOT IOS)
 
     add_subdirectory(${LIBRARIES}/bluegl)
     add_subdirectory(${LIBRARIES}/filagui)
+    add_subdirectory(${LIBRARIES}/filagltf)
     add_subdirectory(${LIBRARIES}/imageio)
 
     add_subdirectory(${FILAMENT}/java)
@@ -326,6 +327,7 @@ if (NOT ANDROID AND NOT WEBGL AND NOT IOS)
     add_subdirectory(${EXTERNAL}/spirv-cross/tnt)
     add_subdirectory(${EXTERNAL}/stb/tnt)
     add_subdirectory(${EXTERNAL}/tinyexr/tnt)
+    add_subdirectory(${EXTERNAL}/tinygltf/tnt)
 
     add_subdirectory(${TOOLS}/cmgen)
     add_subdirectory(${TOOLS}/filamesh)

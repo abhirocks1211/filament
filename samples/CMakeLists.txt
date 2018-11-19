@@ -142,6 +142,7 @@ function(add_filamesh_demo NAME)
 endfunction()
 
 if (NOT ANDROID)
+    add_assimp_demo(filagltf_viewer)
     add_assimp_demo(frame_generator)
     add_assimp_demo(gltf_viewer)
     add_assimp_demo(lightbulb)
@@ -158,6 +159,7 @@ if (NOT ANDROID)
 
     # Sample app specific
     target_link_libraries(frame_generator PRIVATE image imageio)
+    target_link_libraries(filagltf_viewer PRIVATE filagltf)
 endif()
 
 # ==================================================================================================

@@ -24,6 +24,7 @@
 #include <utils/Log.h>
 
 #include <mutex>
+#include <unordered_map>
 
 namespace filament {
 namespace driver {

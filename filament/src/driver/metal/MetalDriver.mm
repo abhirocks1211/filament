@@ -605,15 +605,15 @@ void MetalDriver::blit(Driver::TargetBufferFlags buffers, Driver::RenderTargetHa
 
 }
 
-void MetalDriver::draw(Driver::ProgramHandle ph, Driver::RasterState rs,
-        Driver::RenderPrimitiveHandle rph) {
+void MetalDriver::draw(Driver::PipelineState ps, Driver::RenderPrimitiveHandle rph) {
     ASSERT_PRECONDITION(pImpl->mCurrentCommandEncoder != nullptr,
             "Attempted to draw without a valid command encoder.");
     auto primitive = handle_cast<MetalRenderPrimitive>(mHandleMap, rph);
-    auto program = handle_cast<MetalProgram>(mHandleMap, ph);
+    auto program = handle_cast<MetalProgram>(mHandleMap, ps.program);
+    const auto& rs = ps.rasterState;
 
     // Pipeline state
-    PipelineState pipelineState {
+    metal::PipelineState pipelineState {
         .vertexFunction = program->vertexFunction,
         .fragmentFunction = program->fragmentFunction,
         .vertexDescription = primitive->vertexDescription,

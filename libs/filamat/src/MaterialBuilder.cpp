@@ -347,7 +347,7 @@ Package MaterialBuilder::build() noexcept {
     // TODO: remove the postProcessor functionality, since it isn't being used by the outside world.
     using namespace std::placeholders;
     GLSLPostProcessor postProcessor(mOptimization, mPrintShaders);
-    this->postProcessor(std::bind(&GLSLPostProcessor::process, postProcessor, _1, _2, _3, _4, _5));
+    this->postProcessor(std::bind(&GLSLPostProcessor::process, postProcessor, _1, _2, _3, _4, _5, _6));
 
     // Create chunk tree.
     ChunkContainer container;
@@ -433,7 +433,7 @@ Package MaterialBuilder::build() noexcept {
     // Generate all shaders.
     std::vector<TextEntry> glslEntries;
     std::vector<SpirvEntry> spirvEntries;
-    std::vector<GlslEntry> metalEntries;
+    std::vector<TextEntry> metalEntries;
     LineDictionary glslDictionary;
     BlobDictionary spirvDictionary;
     LineDictionary metalDictionary;
@@ -464,7 +464,7 @@ Package MaterialBuilder::build() noexcept {
 
         TextEntry glslEntry;
         SpirvEntry spirvEntry;
-        GlslEntry metalEntry;
+        TextEntry metalEntry;
 
         glslEntry.shaderModel = static_cast<uint8_t>(params.shaderModel);
         spirvEntry.shaderModel = static_cast<uint8_t>(params.shaderModel);
@@ -592,8 +592,8 @@ Package MaterialBuilder::build() noexcept {
     }
 
     // Emit Metal chunks (MetalDictionaryReader and MaterialMetalChunk).
-    filamat::DictionaryGlslChunk dicMetalChunk(metalDictionary, ChunkType::DictionaryMetal);
-    MaterialGlslChunk metalChunk(metalEntries, metalDictionary, ChunkType::MaterialMetal);
+    filamat::DictionaryTextChunk dicMetalChunk(metalDictionary, ChunkType::DictionaryMetal);
+    MaterialTextChunk metalChunk(metalEntries, metalDictionary, ChunkType::MaterialMetal);
     if (!metalEntries.empty()) {
         container.addChild(&dicMetalChunk);
         container.addChild(&metalChunk);
@@ -610,7 +610,7 @@ Package MaterialBuilder::build() noexcept {
     for (TextEntry entry : glslEntries) {
         free(entry.shader);
     }
-    for (GlslEntry entry : metalEntries) {
+    for (TextEntry entry : metalEntries) {
         free(entry.shader);
     }
     return package;

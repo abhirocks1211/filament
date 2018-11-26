@@ -265,6 +265,12 @@ endif()
 # ==================================================================================================
 # Sub-projects
 # ==================================================================================================
+# spirv-tools must come before filamat, as filamat relies on the presence of the
+# spirv-tools_SOURCE_DIR variable.
+add_subdirectory(${EXTERNAL}/spirv-tools)
+add_subdirectory(${EXTERNAL}/glslang/tnt)
+add_subdirectory(${EXTERNAL}/spirv-cross/tnt)
+
 # Common to all platforms
 add_subdirectory(${EXTERNAL}/libgtest/tnt)
 add_subdirectory(${LIBRARIES}/filabridge)
@@ -277,6 +283,8 @@ add_subdirectory(${LIBRARIES}/utils)
 add_subdirectory(${FILAMENT}/filament)
 add_subdirectory(${FILAMENT}/shaders)
 add_subdirectory(${EXTERNAL}/robin-map/tnt)
+add_subdirectory(${EXTERNAL}/smol-v/tnt)
+add_subdirectory(${EXTERNAL}/benchmark/tnt)
 
 if (FILAMENT_SUPPORTS_VULKAN)
     add_subdirectory(${LIBRARIES}/bluevk)
@@ -292,8 +300,7 @@ set (FILAMENT_SAMPLES_BINARY_DIR ${PROJECT_BINARY_DIR}/samples)
 if (WEBGL)
     add_subdirectory(web/filament-js)
     add_subdirectory(web/samples)
-
-    add_subdirectory(${LIBRARIES}/filagui)
+    add_subdirectory(web/docs)
 
     add_subdirectory(${EXTERNAL}/imgui/tnt)
     add_subdirectory(${EXTERNAL}/stb/tnt)
@@ -307,21 +314,15 @@ if (NOT ANDROID AND NOT WEBGL AND NOT IOS)
     add_subdirectory(${LIBRARIES}/imageio)
 
     add_subdirectory(${FILAMENT}/java)
-
-    # must come first because of glslang
-    add_subdirectory(${EXTERNAL}/spirv-tools)
-
     add_subdirectory(${EXTERNAL}/astcenc/tnt)
     add_subdirectory(${EXTERNAL}/etc2comp)
     add_subdirectory(${EXTERNAL}/getopt)
-    add_subdirectory(${EXTERNAL}/glslang/tnt)
     add_subdirectory(${EXTERNAL}/imgui/tnt)
     add_subdirectory(${EXTERNAL}/libassimp/tnt)
     add_subdirectory(${EXTERNAL}/libpng/tnt)
     add_subdirectory(${EXTERNAL}/libsdl2/tnt)
     add_subdirectory(${EXTERNAL}/libz/tnt)
     add_subdirectory(${EXTERNAL}/skylight/tnt)
-    add_subdirectory(${EXTERNAL}/spirv-cross/tnt)
     add_subdirectory(${EXTERNAL}/stb/tnt)
     add_subdirectory(${EXTERNAL}/tinyexr/tnt)
 
@@ -331,6 +332,7 @@ if (NOT ANDROID AND NOT WEBGL AND NOT IOS)
     add_subdirectory(${TOOLS}/matinfo)
     add_subdirectory(${TOOLS}/mipgen)
     add_subdirectory(${TOOLS}/normal-blending)
+    add_subdirectory(${TOOLS}/resgen)
     add_subdirectory(${TOOLS}/roughness-prefilter)
     add_subdirectory(${TOOLS}/skygen)
     add_subdirectory(${TOOLS}/specular-color)
@@ -338,5 +340,5 @@ endif()
 
 # Generate exported executables for cross-compiled builds (Android, WebGL, and iOS)
 if (NOT CMAKE_CROSSCOMPILING)
-    export(TARGETS matc cmgen filamesh mipgen FILE ${IMPORT_EXECUTABLES})
+    export(TARGETS matc cmgen filamesh mipgen resgen FILE ${IMPORT_EXECUTABLES})
 endif()

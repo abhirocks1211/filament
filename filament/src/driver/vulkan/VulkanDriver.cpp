@@ -25,7 +25,6 @@
 #include <utils/CString.h>
 #include <utils/trap.h>
 
-#include <csignal>
 #include <set>
 
 // Vulkan functions often immediately dereference pointers, so it's fine to pass in a pointer
@@ -53,7 +52,7 @@ VulkanDriver::VulkanDriver(VulkanPlatform* platform,
     // Validation crashes on MoltenVK, so disable it by default on MacOS.
     VkInstanceCreateInfo instanceCreateInfo = {};
 #if !defined(NDEBUG) && !defined(__APPLE__)
-    static const char* DESIRED_LAYERS[] = {
+    static utils::StaticString DESIRED_LAYERS[] = {
     // NOTE: sometimes we see a message: "Cannot activate layer VK_LAYER_GOOGLE_unique_objects
     // prior to activating VK_LAYER_LUNARG_core_validation." despite the fact that it is clearly
     // last in the following list. Should we simply remove unique_objects from the list?
@@ -76,10 +75,10 @@ VulkanDriver::VulkanDriver(VulkanPlatform* platform,
     vkEnumerateInstanceLayerProperties(&layerCount, availableLayers.data());
     std::vector<const char*> enabledLayers;
     for (const VkLayerProperties& layer : availableLayers) {
-        const std::string availableLayer(layer.layerName);
+        const utils::CString availableLayer(layer.layerName);
         for (const auto& desired : DESIRED_LAYERS) {
             if (availableLayer == desired) {
-                enabledLayers.push_back(desired);
+                enabledLayers.push_back(desired.c_str());
             }
         }
     }
@@ -809,14 +808,17 @@ void VulkanDriver::blit(TargetBufferFlags buffers,
         int32_t srcLeft, int32_t srcBottom, uint32_t srcWidth, uint32_t srcHeight) {
 }
 
-void VulkanDriver::draw(Driver::ProgramHandle ph, Driver::RasterState rasterState,
-        Driver::RenderPrimitiveHandle rph) {
+void VulkanDriver::draw(Driver::PipelineState pipelineState, Driver::RenderPrimitiveHandle rph) {
     VkCommandBuffer cmdbuffer = mContext.cmdbuffer;
     ASSERT_POSTCONDITION(cmdbuffer, "Draw calls can occur only within a beginFrame / endFrame.");
     const VulkanRenderPrimitive& prim = *handle_cast<VulkanRenderPrimitive>(mHandleMap, rph);
 
+    Driver::ProgramHandle programHandle = pipelineState.program;
+    Driver::RasterState rasterState = pipelineState.rasterState;
+    Driver::PolygonOffset depthOffset = pipelineState.polygonOffset;
+
     // If this is a debug build, validate the current shader.
-    auto* program = handle_cast<VulkanProgram>(mHandleMap, ph);
+    auto* program = handle_cast<VulkanProgram>(mHandleMap, programHandle);
 #if !defined(NDEBUG)
     if (program->bundle.vertex == VK_NULL_HANDLE || program->bundle.fragment == VK_NULL_HANDLE) {
         utils::slog.e << "Binding missing shader: " << program->name.c_str() << utils::io::endl;
@@ -832,8 +834,9 @@ void VulkanDriver::draw(Driver::ProgramHandle ph, Driver::RasterState rasterStat
         .depthBoundsTestEnable = VK_FALSE,
         .stencilTestEnable = VK_FALSE,
     };
+
     mContext.rasterState.blending = {
-        .blendEnable = rasterState.hasBlending(),
+        .blendEnable = (VkBool32) rasterState.hasBlending(),
         .srcColorBlendFactor = getBlendFactor(rasterState.blendFunctionSrcRGB),
         .dstColorBlendFactor = getBlendFactor(rasterState.blendFunctionDstRGB),
         .colorBlendOp = (VkBlendOp) rasterState.blendEquationRGB,
@@ -842,6 +845,12 @@ void VulkanDriver::draw(Driver::ProgramHandle ph, Driver::RasterState rasterStat
         .alphaBlendOp =  (VkBlendOp) rasterState.blendEquationAlpha,
         .colorWriteMask = (VkColorComponentFlags) (rasterState.colorWrite ? 0xf : 0x0),
     };
+
+    auto& vkraster = mContext.rasterState.rasterization;
+    vkraster.cullMode = getCullMode(rasterState.culling);
+    vkraster.depthBiasEnable = (depthOffset.constant || depthOffset.slope) ? VK_TRUE : VK_FALSE;
+    vkraster.depthBiasConstantFactor = depthOffset.constant;
+    vkraster.depthBiasSlopeFactor = depthOffset.slope;
 
     // Remove the fragment shader from depth-only passes to avoid a validation warning.
     VulkanBinder::ProgramBundle shaderHandles = program->bundle;
@@ -875,6 +884,10 @@ void VulkanDriver::draw(Driver::ProgramHandle ph, Driver::RasterState rasterStat
             if (!sampler->t) {
                 continue;
             }
+
+            // Obtain the global sampler binding index and pass this to VulkanBinder. Note that
+            // "binding" is an offset that is global to the shader, whereas "samplerIndex" is an
+            // offset into the virtual sampler buffer.
             uint8_t binding, group;
             if (program->samplerBindings.getSamplerBinding(bufferIdx, samplerIndex, &binding,
                     &group)) {

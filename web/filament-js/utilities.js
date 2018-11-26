@@ -63,15 +63,17 @@ Filament.PixelBuffer = function(typedarray, format, datatype) {
 /// data by copying a typed array into the WASM heap.
 /// typedarray ::argument:: Data to consume (e.g. Uint8Array, Uint16Array, Float32Array)
 /// cdatatype ::argument:: [CompressedPixelDataType]
+/// faceSize ::argument:: Number of bytes in each face (cubemaps only)
 /// ::retval:: [PixelBufferDescriptor]
-Filament.CompressedPixelBuffer = function(typedarray, cdatatype) {
+Filament.CompressedPixelBuffer = function(typedarray, cdatatype, faceSize) {
     console.assert(typedarray.buffer instanceof ArrayBuffer);
     console.assert(typedarray.byteLength > 0);
+    faceSize = faceSize || typedarray.byteLength;
     if (Filament.HEAPU32.buffer == typedarray.buffer) {
         typedarray = new Uint8Array(typedarray);
     }
     const ta = typedarray;
-    const bd = new Filament.driver$PixelBufferDescriptor(ta, cdatatype, ta.byteLength, true);
+    const bd = new Filament.driver$PixelBufferDescriptor(ta, cdatatype, faceSize, true);
     const uint8array = new Uint8Array(ta.buffer, ta.byteOffset, ta.byteLength);
     bd.getBytes().set(uint8array);
     return bd;
@@ -241,35 +243,13 @@ Filament._createTextureFromKtx = function(ktxdata, engine, options) {
     const Sampler = Filament.Texture$Sampler;
     const ktx = options['ktx'] || new Filament.KtxBundle(ktxdata);
     const nlevels = ktx.getNumMipLevels();
-    const ktxformat = ktx.info().glInternalFormat;
     const rgbm = !!options['rgbm'];
     const srgb = !!options['srgb'];
 
-    // TODO: replace this switch with KtxBundle calls
-    const TextureFormat = Filament.Texture$InternalFormat;
-    const PixelDataFormat = Filament.PixelDataFormat;
-    const gl = Filament.ctx;
-    var texformat, pbformat, pbtype;
-    switch (ktxformat) {
-        case gl.LUMINANCE:
-            texformat = TextureFormat.R8;
-            pbformat = PixelDataFormat.R;
-            pbtype = Filament.PixelDataType.UBYTE;
-            break;
-        case gl.RGB:
-            texformat = srgb ? TextureFormat.SRGB8 : TextureFormat.RGB8;
-            pbformat = PixelDataFormat.RGB;
-            pbtype = Filament.PixelDataType.UBYTE;
-            break;
-        case gl.RGBA:
-            texformat = srgb ? TextureFormat.SRGB8_A8 : TextureFormat.RGBA8;
-            pbformat = rgbm ? PixelDataFormat.RGBM : PixelDataFormat.RGBA;
-            pbtype = Filament.PixelDataType.UBYTE;
-            break;
-        default:
-        console.error('Unsupported KTX format: ' + ktxformat);
-        return null;
-    }
+    var texformat = ktx.getInternalFormat(srgb);
+    var pbformat = ktx.getPixelDataFormat(rgbm);
+    var cdatatype = ktx.getCompressedPixelDataType();
+    var datatype = ktx.getPixelDataType();
 
     const tex = Filament.Texture.Builder()
         .width(ktx.info().pixelWidth)
@@ -280,16 +260,34 @@ Filament._createTextureFromKtx = function(ktxdata, engine, options) {
         .rgbm(rgbm)
         .build(engine);
 
+    if (ktx.isCompressed()) {
+        if (ktx.isCubemap()) {
+            for (var level = 0; level < nlevels; level++) {
+                const uint8array = ktx.getCubeBlob(level);
+                const facesize = uint8array.length / 6;
+                const pixelbuffer = Filament.CompressedPixelBuffer(uint8array, cdatatype, facesize);
+                tex.setImageCube(engine, level, pixelbuffer);
+            }
+            return tex;
+        }
+        for (var level = 0; level < nlevels; level++) {
+            const uint8array = ktx.getBlob([level, 0, 0]);
+            const pixelbuffer = Filament.CompressedPixelBuffer(uint8array, cdatatype);
+            tex.setImage(engine, level, pixelbuffer);
+        }
+        return tex;
+    }
+
     if (ktx.isCubemap()) {
         for (var level = 0; level < nlevels; level++) {
-            const uint8array = ktx.getCubeBlob(level).getBytes();
-            const pixelbuffer = Filament.PixelBuffer(uint8array, pbformat, pbtype);
+            const uint8array = ktx.getCubeBlob(level);
+            const pixelbuffer = Filament.PixelBuffer(uint8array, pbformat, datatype);
             tex.setImageCube(engine, level, pixelbuffer);
         }
     } else {
         for (var level = 0; level < nlevels; level++) {
-            const uint8array = ktx.getBlob([level, 0, 0]).getBytes();
-            const pixelbuffer = Filament.PixelBuffer(uint8array, pbformat, pbtype);
+            const uint8array = ktx.getBlob([level, 0, 0]);
+            const pixelbuffer = Filament.PixelBuffer(uint8array, pbformat, datatype);
             tex.setImage(engine, level, pixelbuffer);
         }
     }
@@ -388,9 +386,7 @@ Filament.getSupportedFormatSuffix = function(desiredFormats) {
     var exts = Filament.getSupportedFormats();
     for (var key in exts) {
         if (exts[key] && desiredFormats.includes(key)) {
-            // TODO: support compressed textures by returning the proper file suffix.
-            // return '_' + key;
-            return '';
+            return '_' + key;
         }
     }
     return '';

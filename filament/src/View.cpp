@@ -39,6 +39,8 @@
 #include <math/scalar.h>
 #include <math/fast.h>
 
+#include <memory>
+
 using namespace math;
 using namespace utils;
 
@@ -59,7 +61,6 @@ FView::FView(FEngine& engine)
     : mFroxelizer(engine),
       mPerViewUb(engine.getPerViewUib()),
       mPerViewSb(engine.getPerViewSib()),
-      mClipSpace01(engine.getBackend() == Backend::VULKAN),
       mDirectionalShadowMap(engine) {
     DriverApi& driver = engine.getDriverApi();
 
@@ -107,8 +108,8 @@ void FView::setDynamicResolutionOptions(DynamicResolutionOptions const& options)
     if (dynamicResolution.enabled) {
         // if enabled, sanitize the parameters
 
-        // History can't be more than 30 frames (~0.5s)
-        dynamicResolution.history = std::min(dynamicResolution.history, uint8_t(30));
+        // History can't be more than 32 frames (~0.5s)
+        dynamicResolution.history = std::min(dynamicResolution.history, uint8_t(MAX_FRAMETIME_HISTORY));
 
         // History must at least be 3 frames
         dynamicResolution.history = std::max(dynamicResolution.history, uint8_t(3));
@@ -136,7 +137,7 @@ void FView::setDynamicResolutionOptions(DynamicResolutionOptions const& options)
         dynamicResolution.maxScale = min(dynamicResolution.maxScale, float2(2.0f));
 
         // reset the history, so we start from a known (and current) state
-        mFrameTimeHistory.clear();
+        mFrameTimeHistorySize = 0;
         mScale = 1.0f;
         mDynamicWorkloadScale = 1.0f;
     }
@@ -146,6 +147,14 @@ void FView::setDynamicLightingOptions(float zLightNear, float zLightFar) noexcep
     mFroxelizer.setOptions(zLightNear, zLightFar);
 }
 
+// this is to avoid a call to memmove
+template<class InputIterator, class OutputIterator>
+static inline
+void move_backward(InputIterator first, InputIterator last, OutputIterator result) {
+    while (first != last) {
+        *--result = *--last;
+    }
+}
 
 math::float2 FView::updateScale(duration frameTime) noexcept {
     DynamicResolutionOptions const& options = mDynamicResolution;
@@ -158,10 +167,13 @@ math::float2 FView::updateScale(duration frameTime) noexcept {
 
         // keep an history of frame times
         auto& history = mFrameTimeHistory;
-        history.push_front(frameTime);
-        if (history.size() > options.history) {
-            history.pop_back();
-        } else if (UTILS_UNLIKELY(history.size() < 3)) {
+
+        // this is like doing { pop_back(); push_front(); }
+        details::move_backward(history.begin(), history.end() - 1, history.end());
+        history.front() = frameTime;
+        mFrameTimeHistorySize = std::min(++mFrameTimeHistorySize, size_t(MAX_FRAMETIME_HISTORY));
+
+        if (UTILS_UNLIKELY(mFrameTimeHistorySize < 3)) {
             // don't make any decision if we don't have enough data
             mScale = 1.0f;
             return mScale;
@@ -169,8 +181,8 @@ math::float2 FView::updateScale(duration frameTime) noexcept {
 
         // apply a median filter to get a good representation of the frame time of the last
         // N frames.
-        std::array<duration, 30> median; // NOLINT -- it's initialized below
-        size_t size = std::min(history.size(), median.size());
+        std::array<duration, MAX_FRAMETIME_HISTORY> median; // NOLINT -- it's initialized below
+        size_t size = std::min(mFrameTimeHistorySize, median.size());
         std::uninitialized_copy_n(history.begin(), size, median.begin());
         std::sort(median.begin(), median.begin() + size);
         duration filteredFrameTime = median[size / 2];
@@ -198,7 +210,7 @@ math::float2 FView::updateScale(duration frameTime) noexcept {
             const float maxMajorScale = minor / major;
             const float majorScale = std::max(scale, maxMajorScale);
 
-            // then the minor axis is scaled down to the original aspec-ratio
+            // then the minor axis is scaled down to the original aspect-ratio
             const float minorScale = std::max(scale / majorScale, majorScale * maxMajorScale);
 
             // if we have some scaling capacity left, scale homogeneously
@@ -573,16 +585,7 @@ void FView::prepareCamera(const CameraInfo& camera, const Viewport& viewport) co
     const mat4f worldFromView(camera.model);
     const mat4f projectionMatrix(camera.projection);
 
-    // In Vulkan, clip-space Z is [0,w] rather than [-w,+w] and Y is flipped.
-    // See https://matthewwellings.com/blog/the-new-vulkan-coordinate-system/
-    const math::mat4f correction(math::mat4f::row_major_init{
-            1.0f,  0.0f, 0.0f, 0.0f,
-            0.0f, -1.0f, 0.0f, 0.0f,
-            0.0f,  0.0f, 0.5f, 0.5f,
-            0.0f,  0.0f, 0.0f, 1.0f,
-    });
-
-    const mat4f clipFromView(mClipSpace01 ? correction * projectionMatrix : projectionMatrix);
+    const mat4f clipFromView(projectionMatrix);
     const mat4f viewFromClip(Camera::inverseProjection(clipFromView));
     const mat4f clipFromWorld(clipFromView * viewFromWorld);
 
@@ -728,9 +731,9 @@ void FView::prepareVisibleLights(FLightManager& lcm, utils::JobSystem&, FScene::
 }
 
 void FView::updatePrimitivesLod(FEngine& engine, const CameraInfo&,
-        FScene::RenderableSoa& renderableData, Range visibles) noexcept {
+        FScene::RenderableSoa& renderableData, Range visible) noexcept {
     FRenderableManager const& rcm = engine.getRenderableManager();
-    for (uint32_t index : visibles) {
+    for (uint32_t index : visible) {
         uint8_t level = 0; // TODO: pick the proper level of detail
         auto ri = renderableData.elementAt<FScene::RENDERABLE_INSTANCE>(index);
         renderableData.elementAt<FScene::PRIMITIVES>(index) = rcm.getRenderPrimitives(ri, level);

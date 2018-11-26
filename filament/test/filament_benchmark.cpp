@@ -42,14 +42,12 @@ void printResults(char const* name, size_t REPEAT, Profiler::Counters const& c) 
     std::cout << "" << std::endl;
 }
 
-template <typename T, size_t REPEAT = 2>
+template<typename T, size_t REPEAT = 2>
 void benchmark(Profiler& p, const char* const name, T f) {
-    Profiler::Counters b;
-    Profiler::Counters c;
     p.start();
 
 #pragma nounroll
-    for (size_t j=0 ; j<2 ; j++) {
+    for (size_t j = 0; j < 2; j++) {
         p.reset();
 #pragma nounroll
         for (size_t i = 0; i < REPEAT; i++) {
@@ -58,13 +56,12 @@ void benchmark(Profiler& p, const char* const name, T f) {
     }
 
     p.stop();
-    p.readCounters(&c);
+    Profiler::Counters c = p.readCounters();
     printResults(name, REPEAT, c);
 }
 
 // ------------------------------------------------------------------------------------------------
-
-int main(void) {
+int main() {
 
     std::mt19937 gen;
     std::uniform_real_distribution<float> rand(-100.0f, 100.0f);
@@ -76,14 +73,22 @@ int main(void) {
     std::vector<float3> boxesCenter(batch);
     std::vector<float3> boxesExtent(batch);
     std::vector<float4> spheres(batch);
+    std::vector<float4> colors(batch);
+    std::vector<float4> colors_results(batch);
     std::vector<half4> spheresHalf(batch);
     for (size_t i=0 ; i<batch ; i++) {
         float4& sphere = spheres[i];
+        float4& color = colors[i];
         float z = std::fabs(rand(gen));
         sphere.z = -z;
         sphere.x = rand(gen, std::uniform_real_distribution<float>::param_type{-z, z});
         sphere.y = rand(gen, std::uniform_real_distribution<float>::param_type{-z, z});
         sphere.w = rand(gen, std::uniform_real_distribution<float>::param_type{0.11f, 25.0f});
+
+        color.x = rand(gen, std::uniform_real_distribution<float>::param_type{0.0f, 1.0f});
+        color.y = rand(gen, std::uniform_real_distribution<float>::param_type{0.0f, 1.0f});
+        color.z = rand(gen, std::uniform_real_distribution<float>::param_type{0.0f, 1.0f});
+        color.w = rand(gen, std::uniform_real_distribution<float>::param_type{0.0f, 1.0f});
 
         boxesCenter[i] = sphere.xyz;
         boxesExtent[i] = {
@@ -96,12 +101,7 @@ int main(void) {
     Culler::result_type * __restrict__ visibles = nullptr;
     posix_memalign((void**)&visibles, 32, batch * sizeof(*visibles));
 
-    Profiler::Counters c;
-    Profiler& p = Profiler::get();
-    p.resetEvents(
-            Profiler::EV_CPU_CYCLES |
-            Profiler::EV_BPU_MISSES
-    );
+    Profiler p(Profiler::EV_CPU_CYCLES | Profiler::EV_BPU_MISSES);
 
     benchmark(p, "Box Culling Direct", [&]() {
         Culler::Test::intersects(visibles, frustum, boxesCenter.data(), boxesExtent.data(), batch);
@@ -166,6 +166,34 @@ int main(void) {
                     spheres[i].z,
                     spheres[i].w
             );
+        }
+    });
+
+    benchmark(p, "pow(float4, 2.2f)", [&]() {
+        for (size_t i = 0; i < batch; i++) {
+            colors_results[i] = pow(colors[i], 2.2f);
+        }
+    });
+
+    benchmark(p, "fast::pow(float4, 2.2f)", [&]() {
+        for (size_t i = 0; i < batch; i++) {
+            colors_results[i] = {
+                    fast::pow(colors[i].x, 2.2f),
+                    fast::pow(colors[i].y, 2.2f),
+                    fast::pow(colors[i].z, 2.2f),
+                    fast::pow(colors[i].w, 2.2f),
+            };
+        }
+    });
+
+    benchmark(p, "fast::pow2dot2(float4)", [&]() {
+        for (size_t i = 0; i < batch; i++) {
+            colors_results[i] = {
+                    fast::pow2dot2(colors[i].x),
+                    fast::pow2dot2(colors[i].y),
+                    fast::pow2dot2(colors[i].z),
+                    fast::pow2dot2(colors[i].w),
+            };
         }
     });
 

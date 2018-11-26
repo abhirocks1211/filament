@@ -30,10 +30,18 @@
 #define __has_builtin(x) 0
 #endif
 
-#define UTILS_PUBLIC  __attribute__((visibility("default")))
+#if __has_attribute(visibility)
+#    define UTILS_PUBLIC  __attribute__((visibility("default")))
+#else
+#    define UTILS_PUBLIC  
+#endif
 
-#ifndef TNT_DEV
-#    define UTILS_PRIVATE __attribute__((visibility("hidden")))
+#if __has_attribute(visibility)
+#    ifndef TNT_DEV
+#        define UTILS_PRIVATE __attribute__((visibility("hidden")))
+#    else
+#        define UTILS_PRIVATE
+#    endif
 #else
 #    define UTILS_PRIVATE
 #endif
@@ -108,13 +116,6 @@
 #endif
 
 #define UTILS_RESTRICT __restrict__
-
-// TODO: set the proper alignment for the target
-#ifndef __EMSCRIPTEN__
-#define UTILS_ALIGN_LOOP {__asm__ __volatile__(".align 4");}
-#else
-#define UTILS_ALIGN_LOOP
-#endif
 
 #if __has_feature(cxx_thread_local)
 #   ifdef ANDROID

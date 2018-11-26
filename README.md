@@ -37,16 +37,16 @@ badges above.
 
 Here are a few sample materials rendered with Filament:
 
-![Brushed copper](docs/images/samples/brushed_copper_2.png)
-![Chess set](docs/images/samples/chess1.png)
-![Environment lighting](docs/images/samples/spheres.png)
-![Material 1](docs/images/samples/material_01.png)
-![Material 2](docs/images/samples/material_02.png)
-![Material 3](docs/images/samples/material_03.png)
-![Material 4](docs/images/samples/material_04.png)
-![Material 6](docs/images/samples/material_06.png)
-![Material 7](docs/images/samples/material_07.png)
-![Material 8](docs/images/samples/material_08.png)
+![Brushed copper](docs/images/samples/brushed_copper_2.jpg)
+![Chess set](docs/images/samples/chess1.jpg)
+![Environment lighting](docs/images/samples/spheres.jpg)
+![Material 1](docs/images/samples/material_01.jpg)
+![Material 2](docs/images/samples/material_02.jpg)
+![Material 3](docs/images/samples/material_03.jpg)
+![Material 4](docs/images/samples/material_04.jpg)
+![Material 6](docs/images/samples/material_06.jpg)
+![Material 7](docs/images/samples/material_07.jpg)
+![Material 8](docs/images/samples/material_08.jpg)
 
 ## Features
 
@@ -98,47 +98,51 @@ Many other features have been either prototyped or planned:
 
 ## Directory structure
 
-- `filament`:                Filament engine and its supporting libraries and tools
-  - `android`:               Android libraries and projects
-    - `build`:               Custom Gradle tasks for Android builds
-    - `filament-android`:    Filament library (AAR) for Android
-    - `samples`:             Android-specific Filament samples
-  - `art`:                   Source for various artworks (logos, PDF manuals, etc.)
-  - `assets`:                3D assets to use with sample applications
-  - `build`:                 CMake build scripts
-  - `docs`:                  Documentation
-    - `math`:                Mathematica notebooks used to explore BRDFs, equations, etc.
-  - `filament`:              Filament engine
-  - `ide`:                   Configuration files for IDEs (CLion, etc.)
-  - `ios`:                   Sample projects for iOS
-  - `java`:                  Java bindings for Filament libraries
-  - `libs`:                  Libraries
-    - `bluegl`:                OpenGL bindings for macOS, Linux and Windows
-    - `bluevk`:                Vulkan bindings for macOS, Linux, Windows and Android
-    - `filabridge`:            Library shared by the Filament engine and host tools
-    - `filaflat`:              Serialization/deserialization library used for materials
-    - `filagui`:               Helper library for [Dear ImGui](https://github.com/ocornut/imgui)
-    - `filamat`:               Material generation library
-    - `filameshio`:            Tiny mesh parsing library (see also `tools/filamesh`)
-    - `image`:                 Image filtering and simple transforms
-    - `imageio`:               Image file reading / writing, only intended for internal use
-    - `math`:                  Math library
-    - `utils`:                 Utility library (threads, memory, data structures, etc.)
-  - `samples`:               Sample desktop applications
-  - `shaders`:               Shaders used by `filamat` and `matc`
-  - `third_party`:           External libraries and assets
-    - `environments`:        Environment maps under CC0 license that can be used with `cmgen`
-    - `textures`:            Textures under CC0 license
-  - `tools`:                 Host tools
-    - `cmgen`:               Image-based lighting asset generator
-    - `filamesh`:            Mesh converter
-    - `matc`:                Material compiler
-    - `matinfo`              Displays information about materials compiled with `matc`
-    - `mipgen`               Generates a series of miplevels from a source image.
-    - `normal-blending`:     Tool to blend normal maps
-    - `roughness-prefilter`: Pre-filters a roughness map from a normal map to reduce aliasing
-    - `skygen`:              Physically-based sky environment texture generator
-    - `specular-color`:      Computes the specular color of conductors based on spectral data
+This repository not only contains the core Filament engine, but also its supporting libraries
+and tools.
+
+- `android`:               Android libraries and projects
+  - `build`:               Custom Gradle tasks for Android builds
+  - `filament-android`:    Filament library (AAR) for Android
+  - `samples`:             Android-specific Filament samples
+- `art`:                   Source for various artworks (logos, PDF manuals, etc.)
+- `assets`:                3D assets to use with sample applications
+- `build`:                 CMake build scripts
+- `docs`:                  Documentation
+  - `math`:                Mathematica notebooks used to explore BRDFs, equations, etc.
+- `filament`:              Filament rendering engine (minimal dependencies)
+- `ide`:                   Configuration files for IDEs (CLion, etc.)
+- `ios`:                   Sample projects for iOS
+- `java`:                  Java bindings for Filament libraries
+- `libs`:                  Libraries
+  - `bluegl`:              OpenGL bindings for macOS, Linux and Windows
+  - `bluevk`:              Vulkan bindings for macOS, Linux, Windows and Android
+  - `filabridge`:          Library shared by the Filament engine and host tools
+  - `filaflat`:            Serialization/deserialization library used for materials
+  - `filagui`:             Helper library for [Dear ImGui](https://github.com/ocornut/imgui)
+  - `filamat`:             Material generation library
+  - `filameshio`:          Tiny mesh parsing library (see also `tools/filamesh`)
+  - `image`:               Image filtering and simple transforms
+  - `imageio`:             Image file reading / writing, only intended for internal use
+  - `math`:                Math library
+  - `utils`:               Utility library (threads, memory, data structures, etc.)
+- `samples`:               Sample desktop applications
+- `shaders`:               Shaders used by `filamat` and `matc`
+- `third_party`:           External libraries and assets
+  - `environments`:        Environment maps under CC0 license that can be used with `cmgen`
+  - `textures`:            Textures under CC0 license
+- `tools`:                 Host tools
+  - `cmgen`:               Image-based lighting asset generator
+  - `filamesh`:            Mesh converter
+  - `matc`:                Material compiler
+  - `matinfo`              Displays information about materials compiled with `matc`
+  - `mipgen`               Generates a series of miplevels from a source image
+  - `normal-blending`:     Tool to blend normal maps
+  - `resgen`               Aggregates binary blobs into embeddable resources
+  - `roughness-prefilter`: Pre-filters a roughness map from a normal map to reduce aliasing
+  - `skygen`:              Physically-based sky environment texture generator
+  - `specular-color`:      Computes the specular color of conductors based on spectral data
+- `web`:                   JavaScript bindings, documentation, and samples
 
 ## Building Filament
 
@@ -707,7 +711,7 @@ cd emsdk
 ./emsdk activate sdk-1.38.11-64bit
 ```
 
-After this you can invoke [easy build](#easy-build) script as follows:
+After this you can invoke the [easy build](#easy-build) script as follows:
 
 ```
 export EMSDK=<your chosen home for the emscripten SDK>
@@ -893,6 +897,11 @@ as possible. The current external dependencies of the runtime library include:
 
 - STL
 - robin-map (header only library)
+
+When building with Vulkan enabled, we have a few additional small dependencies:
+
+- vkmemalloc
+- smol-v
 
 Host tools (such as `matc` or `cmgen`) can use external dependencies freely.
 

@@ -63,7 +63,7 @@ void RenderPass::render(
 
     // compute how much maximum storage we need for this pass
     uint32_t growBy = FScene::getPrimitiveCount(soa, vr.last);
-    // double the color pass for transparents that need to render twice
+    // double the color pass for transparent objects that need to render twice
     const bool colorPass  = bool(commandTypeFlags & CommandTypeFlags::COLOR);
     const bool depthPass  = bool(commandTypeFlags & (CommandTypeFlags::DEPTH | CommandTypeFlags::SHADOW));
     growBy *= uint32_t(colorPass * 2 + depthPass);
@@ -120,8 +120,9 @@ void RenderPass::recordDriverCommands(
     SYSTRACE_CALL();
 
     if (!commands.empty()) {
+        Driver::PipelineState pipeline;
         Handle<HwUniformBuffer> uboHandle = scene.getRenderableUBO();
-        FMaterialInstance const* UTILS_RESTRICT previousMi = nullptr;
+        FMaterialInstance const* UTILS_RESTRICT mi = nullptr;
         FMaterial const* UTILS_RESTRICT ma = nullptr;
         Command const* UTILS_RESTRICT c;
         for (c = commands.cbegin(); c->key != -1LLU; ++c) {
@@ -130,23 +131,23 @@ void RenderPass::recordDriverCommands(
              */
 
             // per-renderable uniform
-            PrimitiveInfo const& UTILS_RESTRICT info = c->primitive;
+            const PrimitiveInfo info = c->primitive;
+            pipeline.rasterState = info.rasterState;
+            if (UTILS_UNLIKELY(mi != info.mi)) {
+                // this is always taken the first time
+                mi = info.mi;
+                pipeline.polygonOffset = mi->getPolygonOffset();
+                ma = mi->getMaterial();
+                mi->use(driver);
+            }
+
+            pipeline.program = ma->getProgram(info.materialVariant.key);
             size_t offset = info.index * sizeof(PerRenderableUib);
-            driver.bindUniformBufferRange(BindingPoints::PER_RENDERABLE, uboHandle, offset, sizeof(PerRenderableUib));
             if (info.perRenderableBones) {
                 driver.bindUniformBuffer(BindingPoints::PER_RENDERABLE_BONES, info.perRenderableBones);
             }
-
-            FMaterialInstance const* const UTILS_RESTRICT mi = info.mi;
-            if (UTILS_UNLIKELY(mi != previousMi)) {
-                // this is always taken the first time
-                previousMi = mi;
-                mi->use(driver);
-                ma = mi->getMaterial();
-            }
-
-            Handle<HwProgram> const ph = ma->getProgram(info.materialVariant.key);
-            driver.draw(ph, info.rasterState, info.primitiveHandle);
+            driver.bindUniformBufferRange(BindingPoints::PER_RENDERABLE, uboHandle, offset, sizeof(PerRenderableUib));
+            driver.draw(pipeline, info.primitiveHandle);
         }
 
         SYSTRACE_VALUE32("commandCount", c - commands.cbegin());
@@ -487,7 +488,7 @@ void FRenderer::ColorPass::beginRenderPass(
         driver::DriverApi& driver, Viewport const& viewport, const CameraInfo& camera) noexcept {
     // wait for froxelization to finish
     // (this could even be a special command between the depth and color passes)
-    js.wait(jobFroxelize);
+    js.waitAndRelease(jobFroxelize);
     view.commitFroxels(driver);
 
     // We won't need the depth or stencil buffers after this pass.
@@ -571,7 +572,7 @@ void FRenderer::ColorPass::renderColorPass(FEngine& engine, JobSystem& js,
     switch (view.getDepthPrepass()) {
         case View::DepthPrepass::DEFAULT:
             // TODO: better default strategy (can even change on a per-frame basis)
-#ifdef ANDROID
+#if defined(ANDROID) || defined(__EMSCRIPTEN__)
             commandType = COLOR;
 #else
             commandType = DEPTH_AND_COLOR;

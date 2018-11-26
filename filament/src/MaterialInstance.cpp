@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include <filament/MaterialInstance.h>
+
 #include "details/MaterialInstance.h"
 
 #include "RenderPass.h"
@@ -21,6 +23,8 @@
 #include "details/Engine.h"
 #include "details/Material.h"
 #include "details/Texture.h"
+
+#include <string.h>
 
 using namespace math;
 
@@ -39,7 +43,9 @@ FMaterialInstance::FMaterialInstance(FEngine& engine, FMaterial const* material)
             material->getId(), material->generateMaterialInstanceId());
 
     if (!material->getUniformInterfaceBlock().isEmpty()) {
-        mUniforms = UniformBuffer(upcast(material)->getDefaultInstance()->mUniforms);
+        const UniformBuffer& defaultUniforms = upcast(material)->getDefaultInstance()->mUniforms;
+        mUniforms = UniformBuffer(upcast(material)->getUniformInterfaceBlock());
+        ::memcpy(const_cast<void*>(mUniforms.getBuffer()), defaultUniforms.getBuffer(), mUniforms.getSize());
         mUbHandle = driver.createUniformBuffer(mUniforms.getSize(), driver::BufferUsage::DYNAMIC);
     }
 
@@ -195,6 +201,10 @@ void MaterialInstance::setScissor(uint32_t left, uint32_t bottom, uint32_t width
 
 void MaterialInstance::unsetScissor() noexcept {
     upcast(this)->unsetScissor();
+}
+
+void MaterialInstance::setPolygonOffset(float scale, float constant) noexcept {
+    upcast(this)->setPolygonOffset(scale, constant);
 }
 
 } // namespace filament

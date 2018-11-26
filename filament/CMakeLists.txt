@@ -1,8 +1,11 @@
 cmake_minimum_required(VERSION 3.1)
-project(filament)
+project(filament C ASM)
 
 set(TARGET filament)
 set(PUBLIC_HDR_DIR include)
+set(GENERATION_ROOT ${CMAKE_CURRENT_BINARY_DIR})
+set(RESOURCE_DIR  "${GENERATION_ROOT}/generated/resources")
+set(MATERIAL_DIR  "${GENERATION_ROOT}/generated/material")
 
 # ==================================================================================================
 # Sources and headers
@@ -80,7 +83,6 @@ set(SRCS
         src/Material.cpp
         src/MaterialInstance.cpp
         src/PostProcessManager.cpp
-        src/PrecompiledMaterials.cpp
         src/Renderer.cpp
         src/RenderPass.cpp
         src/RenderPrimitive.cpp
@@ -141,7 +143,6 @@ set(PRIVATE_HDRS
         src/FrameInfo.h
         src/Intersections.h
         src/PostProcessManager.h
-        src/PrecompiledMaterials.h
         src/RenderPass.h
         src/RenderTargetPool.h
         src/UniformBuffer.h
@@ -161,6 +162,24 @@ endif()
 
 if(IOS AND NOT FILAMENT_SUPPORTS_VULKAN)
     message(FATAL_ERROR "Filament for iOS must be built with Vulkan support.")
+endif()
+
+# Embed the binary resource blob for materials.
+list(APPEND PRIVATE_HDRS ${RESOURCE_DIR}/materials.h)
+if (WEBGL)
+    list(APPEND SRCS ${RESOURCE_DIR}/materials.c)
+else()
+    if (NOT WIN32)
+        set(ASM_ARCH_FLAG "-arch ${DIST_ARCH}")
+    endif()
+    if (APPLE)
+        set(ASM_FILE ${RESOURCE_DIR}/materials.apple.S)
+    else()
+        set(ASM_FILE ${RESOURCE_DIR}/materials.S)
+    endif()
+    list(APPEND SRCS ${ASM_FILE})
+    set_source_files_properties(${ASM_FILE} PROPERTIES
+            COMPILE_FLAGS "-I${RESOURCE_DIR} ${ASM_ARCH_FLAG}")
 endif()
 
 # ==================================================================================================
@@ -226,7 +245,7 @@ if (FILAMENT_SUPPORTS_VULKAN)
 endif()
 
 # ==================================================================================================
-# Generate all .inc: default material, skyboxes, depth and post-process
+# Generate all .filamat: default material, skyboxes, and post-process
 # ==================================================================================================
 
 if (CMAKE_CROSSCOMPILING)
@@ -234,8 +253,7 @@ if (CMAKE_CROSSCOMPILING)
 endif()
 
 set(MATERIAL_BINS)
-set(GENERATION_ROOT ${CMAKE_CURRENT_BINARY_DIR})
-file(MAKE_DIRECTORY "${GENERATION_ROOT}/generated/material/")
+file(MAKE_DIRECTORY ${MATERIAL_DIR})
 
 # Target system.
 if (ANDROID OR WEBGL OR IOS)
@@ -259,29 +277,43 @@ endif()
 foreach (mat_src ${MATERIAL_SRCS})
     get_filename_component(localname "${mat_src}" NAME_WE)
     get_filename_component(fullname "${mat_src}" ABSOLUTE)
-    set(output_path "${GENERATION_ROOT}/generated/material/${localname}.inc")
+    set(output_path "${MATERIAL_DIR}/${localname}.filamat")
 
     add_custom_command(
             OUTPUT ${output_path}
             COMMAND matc ${MATC_BASE_FLAGS} ${MATC_OPT_FLAGS} -p ${MATC_TARGET} -m material
-                    -f header -o ${output_path} ${fullname}
-            DEPENDS ${mat_src} matc
+                    -o ${output_path} ${fullname}
+            DEPENDS ${fullname} matc
             COMMENT "Compiling material ${mat_src} to ${output_path}"
     )
     list(APPEND MATERIAL_BINS ${output_path})
 endforeach()
 
-set(output_path "${GENERATION_ROOT}/generated/material/postprocess.inc")
+set(output_path "${MATERIAL_DIR}/postprocess.filamat")
 add_custom_command(
         OUTPUT ${output_path}
         COMMAND matc ${MATC_BASE_FLAGS} ${MATC_OPT_FLAGS} -p ${MATC_TARGET} -m postprocess
-                -f header -o ${output_path}
+                -o ${output_path}
         DEPENDS matc
         COMMENT "Compiling post-process material ${output_path}"
 )
 list(APPEND MATERIAL_BINS ${output_path})
 
-add_custom_target(filament_materials DEPENDS ${MATERIAL_BINS})
+set(resgen_outputs
+    ${RESOURCE_DIR}/materials.bin
+    ${RESOURCE_DIR}/materials.S
+    ${RESOURCE_DIR}/materials.apple.S
+    ${RESOURCE_DIR}/materials.h
+    ${RESOURCE_DIR}/materials.c
+)
+add_custom_command(
+        OUTPUT ${resgen_outputs}
+        COMMAND resgen -x ${RESOURCE_DIR} -p materials ${MATERIAL_BINS}
+        DEPENDS resgen ${MATERIAL_BINS}
+        COMMENT "Aggregating compiled materials"
+)
+
+add_custom_target(filament_materials DEPENDS ${resgen_outputs})
 
 set(DATA_BINS)
 file(MAKE_DIRECTORY "${GENERATION_ROOT}/generated/data/")
@@ -328,8 +360,8 @@ target_link_libraries(${TARGET} PUBLIC filaflat)
 target_link_libraries(${TARGET} PUBLIC filabridge)
 target_link_libraries(${TARGET} PUBLIC image_headers)
 
-# Android and iOS link directly against platform-specific OpenGL ES libraries
-if(NOT IOS AND NOT ANDROID)
+# Android, iOS, and WebGL do not use bluegl.
+if(NOT IOS AND NOT ANDROID AND NOT WEBGL)
     target_link_libraries(${TARGET} PRIVATE bluegl)
 endif()
 

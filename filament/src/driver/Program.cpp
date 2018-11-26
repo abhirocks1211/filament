@@ -32,8 +32,14 @@ Program& Program::operator=(const Program& rhs) = default;
 Program& Program::operator=(Program&& rhs) noexcept = default;
 Program::~Program() noexcept = default;
 
-Program& Program::diagnostics(const utils::CString& name, uint8_t variant) {
+Program& Program::diagnostics(utils::CString const& name, uint8_t variant) {
     mName = name;
+    mVariant = variant;
+    return *this;
+}
+
+Program& Program::diagnostics(utils::CString&& name, uint8_t variant) noexcept {
+    name.swap(mName);
     mVariant = variant;
     return *this;
 }
@@ -43,8 +49,13 @@ Program& Program::withSamplerBindings(const SamplerBindingMap* bindings) {
     return *this;
 }
 
-Program& Program::shader(Program::Shader shader, CString source) {
-    std::swap(mShadersSource[size_t(shader)], source);
+Program& Program::shader(Program::Shader shader, CString const& source) {
+    mShadersSource[size_t(shader)] = source;
+    return *this;
+}
+
+Program& Program::shader(Program::Shader shader, CString&& source) noexcept {
+    source.swap(mShadersSource[size_t(shader)]);
     return *this;
 }
 
@@ -62,7 +73,7 @@ Program& Program::addSamplerBlock(size_t index, const SamplerInterfaceBlock* sb)
 #if !defined(NDEBUG)
 io::ostream& operator<<(io::ostream& out, const Program& builder) {
     // FIXME: maybe do better here!
-    return out << "Program";
+    return out << "Program(" << builder.mName.c_str_safe() << ")";
 }
 #endif
 

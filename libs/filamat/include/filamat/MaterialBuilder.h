@@ -65,6 +65,13 @@ public:
         METAL
     };
 
+    enum class Optimization {
+        NONE,
+        PREPROCESSOR,
+        SIZE,
+        PERFORMANCE
+    };
+
 protected:
     // Looks at platform and target API, then decides on shader models and output formats.
     void prepare();
@@ -72,7 +79,8 @@ protected:
     using ShaderModel = filament::driver::ShaderModel;
     Platform mPlatform = Platform::DESKTOP;
     TargetApi mTargetApi = TargetApi::OPENGL;
-    TargetApi mCodeGenTargetApi = TargetApi::OPENGL;
+    Optimization mOptimization = Optimization::NONE;
+    bool mPrintShaders = false;
     utils::bitset32 mShaderModels;
     struct CodeGenParams {
         int shaderModel;
@@ -188,10 +196,13 @@ public:
     // (used to generate code) and final output representations (spirv and/or text).
     MaterialBuilder& targetApi(TargetApi targetApi) noexcept;
 
-    // specifies vulkan vs opengl; this method can be used to override which target API is used
-    // during the code generation step. This can be useful when the post-processor uses a
-    // different intermediate representation.
-    MaterialBuilder& codeGenTargetApi(TargetApi targetApi) noexcept;
+    // specifies the level of optimization to apply to the shaders (default is NONE)
+    MaterialBuilder& optimization(Optimization optimization) noexcept;
+
+    // if true, will output the generated GLSL shader code to stdout
+    // TODO: this is present here for matc's "--print" flag, but ideally does not belong inside
+    // MaterialBuilder
+    MaterialBuilder& printShaders(bool printShaders) noexcept;
 
     // specifies a list of variants that should be filtered out during code generation.
     MaterialBuilder& variantFilter(uint8_t variantFilter) noexcept;

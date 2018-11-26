@@ -310,6 +310,8 @@ void VulkanBinder::bindRasterState(const RasterState& rasterState) noexcept {
             raster0.cullMode != raster1.cullMode ||
             raster0.rasterizerDiscardEnable != raster1.rasterizerDiscardEnable ||
             raster0.depthBiasEnable != raster1.depthBiasEnable ||
+            raster0.depthBiasConstantFactor != raster1.depthBiasConstantFactor ||
+            raster0.depthBiasSlopeFactor != raster1.depthBiasSlopeFactor ||
             blend0.colorWriteMask != blend1.colorWriteMask ||
             blend0.blendEnable != blend1.blendEnable ||
             ds0.depthTestEnable != ds1.depthTestEnable ||
@@ -383,9 +385,9 @@ void VulkanBinder::unbindUniformBuffer(VkBuffer uniformBuffer) noexcept {
 }
 
 void VulkanBinder::unbindImageView(VkImageView imageView) noexcept {
-    for (uint32_t bindingIndex = 0u; bindingIndex < NUM_SAMPLER_BINDINGS; ++bindingIndex) {
-        if (mDescriptorKey.samplers[bindingIndex].imageView == imageView) {
-            mDescriptorKey.samplers[bindingIndex] = {
+    for (auto& sampler : mDescriptorKey.samplers) {
+        if (sampler.imageView == imageView) {
+            sampler = {
                 .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
             };
             mDirtyDescriptor = true;
@@ -420,7 +422,9 @@ void VulkanBinder::evictDescriptors(std::function<bool(const DescriptorKey&)> fi
 
 void VulkanBinder::bindUniformBuffer(uint32_t bindingIndex, VkBuffer uniformBuffer,
         VkDeviceSize offset, VkDeviceSize size) noexcept {
-    assert(bindingIndex < NUM_UBUFFER_BINDINGS);
+    ASSERT_POSTCONDITION(bindingIndex < NUM_UBUFFER_BINDINGS,
+            "Uniform bindings overflow: index = %d, capacity = %d.",
+            bindingIndex, NUM_UBUFFER_BINDINGS);
     auto& key = mDescriptorKey;
     if (key.uniformBuffers[bindingIndex] != uniformBuffer ||
         key.uniformBufferOffsets[bindingIndex] != offset ||
@@ -435,7 +439,9 @@ void VulkanBinder::bindUniformBuffer(uint32_t bindingIndex, VkBuffer uniformBuff
 void VulkanBinder::bindSampler(uint32_t bindingIndex, VkDescriptorImageInfo samplerInfo) noexcept {
     const uint32_t offset = NUM_UBUFFER_BINDINGS;
     assert(bindingIndex >= offset);
-    assert(bindingIndex < offset + NUM_SAMPLER_BINDINGS);
+    ASSERT_POSTCONDITION(bindingIndex < offset + NUM_SAMPLER_BINDINGS,
+            "Sampler bindings overflow: index = %d, capacity = %d.",
+            bindingIndex - offset, NUM_SAMPLER_BINDINGS);
     VkDescriptorImageInfo& imageInfo = mDescriptorKey.samplers[bindingIndex - offset];
     if (imageInfo.sampler != samplerInfo.sampler || imageInfo.imageView != samplerInfo.imageView ||
         imageInfo.imageLayout != samplerInfo.imageLayout) {
@@ -618,6 +624,9 @@ static VulkanBinder::RasterState createDefaultRasterState() {
     rasterization.depthClampEnable = VK_FALSE;
     rasterization.rasterizerDiscardEnable = VK_FALSE;
     rasterization.depthBiasEnable = VK_FALSE;
+    rasterization.depthBiasConstantFactor = 0.0f;
+    rasterization.depthBiasClamp = 0.0f; // 0 is a special value that disables clamping
+    rasterization.depthBiasSlopeFactor = 0.0f;
     rasterization.lineWidth = 1.0f;
 
     VkPipelineColorBlendAttachmentState blending = {};

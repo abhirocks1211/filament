@@ -317,7 +317,7 @@ bool FRenderer::beginFrame(FSwapChain* swapChain) {
     driver.beginFrame(monotonic_clock_ns, mFrameId);
     driver.setPresentationTime(monotonic_clock_ns);
 
-    if (mFrameSkipper.skipFrameNeeded()) {
+    if (!mFrameSkipper.beginFrame()) {
         mFrameInfoManager.cancelFrame();
         driver.endFrame(mFrameId);
         engine.flush();
@@ -366,7 +366,7 @@ void FRenderer::endFrame() {
     engine.flush();     // flush command stream
 
     // make sure we're done with the gcs
-    js.wait(job);
+    js.waitAndRelease(job);
 
 
 #if EXTRA_TIMING_INFO

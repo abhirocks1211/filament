@@ -26,18 +26,22 @@
 
 #include <private/filament/Variant.h>
 
+#include "GLSLPostProcessor.h"
+
 #include "shaders/MaterialInfo.h"
 #include "shaders/ShaderGenerator.h"
 
 #include "eiff/BlobDictionary.h"
 #include "eiff/LineDictionary.h"
 #include "eiff/MaterialInterfaceBlockChunk.h"
-#include "eiff/MaterialGlslChunk.h"
+#include "eiff/MaterialTextChunk.h"
 #include "eiff/MaterialSpirvChunk.h"
 #include "eiff/ChunkContainer.h"
 #include "eiff/SimpleFieldChunk.h"
-#include "eiff/DictionaryGlslChunk.h"
+#include "eiff/DictionaryTextChunk.h"
 #include "eiff/DictionarySpirvChunk.h"
+
+#include "filamat/sca/GLSLTools.h"
 
 using namespace utils;
 
@@ -56,10 +60,9 @@ void MaterialBuilderBase::prepare() {
         mShaderModels.set(static_cast<size_t>(ShaderModel::GL_CORE_41));
     }
 
-    // If the code gen target API was specifically set to Vulkan, generate for Vulkan, otherwise
-    // generate for OpenGL (case OPENGL or ALL)
-    TargetApi glCodeGenTargetApi = mCodeGenTargetApi != TargetApi::VULKAN ?
-            TargetApi::OPENGL : TargetApi::VULKAN;
+    // OpenGL is a special case. If we're doing any optimization, then we need to go to Spir-V.
+    TargetApi glCodeGenTargetApi = mOptimization > MaterialBuilder::Optimization::PREPROCESSOR ?
+            TargetApi::VULKAN : TargetApi::OPENGL;
 
     // Build a list of codegen permutations, which is useful across all types of material builders.
     // The shader model loop starts at 1 to skip ShaderModel::UNKNOWN.
@@ -87,6 +90,7 @@ void MaterialBuilderBase::prepare() {
 
 MaterialBuilder::MaterialBuilder() : mMaterialName("Unnamed") {
     std::fill_n(mProperties, filament::MATERIAL_PROPERTIES_COUNT, false);
+    GLSLTools::init();
     mShaderModels.reset();
 }
 
@@ -254,12 +258,16 @@ MaterialBuilder& MaterialBuilder::platform(Platform platform) noexcept {
 
 MaterialBuilder& MaterialBuilder::targetApi(TargetApi targetApi) noexcept {
     mTargetApi = targetApi;
-    mCodeGenTargetApi = targetApi;
     return *this;
 }
 
-MaterialBuilder& MaterialBuilder::codeGenTargetApi(TargetApi targetApi) noexcept {
-    mCodeGenTargetApi = targetApi;
+MaterialBuilder& MaterialBuilder::optimization(Optimization optimization) noexcept {
+    mOptimization = optimization;
+    return *this;
+}
+
+MaterialBuilder& MaterialBuilder::printShaders(bool printShaders) noexcept {
+    mPrintShaders = printShaders;
     return *this;
 }
 
@@ -286,12 +294,10 @@ void MaterialBuilder::prepareToBuild(MaterialInfo& info) noexcept {
     filament::UniformInterfaceBlock::Builder ibb;
     for (size_t i = 0, c = mParameterCount; i < c; i++) {
         auto const& param = mParameters[i];
-        CString const& uniformName = param.name;
         if (param.isSampler) {
-            sbb.add(uniformName.c_str(), param.samplerType, param.samplerFormat,
-                    param.samplerPrecision);
+            sbb.add(param.name, param.samplerType, param.samplerFormat, param.samplerPrecision);
         } else {
-            ibb.add(uniformName.c_str(), param.size, param.uniformType);
+            ibb.add(param.name, param.size, param.uniformType);
         }
     }
 
@@ -314,7 +320,7 @@ void MaterialBuilder::prepareToBuild(MaterialInfo& info) noexcept {
     info.blendingMode = mBlendingMode;
     info.shading = mShading;
     info.hasShadowMultiplier = mShadowMultiplier;
-    info.samplerBindings.populate(&info.sib);
+    info.samplerBindings.populate(&info.sib, mMaterialName.c_str());
 }
 
 static void showErrorMessage(const char* materialName, uint8_t variant,
@@ -336,6 +342,12 @@ static void showErrorMessage(const char* materialName, uint8_t variant,
 Package MaterialBuilder::build() noexcept {
     MaterialInfo info;
     prepareToBuild(info);
+
+    // Install postprocessor to optimize / compile to Spir-V if necessary.
+    // TODO: remove the postProcessor functionality, since it isn't being used by the outside world.
+    using namespace std::placeholders;
+    GLSLPostProcessor postProcessor(mOptimization, mPrintShaders);
+    this->postProcessor(std::bind(&GLSLPostProcessor::process, postProcessor, _1, _2, _3, _4, _5));
 
     // Create chunk tree.
     ChunkContainer container;
@@ -414,18 +426,12 @@ Package MaterialBuilder::build() noexcept {
             static_cast<uint8_t>(mInterpolation));
     container.addChild(&matInterpolation);
 
-    // In order to generate SPIR-V, we must run the GLSL through the post-processor.
-    if (mCodeGenTargetApi != TargetApi::OPENGL && mPostprocessorCallback == nullptr) {
-        utils::slog.e << "SPIR-V requested for " << mMaterialName.c_str()
-                << " but there is no post-processor." << utils::io::endl;
-    }
-
     SimpleFieldChunk<uint32_t> matShaderModels(ChunkType::MaterialShaderModels,
             mShaderModels.getValue());
     container.addChild(&matShaderModels);
 
     // Generate all shaders.
-    std::vector<GlslEntry> glslEntries;
+    std::vector<TextEntry> glslEntries;
     std::vector<SpirvEntry> spirvEntries;
     std::vector<GlslEntry> metalEntries;
     LineDictionary glslDictionary;
@@ -456,7 +462,7 @@ Package MaterialBuilder::build() noexcept {
         std::vector<uint32_t>* pSpirv = targetApiNeedsSpirv ? &spirv : nullptr;
         std::string* pMsl = targetApiNeedsMsl ? &msl : nullptr;
 
-        GlslEntry glslEntry;
+        TextEntry glslEntry;
         SpirvEntry spirvEntry;
         GlslEntry metalEntry;
 
@@ -569,9 +575,9 @@ Package MaterialBuilder::build() noexcept {
         }
     }
 
-    // Emit GLSL chunks (TextDictionaryReader and MaterialGlslChunk).
-    filamat::DictionaryGlslChunk dicGlslChunk(glslDictionary);
-    MaterialGlslChunk glslChunk(glslEntries, glslDictionary);
+    // Emit GLSL chunks (TextDictionaryReader and MaterialTextChunk).
+    filamat::DictionaryTextChunk dicGlslChunk(glslDictionary, ChunkType::DictionaryGlsl);
+    MaterialTextChunk glslChunk(glslEntries, glslDictionary, ChunkType::MaterialGlsl);
     if (!glslEntries.empty()) {
         container.addChild(&dicGlslChunk);
         container.addChild(&glslChunk);
@@ -601,7 +607,7 @@ Package MaterialBuilder::build() noexcept {
     package.setValid(!errorOccured);
 
     // Free all shaders that were created earlier.
-    for (GlslEntry entry : glslEntries) {
+    for (TextEntry entry : glslEntries) {
         free(entry.shader);
     }
     for (GlslEntry entry : metalEntries) {

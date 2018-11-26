@@ -17,17 +17,17 @@
 #ifndef TNT_FILAMENT_DRIVER_PROGRAM_H
 #define TNT_FILAMENT_DRIVER_PROGRAM_H
 
-#include <array>
-#include <string>
+#include <filament/EngineEnums.h>
+#include <filament/SamplerBindingMap.h>
+
+#include <private/filament/SamplerInterfaceBlock.h>
+#include <private/filament/UniformInterfaceBlock.h>
 
 #include <utils/compiler.h>
 #include <utils/CString.h>
 #include <utils/Log.h>
 
-#include <filament/EngineEnums.h>
-#include <private/filament/SamplerInterfaceBlock.h>
-#include <filament/SamplerBindingMap.h>
-#include <private/filament/UniformInterfaceBlock.h>
+#include <array>
 
 namespace filament {
 
@@ -51,10 +51,12 @@ public:
     ~Program() noexcept;
 
     // sets the material name and variant for diagnostic purposes only
-    Program& diagnostics(const utils::CString& name, uint8_t variantKey = 0);
+    Program& diagnostics(utils::CString const& name, uint8_t variantKey = 0);
+    Program& diagnostics(utils::CString&& name, uint8_t variantKey = 0) noexcept;
 
     // sets one of the program's shader (e.g. vertex, fragment)
-    Program& shader(Shader shader, utils::CString source);
+    Program& shader(Shader shader, utils::CString const& source);
+    Program& shader(Shader shader, utils::CString&& source) noexcept;
 
     // sets a uniform interface block for this program
     Program& addUniformBlock(size_t index, const UniformInterfaceBlock* ib);
@@ -63,27 +65,19 @@ public:
     Program& addSamplerBlock(size_t index, const SamplerInterfaceBlock* ib);
 
     template <typename T>
-    Program& withVertexShader(T source) {
+    Program& withVertexShader(T&& source) {
         return shader(Shader::VERTEX, std::forward<T>(source));
     }
 
     template <typename T>
-    Program& withFragmentShader(T source) {
+    Program& withFragmentShader(T&& source) {
         return shader(Shader::FRAGMENT, std::forward<T>(source));
     }
 
     // sets up sampler bindings for this program
     Program& withSamplerBindings(const SamplerBindingMap* bindings);
 
-    // in order to workaround certain driver bugs, we need to be able to modify the
-    // shader string (this happens in OpenGLProgram.cpp)
-    std::array<utils::CString, NUM_SHADER_TYPES>&
-    getShadersSource() noexcept {
-        return mShadersSource;
-    }
-
-    std::array<utils::CString, NUM_SHADER_TYPES> const&
-    getShadersSource() const noexcept {
+    std::array<utils::CString, NUM_SHADER_TYPES> const& getShadersSource() const noexcept {
         return mShadersSource;
     }
 
@@ -97,7 +91,7 @@ public:
         return mSamplerInterfaceBlocks;
     }
 
-    const SamplerBindingMap* getSamplerBindings() const {
+    const SamplerBindingMap* getSamplerBindings() const noexcept {
         return mSamplerBindings;
     }
 

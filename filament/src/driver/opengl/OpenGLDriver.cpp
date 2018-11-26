@@ -401,6 +401,7 @@ void OpenGLDriver::unbindTexture(GLenum target, GLuint texture_id) noexcept {
 
 void OpenGLDriver::unbindSampler(GLuint sampler) noexcept {
     // unbind this sampler from all the units it might be bound to
+    #pragma nounroll    // clang generates >800B of code!!!
     for (GLuint unit = 0; unit < MAX_TEXTURE_UNITS; unit++) {
         if (state.textures.units[unit].sampler == sampler) {
             bindSampler(unit, 0);
@@ -591,6 +592,26 @@ void OpenGLDriver::depthFunc(GLenum func) noexcept {
     // WARNING: don't call this without updating mRasterState
     update_state(state.raster.depthFunc, func, [&]() {
         glDepthFunc(func);
+    });
+}
+
+void OpenGLDriver::polygonOffset(GLfloat factor, GLfloat units) noexcept {
+    // if we're in the shadow-pass, the default polygon offset is factor = unit = 1
+    // TODO: this should be controlled by filament, instead of being a feature of the driver
+    if (factor == 0 && units == 0) {
+        TargetBufferFlags clearFlags = (TargetBufferFlags)mRenderPassParams.clear;
+        if ((clearFlags & TargetBufferFlags::SHADOW) == TargetBufferFlags::SHADOW) {
+            factor = units = 1.0f;
+        }
+    }
+
+    update_state(state.polygonOffset, { factor, units }, [&]() {
+        if (factor != 0 || units != 0) {
+            glPolygonOffset(factor, units);
+            enable(GL_POLYGON_OFFSET_FILL);
+        } else {
+            disable(GL_POLYGON_OFFSET_FILL);
+        }
     });
 }
 
@@ -1221,8 +1242,8 @@ void OpenGLDriver::createStreamFromTextureId(Driver::StreamHandle sh,
     s->gl.externalTextureId = static_cast<GLuint>(externalTextureId);
     glGenTextures(GLStream::ROUND_ROBIN_TEXTURE_COUNT, s->user_thread.read);
     glGenTextures(GLStream::ROUND_ROBIN_TEXTURE_COUNT, s->user_thread.write);
-    for (size_t i = 0; i < GLStream::ROUND_ROBIN_TEXTURE_COUNT; i++) {
-        s->user_thread.infos[i].ets = mPlatform.createExternalTextureStorage();
+    for (auto& info : s->user_thread.infos) {
+        info.ets = mPlatform.createExternalTextureStorage();
     }
 }
 
@@ -1240,6 +1261,7 @@ void OpenGLDriver::destroyVertexBuffer(Driver::VertexBufferHandle vbh) {
         // bindings of bound buffers are reset to 0
         const size_t targetIndex = getIndexForBufferTarget(GL_ARRAY_BUFFER);
         auto& target = state.buffers.genericBinding[targetIndex];
+        #pragma nounroll
         for (GLuint b : eb->gl.buffers) {
             if (target == b) {
                 target = 0;
@@ -1306,6 +1328,8 @@ void OpenGLDriver::destroyUniformBuffer(Driver::UniformBufferHandle ubh) {
         // bindings of bound buffers are reset to 0
         const size_t targetIndex = getIndexForBufferTarget(GL_UNIFORM_BUFFER);
         auto& target = state.buffers.targets[targetIndex];
+
+        #pragma nounroll // clang generates >1 KiB of code!!
         for (auto& buffer : target.buffers) {
             if (buffer.name == ub->gl.ubo.id) {
                 buffer.name = 0;
@@ -1677,7 +1701,7 @@ void OpenGLDriver::updateSamplerBuffer(Driver::SamplerBufferHandle sbh,
     DEBUG_MARKER()
 
     GLSamplerBuffer* sb = handle_cast<GLSamplerBuffer *>(sbh);
-    *sb->sb = std::move(samplerBuffer);
+    *sb->sb = std::move(samplerBuffer); // NOLINT(performance-move-const-arg)
 }
 
 void OpenGLDriver::update2DImage(Driver::TextureHandle th,
@@ -1975,16 +1999,10 @@ void OpenGLDriver::beginRenderPass(Driver::RenderTargetHandle rth,
     if (UTILS_UNLIKELY(state.draw_fbo != rt->gl.fbo)) {
         bindFramebuffer(GL_FRAMEBUFFER, rt->gl.fbo);
 
-        if ((clearFlags & TargetBufferFlags::SHADOW) == TargetBufferFlags::SHADOW) {
-            enable(GL_POLYGON_OFFSET_FILL);
-        } else {
-            disable(GL_POLYGON_OFFSET_FILL);
-        }
-
         // glInvalidateFramebuffer appeared on GLES 3.0 and GL4.3, for simplicity we just
         // ignore it on GL (rather than having to do a runtime check).
         if (GLES31_HEADERS && !bugs.disable_invalidate_framebuffer) {
-            std::array<GLenum, 3> attachments;
+            std::array<GLenum, 3> attachments; // NOLINT(cppcoreguidelines-pro-type-member-init)
             GLsizei attachmentCount = getAttachments(attachments, rt, discardFlags);
             if (attachmentCount) {
 #if DEBUG_MARKER_LEVEL == DEBUG_MARKER_SYSTRACE
@@ -2035,7 +2053,7 @@ void OpenGLDriver::endRenderPass(int) {
         GLRenderTarget* rt = handle_cast<GLRenderTarget*>(mRenderPassTarget);
         bindFramebuffer(GL_FRAMEBUFFER, rt->gl.fbo);
 
-        std::array<GLenum, 3> attachments;
+        std::array<GLenum, 3> attachments; // NOLINT(cppcoreguidelines-pro-type-member-init)
         GLsizei attachmentCount = getAttachments(attachments, rt, discardFlags);
         if (attachmentCount) {
 #if DEBUG_MARKER_LEVEL == DEBUG_MARKER_SYSTRACE
@@ -2067,7 +2085,7 @@ void OpenGLDriver::discardSubRenderTargetBuffers(Driver::RenderTargetHandle rth,
         if (left < right && bottom < top) {
             bindFramebuffer(GL_FRAMEBUFFER, rt->gl.fbo);
 
-            std::array<GLenum, 3> attachments;
+            std::array<GLenum, 3> attachments; // NOLINT(cppcoreguidelines-pro-type-member-init)
             GLsizei attachmentCount = getAttachments(attachments, rt, buffers);
             if (attachmentCount) {
                 glInvalidateSubFramebuffer(GL_FRAMEBUFFER, attachmentCount, attachments.data(),
@@ -2717,18 +2735,19 @@ void OpenGLDriver::blit(TargetBufferFlags buffers,
 }
 
 void OpenGLDriver::draw(
-        Driver::ProgramHandle ph,
-        Driver::RasterState rs,
+        Driver::PipelineState state,
         Driver::RenderPrimitiveHandle rph) {
     DEBUG_MARKER()
 
-    OpenGLProgram* p = handle_cast<OpenGLProgram*>(ph);
+    OpenGLProgram* p = handle_cast<OpenGLProgram*>(state.program);
     useProgram(p);
 
     const GLRenderPrimitive* rp = handle_cast<const GLRenderPrimitive *>(rph);
     bindVertexArray(rp);
 
-    setRasterState(rs);
+    setRasterState(state.rasterState);
+
+    polygonOffset(state.polygonOffset.slope, state.polygonOffset.constant);
 
     glDrawRangeElements(GLenum(rp->type), rp->minIndex, rp->maxIndex, rp->count,
             rp->gl.indicesType, reinterpret_cast<const void*>(rp->offset));

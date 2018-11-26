@@ -61,6 +61,13 @@ struct lessCStrings {
     }
 };
 
+// This can be used to creates a string from a string literal -- w/o underlying allocations.
+// e.g.:
+//   StaticString s("Hello World!");
+//
+template <size_t N>
+using StringLiteral = const char[N];
+
 //! \publicsection
 class StaticString {
 public:
@@ -72,13 +79,6 @@ public:
     using const_iterator  = const value_type*;
 
     StaticString() noexcept = default;
-
-    // This can be used to creates a string from a string literal -- w/o underlying allocations.
-    // e.g.:
-    //   StaticString s("Hello World!");
-    //
-    template <size_t N>
-    using StringLiteral = const char[N];
 
     template <size_t N>
     StaticString(StringLiteral<N> const& other) noexcept // NOLINT(google-explicit-constructor)
@@ -172,11 +172,22 @@ public:
     using const_iterator  = const value_type*;
 
     CString() noexcept = default;
+
     CString(const char* cstr, size_type length);
+
+    template<size_t N>
+    explicit CString(StringLiteral<N> const& other) noexcept // NOLINT(google-explicit-constructor)
+            : CString(other, N - 1) {
+    }
+
+    CString(StaticString const& s) : CString(s.c_str(), s.size()) {}
+
     CString(const CString& rhs);
+
     CString(CString&& rhs) noexcept {
         this->swap(rhs);
     }
+
 
     // this creates a CString from a null-terminated C string, this allocates memory and copies
     // its content. this is explicit because this operation is costly.
@@ -185,9 +196,7 @@ public:
     CString& operator=(const CString& rhs);
 
     CString& operator=(CString&& rhs) noexcept {
-        if (this != &rhs) {
-            this->swap(rhs);
-        }
+        this->swap(rhs);
         return *this;
     }
 
@@ -260,6 +269,12 @@ public:
         return begin()[size() - 1];
     }
 
+    // placement new declared as "throw" to avoid the compiler's null-check
+    inline void* operator new(size_t size, void* ptr) {
+        assert(ptr);
+        return ptr;
+    }
+
 private:
     struct Data {
         size_type length;
@@ -279,6 +294,10 @@ private:
         return strncmp(data(), rhs.data(), size());
     }
 
+    friend bool operator==(CString const& lhs, StaticString const& rhs) noexcept {
+        return (lhs.data() == rhs.data()) ||
+               ((lhs.size() == rhs.size()) && !strncmp(lhs.data(), rhs.data(), lhs.size()));
+    }
     friend bool operator==(CString const& lhs, CString const& rhs) noexcept {
         return (lhs.data() == rhs.data()) ||
                ((lhs.size() == rhs.size()) && !strncmp(lhs.data(), rhs.data(), lhs.size()));

@@ -57,14 +57,15 @@ public:
 
         // Size is chosen so that we can store at least std::function<>
         // the alignas() qualifier ensures we're multiple of a cache-line.
-        static constexpr size_t JOB_STORAGE_SIZE = // NOLINT(cert-err58-cpp)
-                (std::max(sizeof(std::function<void()>), size_t(48)) + sizeof(void*) - 1)
-                / sizeof(void*);
+        static constexpr size_t JOB_STORAGE_SIZE_BYTES =
+                sizeof(std::function<void()>) > 48 ? sizeof(std::function<void()>) : 48;
+        static constexpr size_t JOB_STORAGE_SIZE_WORDS =
+                (JOB_STORAGE_SIZE_BYTES + sizeof(void*) - 1) / sizeof(void*);
 
         // keep it first, so it's correctly aligned with all architectures
         // this is were we store the job's data, typically a std::function<>
                                                                 // v7 | v8
-        void* storage[JOB_STORAGE_SIZE];                        // 48 | 48
+        void* storage[JOB_STORAGE_SIZE_WORDS];                  // 48 | 48
         JobFunc function;                                       //  4 |  8
         uint16_t parent;                                        //  2 |  2
         std::atomic<uint16_t> runningJobCount = { 1 };          //  2 |  2
@@ -215,38 +216,77 @@ public:
         return job;
     }
 
-    // Add job to this thread's execution queue.
-    // Current thread must be owned by JobSystem's thread pool. See adopt().
+
+    /*
+     * Jobs are normally finished automatically, this can be used to cancel a job before it is run.
+     *
+     * Never use this once a flavor of run() has been called.
+     */
+    void cancel(Job*& job) noexcept;
+
+    /*
+     * Adds a reference to a Job.
+     *
+     * This allows the caller to waitAndRelease() on this job from multiple threads.
+     * Use runAndWait() if waiting from multiple threads is not needed.
+     *
+     * This job MUST BE waited on with waitAndRelease(), or released with release().
+     */
+    Job* retain(Job* job) noexcept;
+
+    /*
+     * Releases a reference from a Job obtained with runAndRetain() or a call to retain().
+     *
+     * The job can't be used after this call.
+     */
+    void release(Job*& job) noexcept;
+    void release(Job*&& job) noexcept {
+        Job* p = job;
+        release(p);
+    }
+
+    /*
+     * Add job to this thread's execution queue. It's reference will drop automatically.
+     * Current thread must be owned by JobSystem's thread pool. See adopt().
+     *
+     * The job can't be used after this call.
+     */
     enum runFlags { DONT_SIGNAL = 0x1 };
     void run(Job*& job, uint32_t flags = 0) noexcept;
-
-    // This version allow a call such as run(createJob(...));
-    void run(Job*&& job, uint32_t flags = 0) noexcept {
+    void run(Job*&& job, uint32_t flags = 0) noexcept { // allows run(createJob(...));
         Job* p = job;
         run(p);
     }
 
-    // run a job and keep a reference to it. This job MUST BE waited on with wait().
+    /*
+     * Add job to this thread's execution queue and and keep a reference to it.
+     * Current thread must be owned by JobSystem's thread pool. See adopt().
+     *
+     * This job MUST BE waited on with wait(), or released with release().
+     */
     Job* runAndRetain(Job* job, uint32_t flags = 0) noexcept;
 
-    // Wait on a job and destroys it. The job must first be obtained from runAndRetain().
-    // Current thread must be owned by JobSystem's thread pool. See adopt().
-    void wait(Job*& job) noexcept;
+    /*
+     * Wait on a job and destroys it.
+     * Current thread must be owned by JobSystem's thread pool. See adopt().
+     *
+     * The job must first be obtained from runAndRetain() or retain().
+     * The job can't be used after this call.
+     */
+    void waitAndRelease(Job*& job) noexcept;
 
-    void runAndWait(Job*& job) noexcept {
-        runAndRetain(job);
-        wait(job);
-    }
-
-    // This version allow a call such as runAndWait(createJob(...));
-    void runAndWait(Job*&& job) noexcept {
+    /*
+     * Runs and wait for a job. This is equivalent to calling
+     *  runAndRetain(job);
+     *  wait(job);
+     *
+     * The job can't be used after this call.
+     */
+    void runAndWait(Job*& job) noexcept;
+    void runAndWait(Job*&& job) noexcept { // allows runAndWait(createJob(...));
         Job* p = job;
         runAndWait(p);
     }
-
-    // jobs are normally finished automatically, this can be used to cancel a job
-    // before it is run.
-    void finish(Job* job) noexcept;
 
     // for debugging
     friend utils::io::ostream& operator << (utils::io::ostream& out, JobSystem const& js);
@@ -296,18 +336,6 @@ private:
         uint32_t mask;
     };
 
-    class Pin {
-        JobSystem& js;
-        Job const* job;
-    public:
-        Pin(JobSystem& js, Job const* job) noexcept : js(js), job(job) {
-            js.incRef(job);
-        }
-        ~Pin() noexcept {
-            js.decRef(job);
-        }
-    };
-
     static_assert(sizeof(ThreadState) % CACHELINE_SIZE == 0,
             "ThreadState doesn't align to a cache line");
 
@@ -326,6 +354,7 @@ private:
 
     void loop(ThreadState* threadState) noexcept;
     bool execute(JobSystem::ThreadState& state) noexcept;
+    void finish(Job* job) noexcept;
 
     void put(WorkQueue& workQueue, Job* job) noexcept {
         size_t index = job - mJobStorageBase;
@@ -362,7 +391,7 @@ private:
 
     alignas(16) // at least we align to half (or quarter) cache-line
     aligned_vector<ThreadState> mThreadStates;          // actual data is stored offline
-    std::atomic<bool> mExitRequested = { 0 };           // this one is almost never written
+    std::atomic<bool> mExitRequested = { false };       // this one is almost never written
     std::atomic<uint16_t> mAdoptedThreads = { 0 };      // this one is almost never written
     Job* const mJobStorageBase;                         // Base for conversion to indices
     uint16_t mThreadCount = 0;                          // total # of threads in the pool

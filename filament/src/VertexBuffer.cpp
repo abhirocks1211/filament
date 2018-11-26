@@ -71,11 +71,11 @@ VertexBuffer::Builder& VertexBuffer::Builder::attribute(VertexAttribute attribut
 
 #ifndef NDEBUG
         if (byteOffset & 0x3) {
-            utils::slog.d << "[performace] VertexBuffer::Builder::attribute() "
+            utils::slog.d << "[performance] VertexBuffer::Builder::attribute() "
                              "byteOffset not multiple of 4" << utils::io::endl;
         }
         if (byteStride & 0x3) {
-            utils::slog.d << "[performace] VertexBuffer::Builder::attribute() "
+            utils::slog.d << "[performance] VertexBuffer::Builder::attribute() "
                              "byteStride not multiple of 4" << utils::io::endl;
         }
 #endif
@@ -134,6 +134,7 @@ FVertexBuffer::FVertexBuffer(FEngine& engine, const VertexBuffer::Builder& build
 
     auto const& declaredAttributes = mDeclaredAttributes;
     auto const& attributes = mAttributes;
+    #pragma nounroll
     for (size_t i = 0, n = attributeArray.size(); i < n; ++i) {
         if (declaredAttributes[i]) {
             attributeArray[i].offset = attributes[i].offset;

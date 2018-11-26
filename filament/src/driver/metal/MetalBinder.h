@@ -40,9 +40,7 @@ static constexpr uint32_t VERTEX_BUFFER_START = BindingPoints::COUNT;
 static constexpr uint32_t MAX_VERTEX_ATTRIBUTES = filament::ATTRIBUTE_INDEX_COUNT;
 static constexpr uint32_t NUM_UBUFFER_BINDINGS = filament::BindingPoints::COUNT;
 static constexpr uint32_t SAMPLER_BINDINGS_START = NUM_UBUFFER_BINDINGS;
-
-// todo: saw this in VulkanBinder, but how do we know this?
-static constexpr uint32_t NUM_SAMPLER_BINDINGS = 8;
+static constexpr uint32_t NUM_SAMPLER_BINDINGS = filament::MAX_SAMPLER_COUNT;
 
 struct MetalBinderImpl;
 

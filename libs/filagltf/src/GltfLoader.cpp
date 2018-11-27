@@ -13,12 +13,38 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#define TINYGLTF_IMPLEMENTATION
+#define STB_IMAGE_IMPLEMENTATION
+#define STB_IMAGE_WRITE_IMPLEMENTATION
 
 #include <filagltf/GltfLoader.h>
+#include <tiny_gltf.h>
+
 #include <iostream>
 
-int main(int argc, char* argv[]) {
-    GltfLoader loader = GltfLoader();
-    loader.Load("/Users/mlw/glTF-Sample-Models/2.0/WaterBottle/glTF/WaterBottle.gltf");
-    return 0;
+GltfLoader::GltfLoader(){}
+GltfLoader::~GltfLoader(){}
+
+using namespace tinygltf;
+
+void GltfLoader::Load(const std::string &filename){
+    Model model;
+    TinyGLTF loader;
+    std::string err;
+    std::string warn;
+    bool ret = loader.LoadASCIIFromFile(&model, &err, &warn, filename);
+
+    if (!warn.empty()) {
+        printf("Warn: %s\n", warn.c_str());
+    }
+
+    if (!err.empty()) {
+        printf("Err: %s\n", err.c_str());
+    }
+
+    if (!ret) {
+        printf("Failed to parse glTF\n");
+    }
+
 }
+

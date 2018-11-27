@@ -8,11 +8,11 @@ set(PUBLIC_HDR_DIR include)
 # Sources and headers
 # ==================================================================================================
 set(PUBLIC_HDRS
-        include/filagltf/gltfLoader.h
+        include/filagltf/GltfLoader.h
         )
 
 set(SRCS
-        src/gltfLoader.cpp
+        src/GltfLoader.cpp
         )
 
 # ==================================================================================================
@@ -24,4 +24,4 @@ add_library(${TARGET} STATIC ${PUBLIC_HDRS} ${SRCS})
 
 target_include_directories(${TARGET} PUBLIC ${PUBLIC_HDR_DIR})
 
-target_link_libraries(${TARGET} PUBLIC tinyexr)
+target_link_libraries(${TARGET} PUBLIC tinygltf)

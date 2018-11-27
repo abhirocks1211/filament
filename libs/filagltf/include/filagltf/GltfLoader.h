@@ -14,6 +14,18 @@
  * limitations under the License.
  */
 
-#include <filagltf/gltfLoader.h>
-#include <tinyexr.h>
+#ifndef TNT_GLTFLOADER_H
+#define TNT_GLTFLOADER_H
 
+#include <string>
+
+class GltfLoader {
+public:
+    GltfLoader();
+    ~GltfLoader();
+
+    void Load(const std::string &filename);
+};
+
+
+#endif //TNT_GLTFLOADER_H

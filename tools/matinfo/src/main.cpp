@@ -873,7 +873,7 @@ static bool parseChunks(Config config, void* data, size_t size) {
 
             const auto& item = info[config.shaderIndex];
             parser.getShader(item.shaderModel, item.variant, item.pipelineStage, builder);
-            std::cout << builder.getShader();
+            std::cout << builder.getShader().c_str();
 
             return true;
         }

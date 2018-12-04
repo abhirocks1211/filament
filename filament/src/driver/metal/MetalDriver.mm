@@ -476,7 +476,6 @@ void MetalDriver::beginRenderPass(Driver::RenderTargetHandle rth,
     for (auto& i : pImpl->mUniformState) {
         i.invalidate();
     }
-    [pImpl->mCurrentCommandEncoder setFrontFacingWinding:MTLWindingCounterClockwise];
     pImpl->mPipelineState.invalidate();
     pImpl->mDepthStencilState.invalidate();
     pImpl->mCullModeState.invalidate();

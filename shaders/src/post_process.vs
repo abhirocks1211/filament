@@ -23,4 +23,11 @@ void main() {
     vertex_uv = (floor(vertex_uv) + vec2(0.5, 0.5)) * frameUniforms.resolution.zw;
 #endif
     gl_Position = position;
+
+#if POST_PROCESS_ANTI_ALIASING && defined(TARGET_METAL_ENVIRONMENT)
+    // Metal's texture space is inverted that of Filament's (OpenGL's). To fix, we vertically
+    // flip all render targets so samplers sampling from them (like post-processing and the shadow
+    // map) will be correct. Here we flip back so the final result is upright.
+    gl_Position.y = -(gl_Position.y);
+#endif
 }

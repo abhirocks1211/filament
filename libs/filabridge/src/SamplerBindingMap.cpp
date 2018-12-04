@@ -24,10 +24,10 @@
 
 namespace filament {
 
-void SamplerBindingMap::populate(SamplerInterfaceBlock* perMaterialSib, const char* materialName) {
-    // To avoid collision, the sampler bindings start after the last UBO binding.
-    const uint8_t numUniformBlockBindings = filament::BindingPoints::COUNT;
-    uint8_t offset = numUniformBlockBindings;
+void SamplerBindingMap::populate(uint8_t samplerBindingStart, SamplerInterfaceBlock* perMaterialSib,
+        const char* materialName) {
+    uint8_t offset = samplerBindingStart;
+    uint8_t samplerIndexLimit = static_cast<uint8_t>(offset + filament::MAX_SAMPLER_COUNT);
     bool overflow = false;
     for (uint8_t blockIndex = 0; blockIndex < filament::BindingPoints::COUNT; blockIndex++) {
         mSamplerBlockOffsets[blockIndex] = offset;
@@ -40,7 +40,7 @@ void SamplerBindingMap::populate(SamplerInterfaceBlock* perMaterialSib, const ch
         if (sib) {
             auto sibFields = sib->getSamplerInfoList();
             for (auto sInfo : sibFields) {
-                if (offset - numUniformBlockBindings >= filament::MAX_SAMPLER_COUNT) {
+                if (offset > samplerIndexLimit) {
                     overflow = true;
                 }
                 addSampler({
@@ -62,6 +62,7 @@ void SamplerBindingMap::populate(SamplerInterfaceBlock* perMaterialSib, const ch
         utils::slog.e << utils::io::endl;
         offset = 0;
         for (uint8_t blockIndex = 0; blockIndex < filament::BindingPoints::COUNT; blockIndex++) {
+            uint8_t samplerBlockOffset = mSamplerBlockOffsets[blockIndex];
             filament::SamplerInterfaceBlock const* sib;
             if (blockIndex == filament::BindingPoints::PER_MATERIAL_INSTANCE) {
                 sib = perMaterialSib;
@@ -71,7 +72,8 @@ void SamplerBindingMap::populate(SamplerInterfaceBlock* perMaterialSib, const ch
             if (sib) {
                 auto sibFields = sib->getSamplerInfoList();
                 for (auto sInfo : sibFields) {
-                    utils::slog.e << "  " << offset << " " << sInfo.name.c_str() << utils::io::endl;
+                    utils::slog.e << "  " << offset << " " << sInfo.name.c_str() <<
+                        " binding(" << samplerBlockOffset + sInfo.offset << ")" << utils::io::endl;
                     offset++;
                 }
             }

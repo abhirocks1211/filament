@@ -697,8 +697,7 @@ void MetalDriver::draw(Driver::PipelineState ps, Driver::RenderPrimitiveHandle r
         }
     }
 
-    uint8_t offset = NUM_UBUFFER_BINDINGS;
-
+    uint8_t offset = 0;
     for (uint8_t bufferIdx = 0; bufferIdx < NUM_SAMPLER_BINDINGS; bufferIdx++) {
         MetalSamplerBuffer* metalSb = pImpl->mSamplerBindings[bufferIdx];
         if (!metalSb) {
@@ -737,7 +736,7 @@ void MetalDriver::draw(Driver::PipelineState ps, Driver::RenderPrimitiveHandle r
 
     NSRange range {
         .length = NUM_SAMPLER_BINDINGS,
-        .location = SAMPLER_BINDINGS_START
+        .location = 0
     };
     if (pImpl->mTexturesDirty) {
         [pImpl->mCurrentCommandEncoder setFragmentTextures:pImpl->mBoundTextures

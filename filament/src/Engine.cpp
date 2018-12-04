@@ -215,6 +215,9 @@ void FEngine::init() {
     mLightManager.init(*this);
     mDFG.reset(new DFG(*this));
 
+    uint8_t samplerBindingStart = filament::getSamplerBindingStart(mBackend);
+    mPostProcessSamplerBindingMap.populate(samplerBindingStart);
+
     // Always initialize the default material, most materials' depth shaders fallback on it.
     mDefaultMaterial = upcast(
             FMaterial::DefaultMaterialBuilder()
@@ -434,15 +437,10 @@ Handle<HwProgram> FEngine::createPostProcessProgram(MaterialParser& parser,
     // need to populate a SamplerBindingMap and pass a weak reference to Program. Binding maps are
     // normally owned by Material, but in this case we'll simply own a copy right here in static
     // storage.
-    static const SamplerBindingMap* pBindings = [] {
-        static SamplerBindingMap bindings;
-        bindings.populate();
-        return &bindings;
-    }();
 
     Program pb;
     pb      .diagnostics(CString("Post Process"))
-            .withSamplerBindings(pBindings)
+            .withSamplerBindings(&mPostProcessSamplerBindingMap)
             .withVertexShader(vShaderBuilder.getShader())
             .withFragmentShader(fShaderBuilder.getShader())
             .addUniformBlock(BindingPoints::PER_VIEW, &PerViewUib::getUib())

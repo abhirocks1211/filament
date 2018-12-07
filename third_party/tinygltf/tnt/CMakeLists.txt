@@ -1,0 +1,26 @@
+cmake_minimum_required(VERSION 3.1)
+project(tinygltf)
+
+set(TARGET tinygltf)
+set(SRC_DIR ${CMAKE_CURRENT_SOURCE_DIR}/..)
+set(PUBLIC_HDR_DIR ${SRC_DIR})
+
+# ==================================================================================================
+# Sources and headers
+# ==================================================================================================
+set(PUBLIC_HDRS ${SRC_DIR}/tiny_gltf.h)
+
+set(SRCS ${SRC_DIR}/tnt/tiny_gltf.cc)
+
+# ==================================================================================================
+# Include and target definitions
+# ==================================================================================================
+include_directories(${PUBLIC_HDR_DIR})
+
+add_library(${TARGET} STATIC ${PUBLIC_HDRS} ${SRCS})
+target_include_directories (${TARGET} PUBLIC ${PUBLIC_HDR_DIR})
+target_link_libraries(${TARGET} LINK_PUBLIC z)
+
+if (CLANG_CL)
+    target_compile_options(${TARGET} PRIVATE -Wno-unused-variable)
+endif()

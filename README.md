@@ -27,7 +27,7 @@ badges above.
   real-time physically based rendering, the graphics capabilities and implementation of Filament.
   This document explains the math and reasoning behind most of our decisions. This document is a
   good introduction to PBR for graphics programmers.
-- [Materials](https://google.github.io/filament//Materials.md.html), the full reference
+- [Materials](https://google.github.io/filament/Materials.md.html), the full reference
   documentation for our material system. This document explains our different material models, how
   to use the material compiler `matc` and how to write custom materials.
 - [Material Properties](https://google.github.io/filament/Material%20Properties.pdf), a reference
@@ -37,22 +37,21 @@ badges above.
 
 Here are a few sample materials rendered with Filament:
 
-![Brushed copper](docs/images/samples/brushed_copper_2.png)
-![Chess set](docs/images/samples/chess1.png)
-![Environment lighting](docs/images/samples/spheres.png)
-![Material 1](docs/images/samples/material_01.png)
-![Material 2](docs/images/samples/material_02.png)
-![Material 3](docs/images/samples/material_03.png)
-![Material 4](docs/images/samples/material_04.png)
-![Material 6](docs/images/samples/material_06.png)
-![Material 7](docs/images/samples/material_07.png)
-![Material 8](docs/images/samples/material_08.png)
+![Damaged Helmet](docs/images/samples/model_damaged_helmet.jpg)
+![Helmet](docs/images/samples/model_helmet.jpg)
+![Brushed copper](docs/images/samples/brushed_copper_2.jpg)
+![Chess set](docs/images/samples/chess1.jpg)
+![Material 1](docs/images/samples/material_01.jpg)
+![Material 2](docs/images/samples/material_02.jpg)
+![Material 3](docs/images/samples/material_03.jpg)
+![Material 6](docs/images/samples/material_06.jpg)
+![Material 8](docs/images/samples/material_08.jpg)
 
 ## Features
 
 ### APIs
 
-- Native C++ API for Android, Linux, macOS and Windows
+- Native C++ API for Android, iOS, Linux, macOS and Windows
 - Java/JNI API for Android, Linux, macOS and Windows
 - JavaScript API
 
@@ -138,6 +137,7 @@ and tools.
   - `matinfo`              Displays information about materials compiled with `matc`
   - `mipgen`               Generates a series of miplevels from a source image
   - `normal-blending`:     Tool to blend normal maps
+  - `resgen`               Aggregates binary blobs into embeddable resources
   - `roughness-prefilter`: Pre-filters a roughness map from a normal map to reduce aliasing
   - `skygen`:              Physically-based sky environment texture generator
   - `specular-color`:      Computes the specular color of conductors based on spectral data
@@ -348,7 +348,7 @@ Create the msBuild project:
 ```
 
 Check out the output and make sure Clang for Windows frontend was found. You should see a line
-showing the following ouput.
+showing the following output.
 ```
 Clang:C:/Program Files/LLVM/msbuild-bin/cl.exe
 ```
@@ -408,7 +408,7 @@ ninja
 To confirm Filament was properly built, run the following command from the build directory:
 
 ```
-./samples/material_sandbox --ibl=../../samples/envs/office ../../assets/models/sphere/sphere.obj
+./samples/material_sandbox --ibl=../../samples/envs/pillars ../../assets/models/sphere/sphere.obj
 ```
 
 ### Android
@@ -896,6 +896,11 @@ as possible. The current external dependencies of the runtime library include:
 
 - STL
 - robin-map (header only library)
+
+When building with Vulkan enabled, we have a few additional small dependencies:
+
+- vkmemalloc
+- smol-v
 
 Host tools (such as `matc` or `cmgen`) can use external dependencies freely.
 

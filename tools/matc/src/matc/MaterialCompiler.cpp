@@ -22,14 +22,13 @@
 
 #include <filamat/MaterialBuilder.h>
 
-#include "Enums.h"
+#include <filamat/Enums.h>
+
 #include "MaterialLexeme.h"
 #include "MaterialLexer.h"
 #include "JsonishLexer.h"
 #include "JsonishParser.h"
 #include "ParametersProcessor.h"
-#include "sca/GLSLTools.h"
-#include "sca/GLSLPostProcessor.h"
 
 using namespace utils;
 using namespace filamat;
@@ -43,8 +42,6 @@ static constexpr const char* CONFIG_KEY_FRAGMENT_SHADER = "fragment";
 static constexpr const char* CONFIG_KEY_TOOL = "tool";
 
 MaterialCompiler::MaterialCompiler() {
-    GLSLTools::init();
-
     mConfigProcessor[CONFIG_KEY_MATERIAL] = &MaterialCompiler::processMaterial;
     mConfigProcessor[CONFIG_KEY_VERTEX_SHADER] = &MaterialCompiler::processVertexShader;
     mConfigProcessor[CONFIG_KEY_FRAGMENT_SHADER] = &MaterialCompiler::processFragmentShader;
@@ -54,10 +51,6 @@ MaterialCompiler::MaterialCompiler() {
     mConfigProcessorJSON[CONFIG_KEY_VERTEX_SHADER] = &MaterialCompiler::processVertexShaderJSON;
     mConfigProcessorJSON[CONFIG_KEY_FRAGMENT_SHADER] = &MaterialCompiler::processFragmentShaderJSON;
     mConfigProcessorJSON[CONFIG_KEY_TOOL] = &MaterialCompiler::ignoreLexemeJSON;
-}
-
-MaterialCompiler::~MaterialCompiler() {
-    GLSLTools::terminate();
 }
 
 bool MaterialCompiler::processMaterial(const MaterialLexeme& jsonLexeme,
@@ -287,25 +280,14 @@ bool MaterialCompiler::run(const Config& config) {
     builder
         .platform(config.getPlatform())
         .targetApi(config.getTargetApi())
-        .codeGenTargetApi(config.getCodeGenTargetApi())
+        .optimization(config.getOptimizationLevel())
+        .printShaders(config.printShaders())
         .variantFilter(config.getVariantFilter() | builder.getVariantFilter());
-
-    // At this point the builder may be able to generate valid shaders if the user populated the
-    // properties section in the config file properly. If she hasn't, guess them.
-    GLSLTools glslTools;
-    if (!glslTools.process(builder)) {
-        std::cerr << "Could not compile material " << input->getName() << std::endl;
-        return false;
-    }
-
-    // Install postprocessor (to optimize/strip GLSL).
-    GLSLPostProcessor postProcessor(config);
-
-    builder.postProcessor(std::bind(&GLSLPostProcessor::process, postProcessor, _1, _2, _3, _4, _5));
 
     // Write builder.build() to output.
     Package package = builder.build();
     if (!package.isValid()) {
+        std::cerr << "Could not compile material " << input->getName() << std::endl;
         return false;
     }
     return writePackage(package, config);

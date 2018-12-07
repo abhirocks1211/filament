@@ -110,10 +110,39 @@ public:
         float scaleRate = 0.125f;                       //!< rate at which the scale will change
         float targetFrameTimeMilli = 1000.0f / 60.0f;   //!< desired frame time, or budget.
         float headRoomRatio = 0.0f;                     //!< additional headroom for the GPU
-        float reserved[5] = { 0.0f };                   //!< reserved fields, must be zero
         uint8_t history = 9;                            //!< history size
         bool enabled = false;                           //!< enable or disable dynamic resolution
         bool homogeneousScaling = false;                //!< set to true to force homogeneous scaling
+    };
+
+    enum class QualityLevel : int8_t {
+        LOW,
+        MEDIUM,
+        HIGH,
+        ULTRA
+    };
+
+    /**
+     * Structure used to set the quality of the rendering of a View. This structure
+     * offers separate quality settings for different parts of the rendering pipeline:
+     *
+     * hdrColorBuffer: sets the quality of the HDR color buffer. A quality of HIGH or ULTRA means
+     *              using an RGB16F or RGBA16F color buffer. This means colors in the LDR
+     *              range (0..1) have a 10 bit precision. A quality of LOW or MEDIUM means
+     *              using an R11G11B10F opaque color buffer or an RGBA16F transparent color
+     *              buffer. With R11G11B10F colors in the LDR range have a precision of either
+     *              6 bits (red and green channels) or 5 bits (blue channel).
+     */
+    struct RenderQuality {
+        QualityLevel hdrColorBuffer = QualityLevel::HIGH; //!< quality of the color buffer
+    };
+
+    /**
+     * List of available post-processing anti-aliasing techniques.
+     */
+    enum AntiAliasing : uint8_t {
+        NONE = 0,
+        FXAA = 1
     };
 
     enum class DepthPrepass : int8_t {
@@ -178,6 +207,10 @@ public:
      */
     Scene* getScene() noexcept;
 
+    /**
+     * Returns the Scene currently associated with this View.
+     * @return A pointer to the Scene associated to this View. nullptr if no Scene is set.
+     */
     Scene const* getScene() const noexcept {
         return const_cast<View*>(this)->getScene();
     }
@@ -307,7 +340,7 @@ public:
     void setRenderTarget(TargetBufferFlags discard = TargetBufferFlags::ALL) noexcept;
 
     /**
-     * Sets how many samples are to be used for MSAA. Default is 1.
+     * Sets how many samples are to be used for MSAA. Default is 1 and disables MSAA.
      *
      * @param count number of samples to use for multi-sampled anti-aliasing.\n
      *              0: treated as 1
@@ -319,27 +352,26 @@ public:
     void setSampleCount(uint8_t count = 1) noexcept;
 
     /**
-     * Returns the sample count set by setSampleCount(). Effective sample could be different
+     * Returns the sample count set by setSampleCount(). Effective sample could be different.
+     * A value of 0 or 1 means MSAA is disabled.
+     *
      * @return value set by setSampleCount().
      */
     uint8_t getSampleCount() const noexcept;
 
-    enum AntiAliasing : uint8_t {
-        NONE = 0,
-        FXAA = 1
-    };
-
     /**
-     * Enables or disables in the post-processing stage. Enabled by default.
+     * Enables or disables anti-aliasing in the post-processing stage. Enabled by default.
+     * MSAA can be enabled in addition, see setSampleCount().
      *
      * @param type FXAA for enabling, NONE for disabling anti-aliasing.
      */
     void setAntiAliasing(AntiAliasing type) noexcept;
 
     /**
-     * Queries whether FXAA is enabled during the post-processing stage.
+     * Queries whether anti-aliasing is enabled during the post-processing stage. To query
+     * whether MSAA is enabled, see getSampleCount().
      *
-     * @return true if FXAA is enabled, false if not.
+     * @return The post-processing anti-aliasing method.
      */
     AntiAliasing getAntiAliasing() const noexcept;
 
@@ -356,6 +388,20 @@ public:
      * @return value set by setDynamicResolutionOptions().
      */
     DynamicResolutionOptions getDynamicResolutionOptions() const noexcept;
+
+    /**
+     * Sets the rendering quality for this view. Refer to RenderQuality for more
+     * information about the different settings available.
+     *
+     * @param renderQuality The render quality to use on this view
+     */
+    void setRenderQuality(RenderQuality const& renderQuality) noexcept;
+
+    /**
+     * Returns the render quality used by this view.
+     * @return value set by setRenderQuality().
+     */
+    RenderQuality getRenderQuality() const noexcept;
 
     /**
      * Sets options relative to dynamic lighting for this view.
@@ -395,15 +441,16 @@ public:
      */
     void setPostProcessingEnabled(bool enabled) noexcept;
 
+    //! Returns true if post-processing is enabled. See setPostProcessingEnabled() for more info.
     bool isPostProcessingEnabled() const noexcept;
 
     // for debugging...
 
-    //! debugging: allows to entirely disable culling. (culling enabled by default).
-    void setCulling(bool culling) noexcept;
+    //! debugging: allows to entirely disable frustum culling. (culling enabled by default).
+    void setFrustumCullingEnabled(bool culling) noexcept;
 
-    //! debugging: returns whether culling is enabled.
-    bool isCullingEnabled() const noexcept;
+    //! debugging: returns whether frustum culling is enabled.
+    bool isFrustumCullingEnabled() const noexcept;
 
     //! debugging: sets the Camera used for rendering. It may be different from the culling camera.
     void setDebugCamera(Camera* camera) noexcept;

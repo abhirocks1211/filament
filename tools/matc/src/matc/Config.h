@@ -44,13 +44,7 @@ public:
 
     using Platform = filamat::MaterialBuilder::Platform;
     using TargetApi = filamat::MaterialBuilder::TargetApi;
-
-    enum class Optimization {
-        NONE,
-        PREPROCESSOR,
-        SIZE,
-        PERFORMANCE
-    };
+    using Optimization = filamat::MaterialBuilder::Optimization;
 
     enum class Metadata {
         NONE,
@@ -115,17 +109,6 @@ public:
 
     TargetApi getTargetApi() const noexcept {
         return mTargetApi;
-    }
-
-    /**
-     * Returns the target API suitable for the current optimization level. It might be
-     * different than the target API returned by getTargetApi().
-     */
-    TargetApi getCodeGenTargetApi() const noexcept {
-        // When optimizing OpenGL we use SPIRV as an intermediate representation so we must force
-        // the target API to be Vulkan for the generated shaders to compile
-        return mOptimizationLevel > Optimization::PREPROCESSOR && mTargetApi != TargetApi::VULKAN ?
-                TargetApi::VULKAN : mTargetApi;
     }
 
     bool printShaders() const noexcept {

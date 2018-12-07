@@ -97,7 +97,7 @@ Filament.loadClassExtensions = function() {
 
     /// createTextureFromPng ::method:: Creates a 2D [Texture] from the raw contents of a PNG file.
     /// buffer ::argument:: asset string, or Uint8Array, or [Buffer] with PNG file contents
-    /// options ::argument:: JavaScript object with optional `rgbm`, `noalpha`, and `nomips` keys.
+    /// options ::argument:: object with optional `srgb`, `rgbm`, `noalpha`, and `nomips` keys.
     /// ::retval:: [Texture]
     Filament.Engine.prototype.createTextureFromPng = function(buffer, options) {
         buffer = getBufferDescriptor(buffer);
@@ -106,10 +106,21 @@ Filament.loadClassExtensions = function() {
         return result;
     };
 
+    /// createTextureFromJpeg ::method:: Creates a 2D [Texture] from a JPEG image.
+    /// image ::argument:: asset string or DOM Image that has already been loaded
+    /// options ::argument:: JavaScript object with optional `srgb` and `nomips` keys.
+    /// ::retval:: [Texture]
+    Filament.Engine.prototype.createTextureFromJpeg = function(image, options) {
+        if ('string' == typeof image || image instanceof String) {
+            image = Filament.assets[image];
+        }
+        return Filament._createTextureFromJpeg(image, this, options);
+    };
+
     /// loadFilamesh ::method:: Consumes the contents of a filamesh file and creates a renderable.
     /// buffer ::argument:: asset string, or Uint8Array, or [Buffer] with filamesh contents
     /// definstance ::argument:: Optional default [MaterialInstance]
-    /// matinstances ::argument:: Optional object that gets fukked with name => [MaterialInstance]
+    /// matinstances ::argument:: Optional object that gets filled with name => [MaterialInstance]
     /// ::retval:: JavaScript object with keys `renderable`, `vertexBuffer`, and `indexBuffer`. \
     /// These are of type [Entity], [VertexBuffer], and [IndexBuffer].
     Filament.Engine.prototype.loadFilamesh = function(buffer, definstance, matinstances) {

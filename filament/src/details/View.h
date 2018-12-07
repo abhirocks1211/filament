@@ -38,7 +38,7 @@
 #include <utils/Slice.h>
 #include <utils/Range.h>
 
-#include <deque>
+#include <array>
 
 namespace utils {
 class JobSystem;
@@ -96,8 +96,8 @@ public:
     }
     bool isSkyboxVisible() const noexcept;
 
-    void setCulling(bool culling) noexcept { mCulling = culling; }
-    bool isCullingEnabled() const noexcept { return mCulling; }
+    void setFrustumCullingEnabled(bool culling) noexcept { mCulling = culling; }
+    bool isFrustumCullingEnabled() const noexcept { return mCulling; }
 
     void setVisibleLayers(uint8_t select, uint8_t values) noexcept;
     uint8_t getVisibleLayers() const noexcept {
@@ -180,6 +180,14 @@ public:
         return mDynamicResolution;
     }
 
+    void setRenderQuality(RenderQuality const& renderQuality) noexcept {
+        mRenderQuality = renderQuality;
+    }
+
+    RenderQuality getRenderQuality() const noexcept {
+        return mRenderQuality;
+    }
+
     void setDynamicLightingOptions(float zLightNear, float zLightFar) noexcept;
 
     void setPostProcessingEnabled(bool enabled) noexcept {
@@ -214,6 +222,8 @@ public:
     void setCameraUser(FCamera* camera) noexcept { setCullingCamera(camera); }
 
 private:
+    static constexpr size_t MAX_FRAMETIME_HISTORY = 32u;
+
     void prepareVisibleLights(
             FLightManager& lcm, utils::JobSystem& js, FScene::LightSoa& lightData) const;
 
@@ -270,11 +280,14 @@ private:
 
     using duration = std::chrono::duration<float, std::milli>;
     DynamicResolutionOptions mDynamicResolution;
-    std::deque<duration> mFrameTimeHistory;
+    std::array<duration, MAX_FRAMETIME_HISTORY> mFrameTimeHistory;
+    size_t mFrameTimeHistorySize = 0;
 
     math::float2 mScale = 1.0f;
     float mDynamicWorkloadScale = 1.0f;
     bool mIsDynamicResolutionSupported = false;
+
+    RenderQuality mRenderQuality;
 
     mutable UniformBuffer mPerViewUb;
     mutable SamplerBuffer mPerViewSb;

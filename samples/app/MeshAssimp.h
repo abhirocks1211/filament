@@ -26,6 +26,7 @@ namespace filament {
     class Renderable;
 }
 
+#include <unordered_map>
 #include <map>
 #include <vector>
 
@@ -43,6 +44,7 @@ namespace filament {
 #include <filament/Texture.h>
 #include <filament/TextureSampler.h>
 #include <filament/TransformManager.h>
+#include <assimp/scene.h>
 
 class MeshAssimp {
 public:
@@ -50,6 +52,7 @@ public:
     using half4 = math::half4;
     using short4 = math::short4;
     using half2 = math::half2;
+    using ushort2 = math::ushort2;
     explicit MeshAssimp(filament::Engine& engine);
     ~MeshAssimp();
 
@@ -87,15 +90,35 @@ private:
         mat4f accTransform;
     };
 
-    bool setFromFile(const utils::Path& file,
-            std::vector<uint32_t>& outIndices,
-            std::vector<half4>&    outPositions,
-            std::vector<short4>&   outTangents,
-            std::vector<half2>&    outTexCoords,
-            std::vector<Mesh>&     outMeshes,
-            std::vector<int>&      outParents,
-            std::map<std::string, filament::MaterialInstance*>& outMaterials
-            );
+    struct Asset {
+        utils::Path file;
+        std::vector<uint32_t> indices;
+        std::vector<half4> positions;
+        std::vector<short4> tangents;
+        std::vector<ushort2> texCoords0;
+        std::vector<ushort2> texCoords1;
+        bool snormUV0;
+        bool snormUV1;
+        std::vector<Mesh> meshes;
+        std::vector<int> parents;
+    };
+
+    bool setFromFile(Asset& asset, std::map<std::string, filament::MaterialInstance*>& outMaterials);
+
+    void processGLTFMaterial(const aiScene* scene, const aiMaterial* material,
+            const std::string& materialName, const std::string& dirName,
+            std::map<std::string, filament::MaterialInstance*>& outMaterials) const;
+
+    template<bool SNORMUV0S, bool SNORMUV1S>
+    void processNode(Asset& asset,
+                     std::map<std::string, filament::MaterialInstance*>& outMaterials,
+                     const aiScene *scene,
+                     bool isGLTF,
+                     size_t deep,
+                     size_t matCount,
+                     const aiNode *node,
+                     int parentIndex,
+                     size_t &depth) const;
 
     filament::Texture* createOneByOneTexture(uint32_t textureData);
     filament::Engine& mEngine;
@@ -105,14 +128,7 @@ private:
     filament::Material* mDefaultColorMaterial = nullptr;
     filament::Material* mDefaultTransparentColorMaterial = nullptr;
 
-    filament::Material* mGltfMaterial = nullptr; // Single sided gltf material
-    filament::Material* mGltfMaterialDS = nullptr; // Double sided gltf material
-    filament::Material* mGltfMaterialTrans = nullptr; // Transparent gltf material
-    filament::Material* mGltfMaterialDSTrans = nullptr; // Double sided Transparent gltf material
-    filament::Material* mGltfMaterialMasked = nullptr; // Transparent gltf material
-    filament::Material* mGltfMaterialDSMasked = nullptr; // Double sided Transparent gltf material
-    filament::Material* mGltfMaterialUnlit = nullptr;
-    filament::Material* mGltfMaterialDSUnlit = nullptr;
+    mutable std::unordered_map<uint64_t, filament::Material*> mGltfMaterialCache;
     filament::Texture* mDefaultMap = nullptr;
     filament::Texture* mDefaultNormalMap = nullptr;
     float mDefaultMetallic = 0.0;
@@ -122,6 +138,8 @@ private:
     std::vector<utils::Entity> mRenderables;
 
     std::vector<filament::Texture*> mTextures;
+
+
 };
 
 #endif // TNT_FILAMENT_SAMPLE_MESH_ASSIMP_H

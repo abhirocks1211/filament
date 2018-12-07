@@ -1,5 +1,28 @@
 cmake_minimum_required(VERSION 3.1)
-project(filament-samples)
+project(filament-samples C ASM)
+
+set(ROOT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/..)
+set(GENERATION_ROOT ${CMAKE_CURRENT_BINARY_DIR})
+set(RESOURCE_DIR  "${GENERATION_ROOT}/generated/resources")
+set(MATERIAL_DIR  "${GENERATION_ROOT}/generated/material")
+set(RESOURCE_BINS)
+
+# ==================================================================================================
+# Convert OBJ files into filamesh files.
+# ==================================================================================================
+
+function(add_mesh SOURCE TARGET)
+    set(source_mesh "${ROOT_DIR}/${SOURCE}")
+    set(target_mesh "${RESOURCE_DIR}/${TARGET}")
+    set(RESOURCE_BINS ${RESOURCE_BINS} ${target_mesh} PARENT_SCOPE)
+    add_custom_command(
+        OUTPUT ${target_mesh}
+        COMMAND filamesh --compress ${source_mesh} ${target_mesh}
+        MAIN_DEPENDENCY ${source_mesh}
+        DEPENDS filamesh)
+endfunction()
+
+add_mesh("assets/models/monkey/monkey.obj" "suzanne.filamesh")
 
 # ==================================================================================================
 # Build materials
@@ -11,14 +34,6 @@ set(MATERIAL_SRCS
         materials/aiDefaultMat.mat
         materials/aiDefaultTrans.mat
         materials/depthVisualizer.mat
-        materials/gltf2.mat
-        materials/gltf2DoubleSided.mat
-        materials/gltf2DoubleSidedMasked.mat
-        materials/gltf2DoubleSidedTrans.mat
-        materials/gltf2DoubleSidedUnlit.mat
-        materials/gltf2Masked.mat
-        materials/gltf2Trans.mat
-        materials/gltf2Unlit.mat
         materials/groundShadow.mat
         materials/sandboxCloth.mat
         materials/sandboxLit.mat
@@ -32,9 +47,7 @@ if (CMAKE_CROSSCOMPILING)
     include(${IMPORT_EXECUTABLES})
 endif()
 
-set(MATERIAL_BINS)
-set(GENERATION_ROOT ${CMAKE_CURRENT_BINARY_DIR})
-file(MAKE_DIRECTORY "${GENERATION_ROOT}/generated/material/")
+file(MAKE_DIRECTORY ${MATERIAL_DIR})
 
 set(MATC_TARGET desktop)
 
@@ -47,30 +60,46 @@ endif()
 foreach (mat_src ${MATERIAL_SRCS})
     get_filename_component(localname "${mat_src}" NAME_WE)
     get_filename_component(fullname "${mat_src}" ABSOLUTE)
-    set(output_path "${GENERATION_ROOT}/generated/material/${localname}.inc")
+    set(output_path "${MATERIAL_DIR}/${localname}.filamat")
     add_custom_command(
             OUTPUT ${output_path}
-            COMMAND matc ${MATC_FLAGS} -p ${MATC_TARGET} -m material -f header
-            -o ${output_path} ${fullname}
+            COMMAND matc ${MATC_FLAGS} -p ${MATC_TARGET} -m material
+                    -o ${output_path} ${fullname}
             MAIN_DEPENDENCY ${mat_src}
             DEPENDS matc
             COMMENT "Compiling material ${mat_src} to ${output_path}"
     )
-    list(APPEND MATERIAL_BINS ${output_path})
+    list(APPEND RESOURCE_BINS ${output_path})
 endforeach()
 
-add_custom_target(sample_materials DEPENDS ${MATERIAL_BINS})
+# ==================================================================================================
+# Build aggregated resource files
+# ==================================================================================================
+
+get_resgen_vars(${RESOURCE_DIR} resources)
+
+add_custom_command(
+        OUTPUT ${RESGEN_OUTPUTS}
+        COMMAND resgen ${RESGEN_FLAGS} ${RESOURCE_BINS}
+        DEPENDS resgen ${RESOURCE_BINS}
+        COMMENT "Aggregating resources"
+)
+
+if (DEFINED RESGEN_SOURCE_FLAGS)
+    set_source_files_properties(${RESGEN_SOURCE} PROPERTIES COMPILE_FLAGS ${RESGEN_SOURCE_FLAGS})
+endif()
 
 # ==================================================================================================
 # Common library
 # ==================================================================================================
 
-set(APP_LIBS filament sdl2 stb math filamat utils getopt imgui filagui)
+set(APP_LIBS filament sdl2 stb math filamat utils getopt imgui filagui image)
 if (WIN32)
     list(APPEND APP_LIBS sdl2main)
 endif()
 
 set(APP_SRCS
+        ${RESGEN_SOURCE}
         app/CameraManipulator.cpp
         app/Cube.cpp
         app/FilamentApp.cpp
@@ -95,7 +124,6 @@ endif()
 include_directories(app)
 
 add_library(sample-app ${APP_SRCS})
-add_dependencies(sample-app sample_materials)
 target_include_directories(sample-app PUBLIC app)
 
 target_link_libraries(sample-app PRIVATE ${APP_LIBS})
@@ -126,7 +154,6 @@ function(add_assimp_demo NAME)
             ${NAME}
             ${NAME}.cpp
             app/MeshAssimp.cpp)
-    add_dependencies(${NAME} sample_materials)
     target_link_libraries(${NAME} PRIVATE ${APP_LIBS} assimp)
     target_compile_options(${NAME} PRIVATE ${COMPILER_FLAGS})
 endfunction()
@@ -136,7 +163,6 @@ function(add_filamesh_demo NAME)
     add_executable(
             ${NAME}
             ${NAME}.cpp)
-    add_dependencies(${NAME} sample_materials)
     target_link_libraries(${NAME} PRIVATE ${APP_LIBS} filameshio)
     target_compile_options(${NAME} PRIVATE ${COMPILER_FLAGS})
 endfunction()
@@ -148,17 +174,12 @@ if (NOT ANDROID)
     add_assimp_demo(lightbulb)
     add_assimp_demo(material_sandbox)
     add_assimp_demo(sample_full_pbr)
-    add_assimp_demo(sample_pbr)
-    add_assimp_demo(sample_position_offset)
 
     add_filamesh_demo(sample_cloth)
-    add_filamesh_demo(sample_subsurface)
-    add_filamesh_demo(vk_imgui)
     add_filamesh_demo(sample_normal_map)
-    add_filamesh_demo(sample_opacity_mask)
 
     # Sample app specific
-    target_link_libraries(frame_generator PRIVATE image imageio)
+    target_link_libraries(frame_generator PRIVATE imageio)
     target_link_libraries(filagltf_viewer PRIVATE filagltf)
 endif()
 
@@ -189,15 +210,16 @@ endif()
 # ==================================================================================================
 
 if (FILAMENT_SUPPORTS_VULKAN)
-    add_assimp_demo(vk_strobecolor)
-    add_assimp_demo(vk_hellotriangle)
-    add_assimp_demo(vk_depthtesting)
-    add_assimp_demo(vk_texturedquad)
-    add_assimp_demo(vk_hellopbr)
     add_assimp_demo(vk_shadowtest)
-    add_assimp_demo(vk_animation)
-    add_assimp_demo(vk_vbotest)
-    add_assimp_demo(vk_viewtest)
+    add_filamesh_demo(vk_animation)
+    add_filamesh_demo(vk_depthtesting)
+    add_filamesh_demo(vk_hellopbr)
+    add_filamesh_demo(vk_hellotriangle)
+    add_filamesh_demo(vk_imgui)
+    add_filamesh_demo(vk_strobecolor)
+    add_filamesh_demo(vk_texturedquad)
+    add_filamesh_demo(vk_vbotest)
+    add_filamesh_demo(vk_viewtest)
 endif()
 
 # ==================================================================================================

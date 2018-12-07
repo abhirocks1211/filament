@@ -18,6 +18,8 @@
 
 #include <utils/compiler.h>
 
+#include <memory>
+
 namespace utils {
 
 int StaticString::compare(const StaticString& rhs) const noexcept {
@@ -33,10 +35,14 @@ int StaticString::compare(const StaticString& rhs) const noexcept {
 UTILS_NOINLINE
 CString::CString(const char* cstr, size_type length) {
     if (length && cstr) {
+        // I think we can't use this assert with vulkan, because shaders are returned as CString
+        // (see ShaderBuilder).
+        // assert(length == strlen(cstr));
         Data* p = (Data*)malloc(sizeof(Data) + length + 1);
         p->length = length;
         mCStr = (value_type*)(p + 1);
-        memcpy(mCStr, cstr, length + 1);
+        // we don't use memcpy here to avoid a call to libc, the generated code is pretty good.
+        std::uninitialized_copy_n(cstr, length + 1, mCStr);
     }
 }
 

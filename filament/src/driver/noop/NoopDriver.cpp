@@ -15,7 +15,7 @@
  */
 
 #include "driver/noop/NoopDriver.h"
-#include "driver/CommandStream.h"
+#include "driver/CommandStreamDispatcher.h"
 
 namespace filament {
 
@@ -24,11 +24,18 @@ Driver* NoopDriver::create() {
     return new NoopDriver();
 }
 
-NoopDriver::NoopDriver() noexcept
-        : DriverBase(new ConcreteDispatcher<NoopDriver>(this)) {
+NoopDriver::NoopDriver() noexcept : DriverBase(new ConcreteDispatcher<NoopDriver>(this)) {
 }
 
 NoopDriver::~NoopDriver() noexcept = default;
+
+driver::ShaderModel NoopDriver::getShaderModel() const noexcept {
+#if defined(GLES31_HEADERS)
+    return driver::ShaderModel::GL_CORE_30;
+#else
+    return driver::ShaderModel::GL_CORE_41;
+#endif
+}
 
 // explicit instantiation of the Dispatcher
 template class ConcreteDispatcher<NoopDriver>;

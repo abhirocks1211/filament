@@ -122,7 +122,7 @@ void RenderPass::recordDriverCommands(
     if (!commands.empty()) {
         Driver::PipelineState pipeline;
         Handle<HwUniformBuffer> uboHandle = scene.getRenderableUBO();
-        FMaterialInstance const* UTILS_RESTRICT previousMi = nullptr;
+        FMaterialInstance const* UTILS_RESTRICT mi = nullptr;
         FMaterial const* UTILS_RESTRICT ma = nullptr;
         Command const* UTILS_RESTRICT c;
         for (c = commands.cbegin(); c->key != -1LLU; ++c) {
@@ -131,24 +131,22 @@ void RenderPass::recordDriverCommands(
              */
 
             // per-renderable uniform
-            PrimitiveInfo const& UTILS_RESTRICT info = c->primitive;
-            size_t offset = info.index * sizeof(PerRenderableUib);
-            driver.bindUniformBufferRange(BindingPoints::PER_RENDERABLE, uboHandle, offset, sizeof(PerRenderableUib));
-            if (info.perRenderableBones) {
-                driver.bindUniformBuffer(BindingPoints::PER_RENDERABLE_BONES, info.perRenderableBones);
-            }
-
-            FMaterialInstance const* const UTILS_RESTRICT mi = info.mi;
-            if (UTILS_UNLIKELY(mi != previousMi)) {
+            const PrimitiveInfo info = c->primitive;
+            pipeline.rasterState = info.rasterState;
+            if (UTILS_UNLIKELY(mi != info.mi)) {
                 // this is always taken the first time
-                previousMi = mi;
-                mi->use(driver);
+                mi = info.mi;
+                pipeline.polygonOffset = mi->getPolygonOffset();
                 ma = mi->getMaterial();
+                mi->use(driver);
             }
 
             pipeline.program = ma->getProgram(info.materialVariant.key);
-            pipeline.rasterState = info.rasterState;
-            pipeline.polygonOffset = mi->getPolygonOffset();
+            size_t offset = info.index * sizeof(PerRenderableUib);
+            if (info.perRenderableBones) {
+                driver.bindUniformBuffer(BindingPoints::PER_RENDERABLE_BONES, info.perRenderableBones);
+            }
+            driver.bindUniformBufferRange(BindingPoints::PER_RENDERABLE, uboHandle, offset, sizeof(PerRenderableUib));
             driver.draw(pipeline, info.primitiveHandle);
         }
 
@@ -171,7 +169,7 @@ void RenderPass::setupColorCommand(Command& cmdDraw, bool hasDepthPass,
     uint64_t keyBlending = cmdDraw.key;
     keyBlending &= ~(PASS_MASK | BLENDING_MASK);
     keyBlending |= uint64_t(Pass::BLENDED);
-    keyBlending |= makeField(ma->getBlendingMode(), BLENDING_MASK, BLENDING_SHIFT);
+    keyBlending |= makeField(ma->getRenderBlendingMode(), BLENDING_MASK, BLENDING_SHIFT);
 
     uint64_t keyDraw = cmdDraw.key;
     keyDraw &= ~(PASS_MASK | BLENDING_MASK | MATERIAL_MASK);

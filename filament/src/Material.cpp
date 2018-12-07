@@ -77,20 +77,26 @@ Material* Material::Builder::build(Engine& engine) {
         return nullptr;
     }
 
-    assert(upcast(engine).getBackend() != Backend::DEFAULT && "Default backend has not been resolved.");
+    assert(upcast(engine).getBackend() != Backend::DEFAULT &&
+            "Default backend has not been resolved.");
 
     uint32_t v;
     materialParser->getShaderModels(&v);
     utils::bitset32 shaderModels;
     shaderModels.setValue(v);
 
-    uint32_t sm = static_cast<uint32_t>(upcast(engine).getDriver().getShaderModel());
-    CString name;
-    materialParser->getName(&name);
-    if (!ASSERT_POSTCONDITION_NON_FATAL(shaderModels.test(sm),
-            "the material '%s' does not contain shaders compatible with this platform; "
-            "need shader model %d but have 0x%02x", name.c_str_safe(), sm,
-            shaderModels.getValue())) {
+    driver::ShaderModel shaderModel = upcast(engine).getDriver().getShaderModel();
+    if (!shaderModels.test(static_cast<uint32_t>(shaderModel))) {
+        CString name;
+        materialParser->getName(&name);
+        slog.e << "The material '" << name.c_str_safe() << "' was not built for ";
+        switch (shaderModel) {
+            case driver::ShaderModel::GL_ES_30: slog.e << "mobile.\n"; break;
+            case driver::ShaderModel::GL_CORE_41: slog.e << "desktop.\n"; break;
+            case driver::ShaderModel::UNKNOWN: /* should never happen */ break;
+        }
+        slog.e << "Compiled material contains shader models 0x"
+                << io::hex << shaderModels.getValue() << io::dec << "." << io::endl;
         return nullptr;
     }
 
@@ -126,12 +132,23 @@ FMaterial::FMaterial(FEngine& engine, const Material::Builder& builder)
     parser->getInterpolation(&mInterpolation);
     parser->getVertexDomain(&mVertexDomain);
     parser->getRequiredAttributes(&mRequiredAttributes);
+
     if (mBlendingMode == BlendingMode::MASKED) {
         parser->getMaskThreshold(&mMaskThreshold);
     }
+
+    // The fade blending mode only affects shading. For proper sorting we need to
+    // treat this blending mode as a regular transparent blending operation.
+    if (UTILS_UNLIKELY(mBlendingMode == BlendingMode::FADE)) {
+        mRenderBlendingMode = BlendingMode::TRANSPARENT;
+    } else {
+        mRenderBlendingMode = mBlendingMode;
+    }
+
     if (mShading == Shading::UNLIT) {
         parser->hasShadowMultiplier(&mHasShadowMultiplier);
     }
+
     mIsVariantLit = mShading != Shading::UNLIT || mHasShadowMultiplier;
 
     // create raster state
@@ -276,8 +293,6 @@ Handle<HwProgram> FMaterial::getProgramSlow(uint8_t variantKey) const noexcept {
             "GLSL or SPIR-V chunks for the vertex shader (variant=0x%x, filtered=0x%x).",
             mName.c_str(), variantKey, vertexVariantKey);
 
-    CString vs(vsBuilder.getShader(), (CString::size_type) vsBuilder.size());
-
     /*
      * Fragment shader
      */
@@ -291,12 +306,11 @@ Handle<HwProgram> FMaterial::getProgramSlow(uint8_t variantKey) const noexcept {
             "The material '%s' has not been compiled to include the required "
             "GLSL or SPIR-V chunks for the fragment shader (variant=0x%x, filterer=0x%x).",
             mName.c_str(), variantKey, fragmentVariantKey);
-    CString fs(fsBuilder.getShader(), (CString::size_type) fsBuilder.size());
 
     Program pb;
     pb      .diagnostics(mName, variantKey)
-            .withVertexShader(vs)
-            .withFragmentShader(fs)
+            .withVertexShader(vsBuilder.getShader())
+            .withFragmentShader(fsBuilder.getShader())
             .withSamplerBindings(&mSamplerBindings)
             .addUniformBlock(BindingPoints::PER_VIEW, &UibGenerator::getPerViewUib())
             .addUniformBlock(BindingPoints::LIGHTS, &UibGenerator::getLightsUib())

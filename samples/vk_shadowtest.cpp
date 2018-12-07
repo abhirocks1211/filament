@@ -28,6 +28,8 @@
 #include "../samples/app/FilamentApp.h"
 #include "../samples/app/MeshAssimp.h"
 
+#include "generated/resources/resources.h"
+
 using namespace filament;
 using namespace math;
 using Backend = Engine::Backend;
@@ -48,12 +50,9 @@ struct App {
 };
 
 static const char* MODEL_FILE = "assets/models/monkey/monkey.obj";
-static const char* IBL_FOLDER = "envs/office";
+static const char* IBL_FOLDER = "envs/pillars";
 
 static constexpr bool ENABLE_SHADOWS = true;
-static constexpr uint8_t GROUND_SHADOW_PACKAGE[] = {
-    #include "generated/material/groundShadow.inc"
-};
 
 static GroundPlane createGroundPlane(Engine* engine);
 
@@ -129,7 +128,7 @@ int main(int argc, char** argv) {
 
 static GroundPlane createGroundPlane(Engine* engine) {
     Material* shadowMaterial = Material::Builder()
-        .package((void*) GROUND_SHADOW_PACKAGE, sizeof(GROUND_SHADOW_PACKAGE))
+        .package(RESOURCES_GROUNDSHADOW_DATA, RESOURCES_GROUNDSHADOW_SIZE)
         .build(*engine);
 
     const static uint32_t indices[] {

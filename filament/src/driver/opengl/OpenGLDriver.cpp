@@ -24,7 +24,7 @@
 #include <utils/Systrace.h>
 
 #include "driver/DriverApi.h"
-#include "driver/CommandStream.h"
+#include "driver/CommandStreamDispatcher.h"
 #include "driver/opengl/OpenGLProgram.h"
 #include "driver/opengl/OpenGLBlitter.h"
 
@@ -41,7 +41,6 @@
 
 #define DEBUG_MARKER_NONE       0
 #define DEBUG_MARKER_OPENGL     1
-#define DEBUG_MARKER_SYSTRACE   2
 
 // set to the desired debug marker level
 #define DEBUG_MARKER_LEVEL      DEBUG_MARKER_NONE
@@ -49,9 +48,6 @@
 #if DEBUG_MARKER_LEVEL == DEBUG_MARKER_OPENGL
 #   define DEBUG_MARKER() \
         DebugMarker _debug_marker(*this, __PRETTY_FUNCTION__);
-#elif DEBUG_MARKER_LEVEL == DEBUG_MARKER_SYSTRACE
-#   define DEBUG_MARKER() \
-        SYSTRACE_CALL();
 #else
 #   define DEBUG_MARKER()
 #endif
@@ -401,6 +397,7 @@ void OpenGLDriver::unbindTexture(GLenum target, GLuint texture_id) noexcept {
 
 void OpenGLDriver::unbindSampler(GLuint sampler) noexcept {
     // unbind this sampler from all the units it might be bound to
+    #pragma nounroll    // clang generates >800B of code!!!
     for (GLuint unit = 0; unit < MAX_TEXTURE_UNITS; unit++) {
         if (state.textures.units[unit].sampler == sampler) {
             bindSampler(unit, 0);
@@ -1260,6 +1257,7 @@ void OpenGLDriver::destroyVertexBuffer(Driver::VertexBufferHandle vbh) {
         // bindings of bound buffers are reset to 0
         const size_t targetIndex = getIndexForBufferTarget(GL_ARRAY_BUFFER);
         auto& target = state.buffers.genericBinding[targetIndex];
+        #pragma nounroll
         for (GLuint b : eb->gl.buffers) {
             if (target == b) {
                 target = 0;
@@ -1326,6 +1324,8 @@ void OpenGLDriver::destroyUniformBuffer(Driver::UniformBufferHandle ubh) {
         // bindings of bound buffers are reset to 0
         const size_t targetIndex = getIndexForBufferTarget(GL_UNIFORM_BUFFER);
         auto& target = state.buffers.targets[targetIndex];
+
+        #pragma nounroll // clang generates >1 KiB of code!!
         for (auto& buffer : target.buffers) {
             if (buffer.name == ub->gl.ubo.id) {
                 buffer.name = 0;
@@ -2001,9 +2001,6 @@ void OpenGLDriver::beginRenderPass(Driver::RenderTargetHandle rth,
             std::array<GLenum, 3> attachments; // NOLINT(cppcoreguidelines-pro-type-member-init)
             GLsizei attachmentCount = getAttachments(attachments, rt, discardFlags);
             if (attachmentCount) {
-#if DEBUG_MARKER_LEVEL == DEBUG_MARKER_SYSTRACE
-                SYSTRACE_NAME("glInvalidateFramebuffer");
-#endif
                 glInvalidateFramebuffer(GL_FRAMEBUFFER, attachmentCount, attachments.data());
                 CHECK_GL_ERROR(utils::slog.e)
             }
@@ -2052,9 +2049,6 @@ void OpenGLDriver::endRenderPass(int) {
         std::array<GLenum, 3> attachments; // NOLINT(cppcoreguidelines-pro-type-member-init)
         GLsizei attachmentCount = getAttachments(attachments, rt, discardFlags);
         if (attachmentCount) {
-#if DEBUG_MARKER_LEVEL == DEBUG_MARKER_SYSTRACE
-            SYSTRACE_NAME("glInvalidateFramebuffer");
-#endif
             glInvalidateFramebuffer(GL_FRAMEBUFFER, attachmentCount, attachments.data());
         }
 

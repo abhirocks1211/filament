@@ -33,8 +33,6 @@
 #include "details/View.h"
 #include "driver/Program.h"
 
-#include "PrecompiledMaterials.h"
-
 #include <private/filament/SibGenerator.h>
 
 #include <filament/Exposure.h>
@@ -55,6 +53,7 @@
 
 #include <stdio.h>
 
+#include "generated/resources/materials.h"
 
 using namespace math;
 using namespace utils;
@@ -160,7 +159,7 @@ void FEngine::init() {
 
     // Parse all post process shaders now, but create them lazily
     mPostProcessParser = std::make_unique<filaflat::MaterialParser>(mBackend,
-            POST_PROCESS_PACKAGE, POST_PROCESS_PACKAGE_SIZE);
+            MATERIALS_POSTPROCESS_DATA, MATERIALS_POSTPROCESS_SIZE);
 
     UTILS_UNUSED_IN_RELEASE bool ppMaterialOk =
             mPostProcessParser->parse() && mPostProcessParser->isPostProcessMaterial();
@@ -219,7 +218,7 @@ void FEngine::init() {
     // Always initialize the default material, most materials' depth shaders fallback on it.
     mDefaultMaterial = upcast(
             FMaterial::DefaultMaterialBuilder()
-                    .package(DEFAULT_MATERIAL_PACKAGE, DEFAULT_MATERIAL_PACKAGE_SIZE)
+                    .package(MATERIALS_DEFAULTMATERIAL_DATA, MATERIALS_DEFAULTMATERIAL_SIZE)
                     .build(*const_cast<FEngine*>(this)));
 }
 
@@ -409,8 +408,8 @@ const FMaterial* FEngine::getSkyboxMaterial(bool rgbm) const noexcept {
 
 Handle<HwProgram> FEngine::createPostProcessProgram(MaterialParser& parser,
         ShaderModel shaderModel, PostProcessStage stage) const noexcept {
-    ShaderBuilder vShaderBuilder;
-    ShaderBuilder fShaderBuilder;
+    ShaderBuilder& vShaderBuilder = getVertexShaderBuilder();
+    ShaderBuilder& fShaderBuilder = getFragmentShaderBuilder();
     parser.getShader(shaderModel, (uint8_t) stage, ShaderType::VERTEX, vShaderBuilder);
     parser.getShader(shaderModel, (uint8_t) stage, ShaderType::FRAGMENT, fShaderBuilder);
 
@@ -427,8 +426,8 @@ Handle<HwProgram> FEngine::createPostProcessProgram(MaterialParser& parser,
     Program pb;
     pb      .diagnostics(CString("Post Process"))
             .withSamplerBindings(pBindings)
-            .withVertexShader(CString(vShaderBuilder.getShader(), vShaderBuilder.size()))
-            .withFragmentShader(CString(fShaderBuilder.getShader(), fShaderBuilder.size()))
+            .withVertexShader(vShaderBuilder.getShader())
+            .withFragmentShader(fShaderBuilder.getShader())
             .addUniformBlock(BindingPoints::PER_VIEW, &PerViewUib::getUib())
             .addUniformBlock(BindingPoints::POST_PROCESS, &PostProcessingUib::getUib())
             .addSamplerBlock(BindingPoints::POST_PROCESS, &PostProcessSib::getSib());
@@ -716,32 +715,6 @@ bool FEngine::execute() {
 
     return true;
 }
-
-// ---------------------------------------------------------------------------------------------
-
-EnginePerformanceTest::~EnginePerformanceTest() noexcept = default;
-
-class FEnginePerformanceTest : public EnginePerformanceTest {
-public:
-    void activateOmegaThirteen() noexcept { }
-};
-
-FILAMENT_UPCAST(EnginePerformanceTest)
-
-void EnginePerformanceTest::activateOmegaThirteen() noexcept {
-    upcast(this)->activateOmegaThirteen();
-}
-
-void EnginePerformanceTest::activateBigBang() noexcept {
-}
-
-static void destroyUniverse(void *) {
-}
-
-EnginePerformanceTest::PFN EnginePerformanceTest::getDestroyUniverseApi() {
-    return &destroyUniverse;
-}
-
 
 } // namespace details
 

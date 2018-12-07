@@ -42,7 +42,7 @@
 #include <utils/EntityManager.h>
 
 #include <filamat/MaterialBuilder.h>
-#include <filameshio/MeshIO.h>
+#include <filameshio/MeshReader.h>
 
 using namespace math;
 using namespace filament;
@@ -52,7 +52,7 @@ using namespace utils;
 static std::vector<Path> g_filenames;
 
 static std::map<std::string, MaterialInstance*> g_materialInstances;
-static std::vector<MeshIO::Mesh> g_meshes;
+static std::vector<MeshReader::Mesh> g_meshes;
 static const Material* g_material;
 static Entity g_light;
 static Texture* g_normalMap = nullptr;
@@ -261,25 +261,19 @@ static void setup(Engine* engine, View*, Scene* scene) {
 
     MaterialBuilder builder = MaterialBuilder()
             .name("DefaultMaterial")
-            .set(Property::BASE_COLOR)
-            .set(Property::METALLIC)
-            .set(Property::ROUGHNESS)
             .material(shader.c_str())
             .shading(Shading::LIT);
 
     if (hasNormalMap) {
         builder
             .require(VertexAttribute::UV0)
-            .parameter(MaterialBuilder::SamplerType::SAMPLER_2D, "normalMap")
-            .set(Property::NORMAL);
+            .parameter(MaterialBuilder::SamplerType::SAMPLER_2D, "normalMap");
     }
 
     if (hasClearCoatNormalMap) {
         builder
             .require(VertexAttribute::UV0)
-            .parameter(MaterialBuilder::SamplerType::SAMPLER_2D, "clearCoatNormalMap")
-            .set(Property::CLEAR_COAT)
-            .set(Property::CLEAR_COAT_NORMAL);
+            .parameter(MaterialBuilder::SamplerType::SAMPLER_2D, "clearCoatNormalMap");
     }
 
     if (hasBaseColorMap) {
@@ -312,7 +306,7 @@ static void setup(Engine* engine, View*, Scene* scene) {
 
     auto& tcm = engine->getTransformManager();
     for (const auto& filename : g_filenames) {
-        MeshIO::Mesh mesh  = MeshIO::loadMeshFromFile(engine, filename, g_materialInstances);
+        MeshReader::Mesh mesh  = MeshReader::loadMeshFromFile(engine, filename, g_materialInstances);
         if (mesh.renderable) {
             auto ei = tcm.getInstance(mesh.renderable);
             tcm.setTransform(ei, mat4f{ mat3f(g_config.scale), float3(0.0f, 0.0f, -4.0f) } *

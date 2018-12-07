@@ -1,8 +1,11 @@
 cmake_minimum_required(VERSION 3.1)
-project(filament)
+project(filament C ASM)
 
 set(TARGET filament)
 set(PUBLIC_HDR_DIR include)
+set(GENERATION_ROOT ${CMAKE_CURRENT_BINARY_DIR})
+set(RESOURCE_DIR  "${GENERATION_ROOT}/generated/resources")
+set(MATERIAL_DIR  "${GENERATION_ROOT}/generated/material")
 
 # ==================================================================================================
 # Sources and headers
@@ -77,7 +80,6 @@ set(SRCS
         src/Material.cpp
         src/MaterialInstance.cpp
         src/PostProcessManager.cpp
-        src/PrecompiledMaterials.cpp
         src/Renderer.cpp
         src/RenderPass.cpp
         src/RenderPrimitive.cpp
@@ -125,6 +127,7 @@ set(PRIVATE_HDRS
         src/driver/CircularBuffer.h
         src/driver/CommandBufferQueue.h
         src/driver/CommandStream.h
+        src/driver/CommandStreamDispatcher.h
         src/driver/Driver.h
         src/driver/DriverAPI.inc
         src/driver/DriverApi.h
@@ -138,7 +141,6 @@ set(PRIVATE_HDRS
         src/FrameInfo.h
         src/Intersections.h
         src/PostProcessManager.h
-        src/PrecompiledMaterials.h
         src/RenderPass.h
         src/RenderTargetPool.h
         src/UniformBuffer.h
@@ -154,11 +156,17 @@ set(MATERIAL_SRCS
 # Remove it from release builds, since it uses some space needlessly.
 if (CMAKE_BUILD_TYPE MATCHES Debug)
     list(APPEND SRCS src/driver/noop/NoopDriver.cpp)
+    list(APPEND SRCS src/driver/noop/PlatformNoop.cpp)
 endif()
 
 if(IOS AND NOT FILAMENT_SUPPORTS_VULKAN)
     message(FATAL_ERROR "Filament for iOS must be built with Vulkan support.")
 endif()
+
+# Embed the binary resource blob for materials.
+get_resgen_vars(${RESOURCE_DIR} materials)
+list(APPEND PRIVATE_HDRS ${RESGEN_HEADER})
+list(APPEND SRCS ${RESGEN_SOURCE})
 
 # ==================================================================================================
 # OS specific
@@ -222,7 +230,7 @@ if (FILAMENT_SUPPORTS_VULKAN)
 endif()
 
 # ==================================================================================================
-# Generate all .inc: default material, skyboxes, depth and post-process
+# Generate all .filamat: default material, skyboxes, and post-process
 # ==================================================================================================
 
 if (CMAKE_CROSSCOMPILING)
@@ -230,8 +238,7 @@ if (CMAKE_CROSSCOMPILING)
 endif()
 
 set(MATERIAL_BINS)
-set(GENERATION_ROOT ${CMAKE_CURRENT_BINARY_DIR})
-file(MAKE_DIRECTORY "${GENERATION_ROOT}/generated/material/")
+file(MAKE_DIRECTORY ${MATERIAL_DIR})
 
 # Target system.
 if (ANDROID OR WEBGL OR IOS)
@@ -255,29 +262,38 @@ endif()
 foreach (mat_src ${MATERIAL_SRCS})
     get_filename_component(localname "${mat_src}" NAME_WE)
     get_filename_component(fullname "${mat_src}" ABSOLUTE)
-    set(output_path "${GENERATION_ROOT}/generated/material/${localname}.inc")
+    set(output_path "${MATERIAL_DIR}/${localname}.filamat")
 
     add_custom_command(
             OUTPUT ${output_path}
             COMMAND matc ${MATC_BASE_FLAGS} ${MATC_OPT_FLAGS} -p ${MATC_TARGET} -m material
-                    -f header -o ${output_path} ${fullname}
-            DEPENDS ${mat_src} matc
+                    -o ${output_path} ${fullname}
+            DEPENDS ${fullname} matc
             COMMENT "Compiling material ${mat_src} to ${output_path}"
     )
     list(APPEND MATERIAL_BINS ${output_path})
 endforeach()
 
-set(output_path "${GENERATION_ROOT}/generated/material/postprocess.inc")
+set(output_path "${MATERIAL_DIR}/postprocess.filamat")
 add_custom_command(
         OUTPUT ${output_path}
         COMMAND matc ${MATC_BASE_FLAGS} ${MATC_OPT_FLAGS} -p ${MATC_TARGET} -m postprocess
-                -f header -o ${output_path}
+                -o ${output_path}
         DEPENDS matc
         COMMENT "Compiling post-process material ${output_path}"
 )
 list(APPEND MATERIAL_BINS ${output_path})
 
-add_custom_target(filament_materials DEPENDS ${MATERIAL_BINS})
+add_custom_command(
+        OUTPUT ${RESGEN_OUTPUTS}
+        COMMAND resgen ${RESGEN_FLAGS} ${MATERIAL_BINS}
+        DEPENDS resgen ${MATERIAL_BINS}
+        COMMENT "Aggregating compiled materials"
+)
+
+if (DEFINED RESGEN_SOURCE_FLAGS)
+    set_source_files_properties(${RESGEN_SOURCE} PROPERTIES COMPILE_FLAGS ${RESGEN_SOURCE_FLAGS})
+endif()
 
 set(DATA_BINS)
 file(MAKE_DIRECTORY "${GENERATION_ROOT}/generated/data/")
@@ -301,7 +317,6 @@ include_directories(src)
 
 # we're building a library
 add_library(${TARGET} STATIC ${PRIVATE_HDRS} ${PUBLIC_HDRS} ${SRCS} ${DATA_BINS})
-add_dependencies(${TARGET} filament_materials)
 
 # specify where the public headers of this library are
 target_include_directories(${TARGET} PUBLIC ${PUBLIC_HDR_DIR})
@@ -406,3 +421,4 @@ install(FILES "README.md" DESTINATION .)
 # Sub-projects
 # ==================================================================================================
 add_subdirectory(test)
+add_subdirectory(benchmark)

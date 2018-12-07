@@ -915,7 +915,7 @@ $$
 Since the clear coat layer's IOR is fixed, we can combine both steps to simplify:
 
 $$
-f_{0_{base}} = \frac{\left( 1 - 5 \sqrt{\fNormal} \right) ^2}{\left( 5 \sqrt{\fNormal} \right) ^2}
+f_{0_{base}} = \frac{\left( 1 - 5 \sqrt{\fNormal} \right) ^2}{\left( 5 - \sqrt{\fNormal} \right) ^2}
 $$
 
 We should also modify the base layer's apparent roughness based on the IOR of the clear coat layer but this is something we have opted to leave out for now.
@@ -2932,7 +2932,7 @@ float exposureSettings(float aperture, float shutterSpeed, float sensitivity) {
 // Computes the exposure normalization factor from
 // the camera's EV100
 float exposure(ev100) {
-    return pow(2.0, ev100) * 1.2;
+    return 1.0 / (pow(2.0, ev100) * 1.2);
 }
 
 float ev100 = exposureSettings(aperture, shutterSpeed, sensitivity);

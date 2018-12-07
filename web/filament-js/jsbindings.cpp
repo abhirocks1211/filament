@@ -32,7 +32,7 @@
  * this explicit rather than mysterious.
  */
 
-#include <filameshio/MeshIO.h>
+#include <filameshio/MeshReader.h>
 
 #include <filament/Camera.h>
 #include <filament/Engine.h>
@@ -461,10 +461,55 @@ class_<RenderBuilder>("RenderableManager$Builder")
         return &builder->geometry(index, type, vertices, indices); })
     .BUILDER_FUNCTION("material", RenderBuilder, (RenderBuilder* builder,
             size_t index, MaterialInstance* mi), {
-        return &builder->material(index, mi); });
+        return &builder->material(index, mi); })
+    .BUILDER_FUNCTION("blendOrder", RenderBuilder,
+            (RenderBuilder* builder, size_t index, uint16_t order), {
+        return &builder->blendOrder(index, order); });
 
+/// RenderableManager ::core class:: Allows access to properties of drawable objects.
 class_<RenderableManager>("RenderableManager")
-    .class_function("Builder", (RenderBuilder (*)(int)) [] (int n) { return RenderBuilder(n); });
+    .class_function("Builder", (RenderBuilder (*)(int)) [] (int n) { return RenderBuilder(n); })
+
+    /// getInstance ::method:: Gets an instance of the renderable component for an entity.
+    /// entity ::argument:: an [Entity]
+    /// ::retval:: a renderable component
+    .function("getInstance", &RenderableManager::getInstance)
+
+    .function("setAxisAlignedBoundingBox", &RenderableManager::setAxisAlignedBoundingBox)
+    .function("setLayerMask", &RenderableManager::setLayerMask)
+    .function("setPriority", &RenderableManager::setPriority)
+    .function("setCastShadows", &RenderableManager::setCastShadows)
+    .function("setReceiveShadows", &RenderableManager::setReceiveShadows)
+    .function("isShadowCaster", &RenderableManager::isShadowCaster)
+    .function("isShadowReceiver", &RenderableManager::isShadowReceiver)
+    .function("getAxisAlignedBoundingBox", &RenderableManager::getAxisAlignedBoundingBox)
+    .function("getPrimitiveCount", &RenderableManager::getPrimitiveCount)
+    .function("setMaterialInstanceAt", &RenderableManager::setMaterialInstanceAt,
+            allow_raw_pointers())
+    .function("getMaterialInstanceAt", &RenderableManager::getMaterialInstanceAt,
+            allow_raw_pointers())
+    .function("setBlendOrderAt", &RenderableManager::setBlendOrderAt)
+
+    // TODO: provide bindings for AttributeBitset
+    .function("getEnabledAttributesAt", &RenderableManager::getEnabledAttributesAt)
+
+    .function("setGeometryAt", EMBIND_LAMBDA(void, (RenderableManager* self,
+            RenderableManager::Instance instance, size_t primitiveIndex,
+            RenderableManager::PrimitiveType type, VertexBuffer* vertices, IndexBuffer* indices,
+            size_t offset, size_t count), {
+        self->setGeometryAt(instance, primitiveIndex, type, vertices, indices, offset, count);
+    }), allow_raw_pointers())
+
+    .function("setGeometryRangeAt", EMBIND_LAMBDA(void, (RenderableManager* self,
+            RenderableManager::Instance instance, size_t primitiveIndex,
+            RenderableManager::PrimitiveType type, size_t offset, size_t count), {
+        self->setGeometryAt(instance, primitiveIndex, type, offset, count);
+    }), allow_raw_pointers());
+
+/// RenderableManager$Instance ::class:: Component instance returned by [RenderableManager]
+/// Be sure to call the instance's `delete` method when you're done with it.
+class_<RenderableManager::Instance>("RenderableManager$Instance");
+    /// delete ::method:: Frees an instance obtained via `getInstance`
 
 /// TransformManager ::core class:: Adds transform components to entities.
 class_<TransformManager>("TransformManager")
@@ -587,7 +632,7 @@ class_<MaterialInstance>("MaterialInstance")
     .function("setColorParameter", EMBIND_LAMBDA(void,
             (MaterialInstance* self, std::string name, RgbType type, math::float3 value), {
         self->setParameter(name.c_str(), type, value); }), allow_raw_pointers())
-    .function("setPolygonOffset", &MaterialInstance::setPolygonOffset, allow_raw_pointers());
+    .function("setPolygonOffset", &MaterialInstance::setPolygonOffset);
 
 class_<TextureSampler>("TextureSampler")
     .constructor<driver::SamplerMinFilter, driver::SamplerMagFilter, driver::SamplerWrapMode>();
@@ -603,13 +648,7 @@ class_<Texture>("Texture")
     .function("_setImageCube", EMBIND_LAMBDA(void, (Texture* self,
             Engine* engine, uint8_t level, PixelBufferDescriptor pbd), {
         uint32_t faceSize = pbd.pbd->size / 6;
-        Texture::FaceOffsets offsets;
-        offsets.px = faceSize * 0;
-        offsets.nx = faceSize * 1;
-        offsets.py = faceSize * 2;
-        offsets.ny = faceSize * 3;
-        offsets.pz = faceSize * 4;
-        offsets.nz = faceSize * 5;
+        Texture::FaceOffsets offsets(faceSize);
         self->setImage(*engine, level, std::move(*pbd.pbd), offsets);
     }), allow_raw_pointers());
 
@@ -721,8 +760,8 @@ class_<PixelBufferDescriptor>("driver$PixelBufferDescriptor")
 // ------------
 
 /// KtxBundle ::class:: In-memory representation of a KTX file.
-/// Most clients should use one of the `*fromKtx` utility methods in the JavaScript [Engine] wrapper
-/// rather than interacting with `KtxBundle` directly.
+/// Most clients should use one of the `create*FromKtx` utility methods in the JavaScript [Engine]
+/// wrapper rather than interacting with `KtxBundle` directly.
 class_<KtxBundle>("KtxBundle")
     .constructor(EMBIND_LAMBDA(KtxBundle*, (BufferDescriptor kbd), {
         return new KtxBundle((uint8_t*) kbd.bd->buffer, (uint32_t) kbd.bd->size);
@@ -742,7 +781,7 @@ class_<KtxBundle>("KtxBundle")
     /// Returns "undefined" if no valid Filament enumerant exists.
     .function("getInternalFormat",
             EMBIND_LAMBDA(Texture::InternalFormat, (KtxBundle* self, bool srgb), {
-        auto result = KtxUtility::toTextureFormat(self->info().glInternalFormat);
+        auto result = KtxUtility::toTextureFormat(self->info());
         if (srgb) {
             if (result == Texture::InternalFormat::RGB8) {
                 result = Texture::InternalFormat::SRGB8;
@@ -760,14 +799,7 @@ class_<KtxBundle>("KtxBundle")
     /// Returns "undefined" if no valid Filament enumerant exists.
     .function("getPixelDataFormat",
             EMBIND_LAMBDA(driver::PixelDataFormat, (KtxBundle* self, bool rgbm), {
-        switch (self->info().glTypeSize) {
-            case 1: return driver::PixelDataFormat::R;
-            case 2: return driver::PixelDataFormat::RG;
-            case 3: return driver::PixelDataFormat::RGB;
-            case 4: return rgbm ? driver::PixelDataFormat::RGBA : driver::PixelDataFormat::RGBM;
-        }
-        assert(false && "Unknown pixel data format.");
-        return (driver::PixelDataFormat) 0xff;
+        return KtxUtility::toPixelDataFormat(self->getInfo(), rgbm);
     }), allow_raw_pointers())
 
     /// getPixelDataType ::method::
@@ -775,7 +807,7 @@ class_<KtxBundle>("KtxBundle")
     /// Returns "undefined" if no valid Filament enumerant exists.
     .function("getPixelDataType",
             EMBIND_LAMBDA(driver::PixelDataType, (KtxBundle* self), {
-        return KtxUtility::toPixelDataType(self->info().glType);
+        return KtxUtility::toPixelDataType(self->getInfo());
     }), allow_raw_pointers())
 
     /// getCompressedPixelDataType ::method::
@@ -783,14 +815,14 @@ class_<KtxBundle>("KtxBundle")
     /// Returns "undefined" if no valid Filament enumerant exists.
     .function("getCompressedPixelDataType",
             EMBIND_LAMBDA(driver::CompressedPixelDataType, (KtxBundle* self), {
-        return KtxUtility::toCompressedPixelDataType(self->info().glInternalFormat);
+        return KtxUtility::toCompressedPixelDataType(self->getInfo());
     }), allow_raw_pointers())
 
     /// isCompressed ::method::
     /// Per spec, compressed textures in KTX always have their glFormat field set to 0.
     /// ::retval:: boolean
     .function("isCompressed", EMBIND_LAMBDA(bool, (KtxBundle* self), {
-        return self->info().glFormat == 0;
+        return KtxUtility::isCompressed(self->getInfo());
     }), allow_raw_pointers())
 
     .function("isCubemap", &KtxBundle::isCubemap)
@@ -819,6 +851,11 @@ class_<KtxBundle>("KtxBundle")
         return std::string(self->getMetadata(key.c_str()));
     }), allow_raw_pointers());
 
+function("KtxUtility$createTexture", EMBIND_LAMBDA(Texture*,
+        (Engine* engine, const KtxBundle& ktx, bool srgb, bool rgbm), {
+    return KtxUtility::createTexture(engine, ktx, srgb, rgbm, nullptr, nullptr);
+}), allow_raw_pointers());
+
 /// KtxInfo ::class:: Property accessor for KTX header.
 /// For example, `ktxbundle.info().pixelWidth`. See the
 /// [KTX spec](https://www.khronos.org/opengles/sdk/tools/KTX/file_format_spec/) for the list of
@@ -836,12 +873,12 @@ class_<KtxInfo>("KtxInfo")
 
 register_vector<std::string>("RegistryKeys");
 
-class_<MeshIO::MaterialRegistry>("MeshIO$MaterialRegistry")
+class_<MeshReader::MaterialRegistry>("MeshReader$MaterialRegistry")
     .constructor<>()
-    .function("size", &MeshIO::MaterialRegistry::size)
-    .function("get", internal::MapAccess<MeshIO::MaterialRegistry>::get)
-    .function("set", internal::MapAccess<MeshIO::MaterialRegistry>::set)
-    .function("keys", EMBIND_LAMBDA(std::vector<std::string>, (MeshIO::MaterialRegistry* self), {
+    .function("size", &MeshReader::MaterialRegistry::size)
+    .function("get", internal::MapAccess<MeshReader::MaterialRegistry>::get)
+    .function("set", internal::MapAccess<MeshReader::MaterialRegistry>::set)
+    .function("keys", EMBIND_LAMBDA(std::vector<std::string>, (MeshReader::MaterialRegistry* self), {
         std::vector<std::string> result;
         for (const auto& pair : *self) {
             result.emplace_back(pair.first);
@@ -849,17 +886,17 @@ class_<MeshIO::MaterialRegistry>("MeshIO$MaterialRegistry")
         return result;
     }), allow_raw_pointers());
 
-// MeshIO ::class:: Simple parser for filamesh files.
+// MeshReader ::class:: Simple parser for filamesh files.
 // JavaScript clients are encouraged to use the [loadFilamesh] helper function instead of using
 // this class directly.
-class_<MeshIO>("MeshIO")
+class_<MeshReader>("MeshReader")
     // loadMeshFromBuffer ::static method:: Parses a filamesh buffer.
     // engine ::argument:: [Engine]
     // buffer ::argument:: [Buffer]
-    // materials ::argument:: [MeshIO$MaterialRegistry]
-    // ::retval:: the [MeshIO$Mesh] object
-    .class_function("loadMeshFromBuffer", EMBIND_LAMBDA(MeshIO::Mesh,
-            (Engine* engine, BufferDescriptor buffer, const MeshIO::MaterialRegistry& matreg), {
+    // materials ::argument:: [MeshReader$MaterialRegistry]
+    // ::retval:: the [MeshReader$Mesh] object
+    .class_function("loadMeshFromBuffer", EMBIND_LAMBDA(MeshReader::Mesh,
+            (Engine* engine, BufferDescriptor buffer, const MeshReader::MaterialRegistry& matreg), {
         // This destruction lambda is called for the vertex buffer AND index buffer, so release
         // CPU memory only after both have been uploaded to the GPU.
         struct Bundle { int count; BufferDescriptor buffer; };
@@ -871,23 +908,23 @@ class_<MeshIO>("MeshIO")
             }
         };
         // Parse the filamesh buffer. This creates the VB, IB, and renderable.
-        return MeshIO::loadMeshFromBuffer(
+        return MeshReader::loadMeshFromBuffer(
                 engine, buffer.bd->buffer,
                 destructor, bundle, matreg);
     }), allow_raw_pointers());
 
-// MeshIO$Mesh ::class:: Property accessor for objects created by [MeshIO].
+// MeshReader$Mesh ::class:: Property accessor for objects created by [MeshReader].
 // This exposes three getter methods: `renderable()`, `vertexBuffer()`, and `indexBuffer()`. These
 // are of type [Entity], [VertexBuffer], and [IndexBuffer]. JavaScript clients are encouraged to
 // use the [loadFilamesh] helper function instead of using this class directly.
-class_<MeshIO::Mesh>("MeshIO$Mesh")
-    .function("renderable", EMBIND_LAMBDA(utils::Entity, (MeshIO::Mesh mesh), {
+class_<MeshReader::Mesh>("MeshReader$Mesh")
+    .function("renderable", EMBIND_LAMBDA(utils::Entity, (MeshReader::Mesh mesh), {
         return mesh.renderable;
     }), allow_raw_pointers())
-    .function("vertexBuffer", EMBIND_LAMBDA(VertexBuffer*, (MeshIO::Mesh mesh), {
+    .function("vertexBuffer", EMBIND_LAMBDA(VertexBuffer*, (MeshReader::Mesh mesh), {
         return mesh.vertexBuffer;
     }), allow_raw_pointers())
-    .function("indexBuffer", EMBIND_LAMBDA(IndexBuffer*, (MeshIO::Mesh mesh), {
+    .function("indexBuffer", EMBIND_LAMBDA(IndexBuffer*, (MeshReader::Mesh mesh), {
         return mesh.indexBuffer;
     }), allow_raw_pointers());
 

@@ -106,12 +106,27 @@ struct BlendState {
     }
 };
 
+// StateCache caches Metal state objects using a templated StateType as a key.
+// StateCreator is a functor that creates a new state of type MetalType. It is assumed that this
+// type is created via a new* method, and thus it will be released upon deallocation of the
+// StateCache.
 template<typename StateType,
          typename MetalType,
          typename StateCreator>
 class StateCache {
 
 public:
+
+    StateCache() = default;
+
+    StateCache(const StateCache&) = delete;
+    StateCache& operator=(const StateCache&) = delete;
+
+    ~StateCache() {
+        for(auto it = mStateCache.begin(); it != mStateCache.end(); ++it) {
+            [it.value() release];
+        }
+    }
 
     void setDevice(id<MTLDevice> device) { mDevice = device; }
 

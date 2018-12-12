@@ -76,11 +76,21 @@ MetalVertexBuffer::MetalVertexBuffer(id<MTLDevice> device, uint8_t bufferCount, 
     }
 }
 
+MetalVertexBuffer::~MetalVertexBuffer() {
+    for (auto buffer : buffers) {
+        [buffer release];
+    }
+}
+
 MetalIndexBuffer::MetalIndexBuffer(id<MTLDevice> device, uint8_t elementSize, uint32_t indexCount)
     : HwIndexBuffer(elementSize, indexCount) {
     buffer = [device newBufferWithLength:(elementSize * indexCount)
                                  options:MTLResourceStorageModeShared];
 }
+
+MetalIndexBuffer::~MetalIndexBuffer() {
+    [buffer release];
+};
 
 MetalUniformBuffer::MetalUniformBuffer(id<MTLDevice> device, size_t size) : HwUniformBuffer(),
         size(size) {
@@ -162,9 +172,16 @@ MetalProgram::MetalProgram(id<MTLDevice> device, const Program& program) noexcep
         ASSERT_POSTCONDITION(library != nil, "Unable to compile Metal shading library.");
 
         *shaderFunctions[i] = [library newFunctionWithName:@"main0"];
+
+        [library release];
     }
 
     samplerBindings = *program.getSamplerBindings();
+}
+
+MetalProgram::~MetalProgram() {
+    [vertexFunction release];
+    [fragmentFunction release];
 }
 
 MetalTexture::MetalTexture(id<MTLDevice> device, driver::SamplerType target, uint8_t levels,

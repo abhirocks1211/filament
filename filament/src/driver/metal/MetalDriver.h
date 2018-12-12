@@ -128,8 +128,13 @@ private:
     template<typename Dp, typename B>
     void destruct_handle(HandleMap& handleMap, Handle<B>& handle) noexcept {
         std::lock_guard<std::mutex> lock(mHandleMapMutex);
+        assert(handle);
         // Call the destructor, remove the blob, don't bother reclaiming the integer id.
-        handle_cast<Dp>(handleMap, handle)->~Dp();
+        auto iter = handleMap.find(handle.getId());
+        assert(iter != handleMap.end());
+        Blob& blob = iter->second;
+        assert(blob.size() == sizeof(Dp));
+        reinterpret_cast<Dp*>(blob.data())->~Dp();
         handleMap.erase(handle.getId());
     }
 

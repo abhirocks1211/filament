@@ -95,8 +95,10 @@ MetalDriver::~MetalDriver() noexcept {
     delete pImpl;
 }
 
+#define METAL_DEBUG_COMMANDS 1
+
 void MetalDriver::debugCommand(const char *methodName) {
-#if METAL_DEBUG_COMMANDS
+#if defined(METAL_DEBUG_COMMANDS)
     utils::slog.d << methodName << utils::io::endl;
 #endif
 }
@@ -277,19 +279,27 @@ Driver::StreamHandle MetalDriver::createStreamFromTextureIdSynchronous() noexcep
 }
 
 void MetalDriver::destroyVertexBuffer(Driver::VertexBufferHandle vbh) {
-
+    if (vbh) {
+        destruct_handle<MetalVertexBuffer>(mHandleMap, vbh);
+    }
 }
 
 void MetalDriver::destroyIndexBuffer(Driver::IndexBufferHandle ibh) {
-
+    if (ibh) {
+        destruct_handle<MetalIndexBuffer>(mHandleMap, ibh);
+    }
 }
 
 void MetalDriver::destroyRenderPrimitive(Driver::RenderPrimitiveHandle rph) {
-
+    if (rph) {
+        destruct_handle<MetalRenderPrimitive>(mHandleMap, rph);
+    }
 }
 
 void MetalDriver::destroyProgram(Driver::ProgramHandle ph) {
-
+    if (ph) {
+        destruct_handle<MetalProgram>(mHandleMap, ph);
+    }
 }
 
 void MetalDriver::destroySamplerBuffer(Driver::SamplerBufferHandle sbh) {

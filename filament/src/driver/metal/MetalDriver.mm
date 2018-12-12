@@ -95,13 +95,13 @@ MetalDriver::~MetalDriver() noexcept {
     delete pImpl;
 }
 
-#define METAL_DEBUG_COMMANDS 1
-
+#if !defined(NDEBUG)
 void MetalDriver::debugCommand(const char *methodName) {
-#if defined(METAL_DEBUG_COMMANDS)
+#if METAL_DEBUG_COMMANDS == 1
     utils::slog.d << methodName << utils::io::endl;
 #endif
 }
+#endif
 
 void MetalDriver::beginFrame(int64_t monotonic_clock_ns, uint32_t frameId) {
     pImpl->mCurrentCommandBuffer = [pImpl->mCommandQueue commandBuffer];

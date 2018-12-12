@@ -110,7 +110,7 @@ struct MetalTexture : public HwTexture {
 
 struct MetalSamplerBuffer : public HwSamplerBuffer {
 
-    MetalSamplerBuffer(size_t size) : HwSamplerBuffer(size) {}
+    explicit MetalSamplerBuffer(size_t size) : HwSamplerBuffer(size) {}
 
 };
 

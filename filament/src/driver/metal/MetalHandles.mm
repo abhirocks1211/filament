@@ -104,6 +104,13 @@ MetalUniformBuffer::MetalUniformBuffer(id<MTLDevice> device, size_t size) : HwUn
     }
 }
 
+MetalUniformBuffer::~MetalUniformBuffer() {
+    if (buffer) {
+        [buffer release];
+    } else if (cpuBuffer) {
+        free(cpuBuffer);
+    }
+}
 
 void MetalRenderPrimitive::setBuffers(MetalVertexBuffer* vertexBuffer, MetalIndexBuffer*
         indexBuffer, uint32_t enabledAttributes) {

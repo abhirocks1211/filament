@@ -54,6 +54,7 @@ struct MetalIndexBuffer : public HwIndexBuffer {
 
 struct MetalUniformBuffer : public HwUniformBuffer {
     MetalUniformBuffer(id<MTLDevice> device, size_t size);
+    ~MetalUniformBuffer();
 
     size_t size = 0;
 

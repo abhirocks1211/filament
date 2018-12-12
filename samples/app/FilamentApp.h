@@ -155,6 +155,7 @@ private:
         void fixupMouseCoordinatesForHdpi(ssize_t& x, ssize_t& y) const;
 
         SDL_Window* mWindow = nullptr;
+        SDL_Renderer* mSdlRenderer = nullptr;
         FilamentApp* mFilamentApp = nullptr;
         filament::Renderer* mRenderer = nullptr;
 

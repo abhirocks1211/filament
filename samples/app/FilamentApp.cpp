@@ -437,7 +437,7 @@ FilamentApp::Window::Window(FilamentApp* filamentApp,
     // SDL to create a Metal backing layer, which allows us to run Vulkan apps via MoltenVK.
     #if defined(FILAMENT_DRIVER_SUPPORTS_VULKAN) && defined(__APPLE__)
     constexpr int METAL_DRIVER = 2;
-    SDL_CreateRenderer(mWindow, METAL_DRIVER, SDL_RENDERER_ACCELERATED);
+    mSdlRenderer = SDL_CreateRenderer(mWindow, METAL_DRIVER, SDL_RENDERER_ACCELERATED);
     #endif
 
     void* nativeWindow = ::getNativeWindow(mWindow);
@@ -503,6 +503,9 @@ FilamentApp::Window::~Window() {
     }
     mFilamentApp->mEngine->destroy(mRenderer);
     mFilamentApp->mEngine->destroy(mSwapChain);
+    if (mSdlRenderer) {
+        SDL_DestroyRenderer(mSdlRenderer);
+    }
     SDL_DestroyWindow(mWindow);
 }
 

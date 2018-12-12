@@ -95,8 +95,8 @@ struct MetalTexture : public HwTexture {
 
     MetalTexture(id<MTLDevice> device, driver::SamplerType target, uint8_t levels,
             TextureFormat format, uint8_t samples, uint32_t width, uint32_t height, uint32_t depth,
-            TextureUsage usage)
-    noexcept;
+            TextureUsage usage) noexcept;
+    ~MetalTexture();
 
     void load2DImage(uint32_t level, uint32_t xoffset, uint32_t yoffset, uint32_t width,
             uint32_t height, Driver::PixelBufferDescriptor& data) noexcept;

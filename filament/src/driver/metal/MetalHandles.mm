@@ -226,6 +226,10 @@ MetalTexture::MetalTexture(id<MTLDevice> device, driver::SamplerType target, uin
     texture = [device newTextureWithDescriptor:descriptor];
 }
 
+MetalTexture::~MetalTexture() {
+    [texture release];
+}
+
 void MetalTexture::load2DImage(uint32_t level, uint32_t xoffset, uint32_t yoffset, uint32_t width,
         uint32_t height, Driver::PixelBufferDescriptor& data) noexcept {
     MTLRegion region {

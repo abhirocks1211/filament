@@ -315,7 +315,9 @@ void MetalDriver::destroyUniformBuffer(Driver::UniformBufferHandle ubh) {
 }
 
 void MetalDriver::destroyTexture(Driver::TextureHandle th) {
-
+    if (th) {
+        destruct_handle<MetalTexture>(mHandleMap, th);
+    }
 }
 
 void MetalDriver::destroyRenderTarget(Driver::RenderTargetHandle rth) {

@@ -39,6 +39,9 @@ struct MetalDriverImpl {
     id<MTLDevice> mDevice = nullptr;
     id<MTLCommandQueue> mCommandQueue = nullptr;
 
+    NSAutoreleasePool* mDriverPool = nil;
+    NSAutoreleasePool* mPool = nil;
+
     // Single use, re-created each frame.
     id<MTLCommandBuffer> mCurrentCommandBuffer = nullptr;
     id<MTLRenderCommandEncoder> mCurrentCommandEncoder = nullptr;
@@ -82,6 +85,7 @@ MetalDriver::MetalDriver(driver::MetalPlatform* platform) noexcept
         mPlatform(*platform),
         pImpl(new MetalDriverImpl) {
 
+    pImpl->mDriverPool = [[NSAutoreleasePool alloc] init];
     pImpl->mDevice = MTLCreateSystemDefaultDevice();
     pImpl->mCommandQueue = [pImpl->mDevice newCommandQueue];
     pImpl->mPipelineStateCache.setDevice(pImpl->mDevice);
@@ -90,8 +94,6 @@ MetalDriver::MetalDriver(driver::MetalPlatform* platform) noexcept
 }
 
 MetalDriver::~MetalDriver() noexcept {
-    [pImpl->mCommandQueue release];
-    [pImpl->mDepthTexture release];
     delete pImpl;
 }
 
@@ -104,6 +106,7 @@ void MetalDriver::debugCommand(const char *methodName) {
 #endif
 
 void MetalDriver::beginFrame(int64_t monotonic_clock_ns, uint32_t frameId) {
+    pImpl->mPool = [[NSAutoreleasePool alloc] init];
     pImpl->mCurrentCommandBuffer = [pImpl->mCommandQueue commandBuffer];
 }
 
@@ -180,6 +183,8 @@ void MetalDriver::createRenderTarget(Driver::RenderTargetHandle rth,
         renderTarget->depth = depthTexture->texture;
     } else if (targetBufferFlags & TargetBufferFlags::DEPTH) {
         // Create a depth texture.
+        // TODO: ownership is not clear here. Should we force Filament to always create a depth
+        // texture ahead of time?
         MTLTextureDescriptor* depthTextureDesc =
                 [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatDepth32Float
                                                                    width:width
@@ -321,19 +326,27 @@ void MetalDriver::destroyTexture(Driver::TextureHandle th) {
 }
 
 void MetalDriver::destroyRenderTarget(Driver::RenderTargetHandle rth) {
-
+    if (rth) {
+        // todo: see comment inside of createRenderTarget for why this is difficult at the moment.
+        // destruct_handle<MetalRenderTarget>(mHandleMap, rth);
+    }
 }
 
 void MetalDriver::destroySwapChain(Driver::SwapChainHandle sch) {
-
+    if (sch) {
+        destruct_handle<MetalSwapChain>(mHandleMap, sch);
+    }
 }
 
 void MetalDriver::destroyStream(Driver::StreamHandle sh) {
-
+    // no-op
 }
 
 void MetalDriver::terminate() {
-
+    [pImpl->mCommandQueue release];
+    [pImpl->mDevice release];
+    [pImpl->mDepthTexture release];
+    [pImpl->mDriverPool drain];
 }
 
 Driver::StreamHandle MetalDriver::createStream(void* stream) {
@@ -342,7 +355,7 @@ Driver::StreamHandle MetalDriver::createStream(void* stream) {
 
 void MetalDriver::setStreamDimensions(Driver::StreamHandle stream, uint32_t width,
         uint32_t height) {
-
+    // no-op
 }
 
 int64_t MetalDriver::getStreamTimestamp(Driver::StreamHandle stream) {
@@ -350,11 +363,11 @@ int64_t MetalDriver::getStreamTimestamp(Driver::StreamHandle stream) {
 }
 
 void MetalDriver::updateStreams(driver::DriverApi* driver) {
-
+    // no-op
 }
 
 void MetalDriver::destroyFence(Driver::FenceHandle fh) {
-
+    // no-op
 }
 
 Driver::FenceStatus MetalDriver::wait(Driver::FenceHandle fh, uint64_t timeout) {
@@ -554,6 +567,7 @@ void MetalDriver::commit(Driver::SwapChainHandle sch) {
     [pImpl->mCurrentCommandBuffer presentDrawable:pImpl->mCurrentDrawable];
     [pImpl->mCurrentCommandBuffer commit];
     pImpl->mCurrentDrawable = nil;
+    [pImpl->mPool drain];
 }
 
 void MetalDriver::viewport(ssize_t left, ssize_t bottom, size_t width, size_t height) {

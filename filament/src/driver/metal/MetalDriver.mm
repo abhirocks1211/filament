@@ -95,6 +95,7 @@ MetalDriver::MetalDriver(driver::MetalPlatform* platform) noexcept
 
 MetalDriver::~MetalDriver() noexcept {
     delete pImpl;
+    [pImpl->mDevice release];
 }
 
 #if !defined(NDEBUG)
@@ -344,7 +345,6 @@ void MetalDriver::destroyStream(Driver::StreamHandle sh) {
 
 void MetalDriver::terminate() {
     [pImpl->mCommandQueue release];
-    [pImpl->mDevice release];
     [pImpl->mDepthTexture release];
     [pImpl->mDriverPool drain];
 }

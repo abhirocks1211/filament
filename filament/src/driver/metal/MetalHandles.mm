@@ -72,12 +72,14 @@ MetalVertexBuffer::MetalVertexBuffer(id<MTLDevice> device, uint8_t bufferCount, 
 
         id<MTLBuffer> buffer = [device newBufferWithLength:size
                                                    options:MTLResourceStorageModeShared];
+        NSLog(@"[Benjamin] Created buffer at %@", buffer);
         buffers.push_back(buffer);
     }
 }
 
 MetalVertexBuffer::~MetalVertexBuffer() {
     for (auto buffer : buffers) {
+        NSLog(@"[Benjamin] Released buffer at %@", buffer);
         [buffer release];
     }
 }

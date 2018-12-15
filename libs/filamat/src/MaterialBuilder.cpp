@@ -548,26 +548,14 @@ Package MaterialBuilder::build() noexcept {
                 // Fragment Shader
                 std::string fs = sg.createFragmentProgram(
                         shaderModel, targetApi, codeGenTargetApi, info, k, mInterpolation);
-<<<<<<< HEAD
-                if (mPostprocessorCallback != nullptr) {
-                    bool ok = mPostprocessorCallback(fs, filament::driver::ShaderType::FRAGMENT,
-                            shaderModel, &fs, pSpirv, pMsl);
-                    if (!ok) {
-                        showErrorMessage(mMaterialName.c_str_safe(), k, targetApi,
-                                filament::driver::ShaderType::FRAGMENT, fs);
-                        errorOccured = true;
-                        break;
-                    }
-=======
 
                 bool ok = postProcessor.process(fs, filament::driver::ShaderType::FRAGMENT,
-                        shaderModel, &fs, pSpirv);
+                        shaderModel, &fs, pSpirv, pMsl);
                 if (!ok) {
                     showErrorMessage(mMaterialName.c_str_safe(), k, targetApi,
                             filament::driver::ShaderType::FRAGMENT, fs);
                     errorOccured = true;
                     break;
->>>>>>> master
                 }
 
                 if (targetApi == TargetApi::OPENGL) {

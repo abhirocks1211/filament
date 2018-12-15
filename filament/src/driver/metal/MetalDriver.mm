@@ -14,8 +14,9 @@
  * limitations under the License.
  */
 
-#include "driver/metal/MetalDriver.h"
 #include "driver/CommandStream.h"
+#include "driver/CommandStreamDispatcher.h"
+#include "driver/metal/MetalDriver.h"
 
 #include "MetalBinder.h"
 #include "MetalEnums.h"

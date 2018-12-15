@@ -29,7 +29,7 @@ Note: the UV1 attribute cannot be used in interleaved mode
     uint32  : number of parts (sub-meshes or draw calls)
     float3  : center of the total bounding box (AABB)
     float3  : half extent of the total bounding box (AABB)
-    uint32  : 0 if the vertices are not interleaved, 1 otherwise
+    uint32  : flags (see below)
     uint32  : offset of the position attribute
     uint32  : stride of the position attribute
     uint32  : offset of the tangents attribute
@@ -38,13 +38,19 @@ Note: the UV1 attribute cannot be used in interleaved mode
     uint32  : stride of the color attribute
     uint32  : offset of the UV0 attribute
     uint32  : stride of the UV0 attribute
-    uint32  : offset of the UV1 attribute (always 0xffffffff in interleaved mode)
-    uint32  : stride of the UV1 attribute (always 0xffffffff in interleaved mode)
+    uint32  : offset of the UV1 attribute (0xffffffff if UV1 is not present)
+    uint32  : stride of the UV1 attribute (0xffffffff if UV1 is not present)
     uint32  : total number of vertices
-    uint32  : size in bytes occupied by the vertices
+    uint32  : size in bytes occupied by the (compressed) vertices
     uint32  : 0 if indices are stored as uint32, 1 if stored as uint16
     uint32  : total number of indices
-    uint32  : size in bytes occupied by the indices
+    uint32  : size in bytes occupied by the (compressed) indices
+
+The `flags` field contains the following bits:
+
+- Bit 0: Specifies that vertex attributes are interleaved.
+- Bit 1: UV's are 16-bit integers normalized into [-1, +1] rather than half-floats.
+- Bit 2: Vertex and index data are compressed using zeux/meshoptimizer.
 
 ### Vertex data
 
@@ -97,7 +103,7 @@ struct Header {
     uint32_t version;
     uint32_t parts;
     Box      aabb;
-    uint32_t interleaved;
+    uint32_t flags;
     uint32_t offsetPosition;
     uint32_t stridePosition;
     uint32_t offsetTangents;
@@ -119,7 +125,7 @@ struct Vertex {
     half4  position;
     short4 tangents;
     ubyte4 color;
-    half2  uv0;
+    short2 uv0; // either half-float or snorm int16
 };
 
 struct Part {

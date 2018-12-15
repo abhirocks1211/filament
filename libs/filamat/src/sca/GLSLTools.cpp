@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "filamat/sca/GLSLTools.h"
+#include "GLSLTools.h"
 
 #include <cstring>
 
@@ -28,7 +28,7 @@
 
 #include "filamat/Enums.h"
 
-#include "filamat/sca/ASTHelpers.h"
+#include "ASTHelpers.h"
 
 // GLSLANG headers
 #include <InfoSink.h>
@@ -66,8 +66,8 @@ bool GLSLTools::analyzeFragmentShader(const std::string& shaderCode, ShaderModel
     EShMessages msg = glslangFlagsFromTargetApi(targetApi);
     bool ok = tShader.parse(&DefaultTBuiltInResource, version, false, msg);
     if (!ok) {
-        std::cerr << "ERROR: Unable to parse fragment shader:" << std::endl;
-        std::cerr << tShader.getInfoLog() << std::flush;
+        utils::slog.e << "ERROR: Unable to parse fragment shader:" << utils::io::endl;
+        utils::slog.e << tShader.getInfoLog() << utils::io::flush;
         return false;
     }
 
@@ -75,8 +75,8 @@ bool GLSLTools::analyzeFragmentShader(const std::string& shaderCode, ShaderModel
     // Check there is a material function definition in this shader.
     TIntermNode* materialFctNode = ASTUtils::getFunctionByNameOnly("material", *root);
     if (materialFctNode == nullptr) {
-        std::cerr << "ERROR: Invalid fragment shader:" << std::endl;
-        std::cerr << "ERROR: Unable to find material() function" << std::endl;
+        utils::slog.e << "ERROR: Invalid fragment shader:" << utils::io::endl;
+        utils::slog.e << "ERROR: Unable to find material() function" << utils::io::endl;
         return false;
     }
 
@@ -84,8 +84,8 @@ bool GLSLTools::analyzeFragmentShader(const std::string& shaderCode, ShaderModel
     TIntermAggregate* prepareMaterialNode = ASTUtils::getFunctionByNameOnly("prepareMaterial",
             *root);
     if (prepareMaterialNode == nullptr) {
-        std::cerr << "ERROR: Invalid fragment shader:" << std::endl;
-        std::cerr << "ERROR: Unable to find prepareMaterial() function" << std::endl;
+        utils::slog.e << "ERROR: Invalid fragment shader:" << utils::io::endl;
+        utils::slog.e << "ERROR: Unable to find prepareMaterial() function" << utils::io::endl;
         return false;
     }
 
@@ -93,8 +93,8 @@ bool GLSLTools::analyzeFragmentShader(const std::string& shaderCode, ShaderModel
     bool prepareMaterialCalled = isFunctionCalled(prepareMaterialSignature,
             *materialFctNode, *root);
     if (!prepareMaterialCalled) {
-        std::cerr << "ERROR: Invalid fragment shader:" << std::endl;
-        std::cerr << "ERROR: prepareMaterial() is not called" << std::endl;
+        utils::slog.e << "ERROR: Invalid fragment shader:" << utils::io::endl;
+        utils::slog.e << "ERROR: prepareMaterial() is not called" << utils::io::endl;
         return false;
     }
 
@@ -115,8 +115,8 @@ bool GLSLTools::analyzeVertexShader(const std::string& shaderCode, ShaderModel m
     EShMessages msg = glslangFlagsFromTargetApi(targetApi);
     bool ok = tShader.parse(&DefaultTBuiltInResource, version, false, msg);
     if (!ok) {
-        std::cerr << "ERROR: Unable to parse vertex shader" << std::endl;
-        std::cerr << tShader.getInfoLog() << std::flush;
+        utils::slog.e << "ERROR: Unable to parse vertex shader" << utils::io::endl;
+        utils::slog.e << tShader.getInfoLog() << utils::io::flush;
         return false;
     }
 
@@ -124,57 +124,36 @@ bool GLSLTools::analyzeVertexShader(const std::string& shaderCode, ShaderModel m
     // Check there is a material function definition in this shader.
     TIntermNode* materialFctNode = ASTUtils::getFunctionByNameOnly("materialVertex", *root);
     if (materialFctNode == nullptr) {
-        std::cerr << "ERROR: Invalid vertex shader" << std::endl;
-        std::cerr << "ERROR: Unable to find materialVertex() function" << std::endl;
+        utils::slog.e << "ERROR: Invalid vertex shader" << utils::io::endl;
+        utils::slog.e << "ERROR: Unable to find materialVertex() function" << utils::io::endl;
         return false;
     }
 
     return true;
 }
 
-bool GLSLTools::process(MaterialBuilder& builder) const noexcept {
-    PropertySet properties;
-    if (!findProperties(builder, properties)) {
-        return false;
-    }
-
-    for (Property property : properties) {
-        builder.set(property);
-    }
-
-    // At this point the shader is syntactically correct. Perform semantic analysis now.
-    ShaderModel model;
-
-    std::string shaderCode = builder.peek(ShaderType::VERTEX, model);
-    bool result = analyzeVertexShader(shaderCode, model, builder.getTargetApi());
-    if (!result) return result;
-
-    shaderCode = builder.peek(ShaderType::FRAGMENT, model);
-    result = analyzeFragmentShader(shaderCode, model, builder.getTargetApi());
-    return result;
-}
-
 void GLSLTools::init() {
-    InitializeProcess();
+    // According to glslang, InitializeProcess should be called exactly once per process.
+    static bool initializeCalled = false;
+    if (!initializeCalled) {
+        InitializeProcess();
+        initializeCalled = true;
+    }
 }
 
-void GLSLTools::terminate() {
-    FinalizeProcess();
-}
-
-bool GLSLTools::findProperties(const filamat::MaterialBuilder& builderIn, PropertySet& properties)
-        const noexcept {
+bool GLSLTools::findProperties(const filamat::MaterialBuilder& builderIn,
+        MaterialBuilder::PropertyList& properties,
+        MaterialBuilder::TargetApi targetApi) const noexcept {
+    filamat::MaterialBuilder builder(builderIn);
 
     // Some fields in MaterialInputs only exist if the property is set (e.g: normal, subsurface
-    // for cloth shading model). Copy the builder and give our shader all properties. This will
-    // enable us to parse and static code analyse the AST.
-    filamat::MaterialBuilder builder(builderIn);
-    for (auto hint : Enums::map<Property>()) {
-        builder.set(hint.second);
-    }
+    // for cloth shading model). Give our shader all properties. This will enable us to parse and
+    // static code analyse the AST.
+    MaterialBuilder::PropertyList allProperties;
+    std::fill_n(allProperties, filament::MATERIAL_PROPERTIES_COUNT, true);
 
     ShaderModel model;
-    std::string shaderCode = builder.peek(ShaderType::FRAGMENT, model);
+    std::string shaderCode = builder.peek(ShaderType::FRAGMENT, model, allProperties);
     const char* shaderCString = shaderCode.c_str();
 
     TShader tShader(EShLanguage::EShLangFragment);
@@ -182,13 +161,13 @@ bool GLSLTools::findProperties(const filamat::MaterialBuilder& builderIn, Proper
 
     GLSLangCleaner cleaner;
     int version = glslangVersionFromShaderModel(model);
-    EShMessages msg = glslangFlagsFromTargetApi(builderIn.getTargetApi());
+    EShMessages msg = glslangFlagsFromTargetApi(targetApi);
     const TBuiltInResource* builtins = &DefaultTBuiltInResource;
     bool ok = tShader.parse(builtins, version, false, msg);
     if (!ok) {
         // Even with all properties set the shader doesn't build. This is likely a syntax error
         // with user provided code.
-        std::cerr << tShader.getInfoLog() << std::endl;
+        utils::slog.e << tShader.getInfoLog() << utils::io::endl;
         return false;
     }
 
@@ -200,21 +179,22 @@ bool GLSLTools::findProperties(const filamat::MaterialBuilder& builderIn, Proper
 }
 
 bool GLSLTools::findPropertyWritesOperations(const std::string& functionName, size_t parameterIdx,
-        TIntermNode* rootNode, PropertySet& properties) const noexcept {
+        TIntermNode* rootNode, MaterialBuilder::PropertyList& properties) const noexcept {
 
     glslang::TIntermAggregate* functionMaterialDef =
             ASTUtils::getFunctionBySignature(functionName, *rootNode);
     if (functionMaterialDef == nullptr) {
-        std::cerr << "Unable to find function '" << functionName << "' definition." << std::endl;
+        utils::slog.e << "Unable to find function '" << functionName << "' definition."
+                << utils::io::endl;
         return false;
     }
 
     std::vector<FunctionParameter> functionMaterialParameters;
     ASTUtils::getFunctionParameters(functionMaterialDef, functionMaterialParameters);
 
-    if (functionMaterialParameters.size() < parameterIdx) {
-        std::cerr << "Unable to find function '" << functionName <<  "' parameterIndex: " <<
-                parameterIdx << std::endl;
+    if (functionMaterialParameters.size() <= parameterIdx) {
+        utils::slog.e << "Unable to find function '" << functionName <<  "' parameterIndex: " <<
+                parameterIdx << utils::io::endl;
         return false;
     }
 
@@ -228,7 +208,8 @@ bool GLSLTools::findPropertyWritesOperations(const std::string& functionName, si
     std::deque<Symbol> symbols;
     bool ok = findSymbolsUsage(functionName, *rootNode, symbols);
     if (!ok) {
-        std::cerr << "Unable to trace usage of symbols in function '" << functionName << std::endl;
+        utils::slog.e << "Unable to trace usage of symbols in function '" << functionName
+                << utils::io::endl;
         return false;
     }
 
@@ -253,7 +234,7 @@ bool GLSLTools::findPropertyWritesOperations(const std::string& functionName, si
 
 void GLSLTools::scanSymbolForProperty(Symbol& symbol,
         TIntermNode* rootNode,
-        PropertySet& properties) const noexcept {
+        MaterialBuilder::PropertyList& properties) const noexcept {
     for (Access access : symbol.getAccesses()) {
         if (access.type == Access::Type::FunctionCall) {
             // Do NOT look into prepareMaterial call.
@@ -274,7 +255,7 @@ void GLSLTools::scanSymbolForProperty(Symbol& symbol,
                         FunctionParameter::INOUT) {
                     MaterialBuilder::Property p =
                             Enums::toEnum<Property>(symbol.getDirectIndexStructName());
-                    properties.insert(p);
+                    properties[size_t(p)] = true;
                 }
             } else {
                 findPropertyWritesOperations(access.string, access.parameterIdx, rootNode,
@@ -287,7 +268,7 @@ void GLSLTools::scanSymbolForProperty(Symbol& symbol,
         if (access.type == Access::Type::DirectIndexForStruct) {
             if (Enums::isValid<Property>(access.string)) {
                 MaterialBuilder::Property p = Enums::toEnum<Property>(access.string);
-                properties.insert(p);
+                properties[size_t(p)] = true;
             }
             return;
         }

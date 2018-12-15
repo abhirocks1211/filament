@@ -275,9 +275,11 @@ private:
     using GetProcAddressType = MustCastToRightType (*)(const char* name);
     GetProcAddressType getProcAddress = nullptr;
 
-    static bool hasExtension(std::set<utils::StaticString> const& exts, const char* ext) noexcept;
-    void initExtensionsGLES(GLint major, GLint minor, std::set<utils::StaticString> const& extensionsMap);
-    void initExtensionsGL(GLint major, GLint minor, std::set<utils::StaticString> const& extensionsMap);
+    // this is chosen to minimize code size
+    using ExtentionSet = std::set<utils::StaticString>;
+    static bool hasExtension(ExtentionSet const& exts, utils::StaticString ext) noexcept;
+    void initExtensionsGLES(GLint major, GLint minor, ExtentionSet const& extensionsMap);
+    void initExtensionsGL(GLint major, GLint minor, ExtentionSet const& extensionsMap);
 
 
     /* Misc... */
@@ -345,6 +347,7 @@ private:
     inline void disableVertexAttribArray(GLuint index) noexcept;
     inline void enable(GLenum cap) noexcept;
     inline void disable(GLenum cap) noexcept;
+    inline void frontFace(GLenum mode) noexcept;
     inline void cullFace(GLenum mode) noexcept;
     inline void blendEquation(GLenum modeRGB, GLenum modeA) noexcept;
     inline void blendFunction(GLenum srcRGB, GLenum srcA, GLenum dstRGB, GLenum dstA) noexcept;
@@ -404,6 +407,7 @@ private:
         } vao;
 
         struct {
+            GLenum frontFace            = GL_CCW;
             GLenum cullFace             = GL_BACK;
             GLenum blendEquationRGB     = GL_FUNC_ADD;
             GLenum blendEquationA       = GL_FUNC_ADD;

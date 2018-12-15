@@ -19,8 +19,8 @@ set(MATERIAL_NAMES
     nonlit)
 
 set(MATC_FLAGS -a opengl -m material -p mobile)
-if (CMAKE_BUILD_TYPE MATCHES Release)
-    set(MATC_FLAGS -O ${MATC_FLAGS})
+if (NOT CMAKE_BUILD_TYPE MATCHES Release)
+    set(MATC_FLAGS -g ${MATC_FLAGS})
 endif()
 
 set(MATERIAL_BINS)
@@ -80,7 +80,7 @@ function(add_mesh SOURCE TARGET)
     set(target_meshes ${target_meshes} ${target_mesh} PARENT_SCOPE)
     add_custom_command(
         OUTPUT ${target_mesh}
-        COMMAND filamesh ${source_mesh} ${target_mesh}
+        COMMAND filamesh --compress ${source_mesh} ${target_mesh}
         MAIN_DEPENDENCY ${source_mesh}
         DEPENDS filamesh)
 endfunction()

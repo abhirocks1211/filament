@@ -43,7 +43,7 @@
 #include "eiff/DictionaryTextChunk.h"
 #include "eiff/DictionarySpirvChunk.h"
 
-#include "filamat/sca/GLSLTools.h"
+#include "sca/GLSLTools.h"
 
 using namespace utils;
 
@@ -92,7 +92,6 @@ void MaterialBuilderBase::prepare() {
 
 MaterialBuilder::MaterialBuilder() : mMaterialName("Unnamed") {
     std::fill_n(mProperties, filament::MATERIAL_PROPERTIES_COUNT, false);
-    GLSLTools::init();
     mShaderModels.reset();
 }
 
@@ -120,32 +119,6 @@ MaterialBuilder& MaterialBuilder::shading(Shading shading) noexcept {
 
 MaterialBuilder& MaterialBuilder::interpolation(Interpolation interpolation) noexcept {
     mInterpolation = interpolation;
-    return *this;
-}
-
-MaterialBuilder& MaterialBuilder::set(Property p) noexcept {
-    // Note: switch/case here is useful in case we're given an invalid property
-    switch (p) {
-        case Property::BASE_COLOR:
-        case Property::ROUGHNESS:
-        case Property::METALLIC:
-        case Property::REFLECTANCE:
-        case Property::AMBIENT_OCCLUSION:
-        case Property::CLEAR_COAT:
-        case Property::CLEAR_COAT_ROUGHNESS:
-        case Property::CLEAR_COAT_NORMAL:
-        case Property::ANISOTROPY:
-        case Property::ANISOTROPY_DIRECTION:
-        case Property::THICKNESS:
-        case Property::SUBSURFACE_POWER:
-        case Property::SUBSURFACE_COLOR:
-        case Property::SHEEN_COLOR:
-        case Property::EMISSIVE:
-        case Property::NORMAL:
-            assert(size_t(p) < filament::MATERIAL_PROPERTIES_COUNT);
-            mProperties[size_t(p)] = true;
-            break;
-    }
     return *this;
 }
 
@@ -324,6 +297,28 @@ void MaterialBuilder::prepareToBuild(MaterialInfo& info) noexcept {
     info.hasShadowMultiplier = mShadowMultiplier;
 }
 
+bool MaterialBuilder::runStaticCodeAnalysis() noexcept {
+    using namespace filament::driver;
+
+    GLSLTools glslTools;
+
+    // Populate mProperties with the properties set in the shader.
+    if (!glslTools.findProperties(*this, mProperties, mTargetApi)) {
+        return false;
+    }
+
+    // At this point the shader is syntactically correct. Perform semantic analysis now.
+    ShaderModel model;
+
+    std::string shaderCode = peek(ShaderType::VERTEX, model, mProperties);
+    bool result = glslTools.analyzeVertexShader(shaderCode, model, mTargetApi);
+    if (!result) return result;
+
+    shaderCode = peek(ShaderType::FRAGMENT, model, mProperties);
+    result = glslTools.analyzeFragmentShader(shaderCode, model, mTargetApi);
+    return result;
+}
+
 static void showErrorMessage(const char* materialName, uint8_t variant,
         MaterialBuilder::TargetApi targetApi, filament::driver::ShaderType shaderType,
         const std::string& shaderCode) {
@@ -341,14 +336,22 @@ static void showErrorMessage(const char* materialName, uint8_t variant,
 }
 
 Package MaterialBuilder::build() noexcept {
+    GLSLTools::init();
+
+    if (!runStaticCodeAnalysis()) {
+        // Return an empty package to signal a failure to build the material.
+        Package package(0);
+        package.setValid(false);
+        return package;
+    }
+
+    bool errorOccured = false;
+
     MaterialInfo info;
     prepareToBuild(info);
 
-    // Install postprocessor to optimize / compile to Spir-V if necessary.
-    // TODO: remove the postProcessor functionality, since it isn't being used by the outside world.
-    using namespace std::placeholders;
+    // Create a postprocessor to optimize / compile to Spir-V if necessary.
     GLSLPostProcessor postProcessor(mOptimization, mPrintShaders);
-    this->postProcessor(std::bind(&GLSLPostProcessor::process, postProcessor, _1, _2, _3, _4, _5, _6));
 
     // Create chunk tree.
     ChunkContainer container;
@@ -450,7 +453,6 @@ Package MaterialBuilder::build() noexcept {
     SimpleFieldChunk<bool> hasCustomDepth(ChunkType::MaterialHasCustomDepthShader, customDepth);
     container.addChild(&hasCustomDepth);
 
-    bool errorOccured = false;
     for (const auto& params : mCodeGenPermutations) {
         // Create Sampler binding map specific to this API.
         assert(params.targetApi != TargetApi::ALL);
@@ -491,31 +493,36 @@ Package MaterialBuilder::build() noexcept {
             metalEntry.variant = k;
 
             // Remove variants for unlit materials
-            uint8_t v = filament::Variant::filterVariant(k & variantMask, isLit() || mShadowMultiplier);
+            uint8_t v = filament::Variant::filterVariant(
+                    k & variantMask, isLit() || mShadowMultiplier);
 
             if (filament::Variant::filterVariantVertex(v) == k) {
                 // Vertex Shader
                 std::string vs = sg.createVertexProgram(
                         shaderModel, targetApi, codeGenTargetApi, info, k,
                         mInterpolation, mVertexDomain);
-                if (mPostprocessorCallback != nullptr) {
-                    bool ok = mPostprocessorCallback(vs, filament::driver::ShaderType::VERTEX,
-                            shaderModel, &vs, pSpirv, pMsl);
-                    if (!ok) {
-                        showErrorMessage(mMaterialName.c_str_safe(), k, targetApi,
-                                filament::driver::ShaderType::VERTEX, vs);
-                        errorOccured = true;
-                        break;
-                    }
+                bool ok = postProcessor.process(vs, filament::driver::ShaderType::VERTEX,
+                        shaderModel, &vs, pSpirv, pMsl);
+                if (!ok) {
+                    showErrorMessage(mMaterialName.c_str_safe(), k, targetApi,
+                            filament::driver::ShaderType::VERTEX, vs);
+                    errorOccured = true;
+                    break;
                 }
+
                 if (targetApi == TargetApi::OPENGL) {
+                    if (codeGenTargetApi == TargetApi::VULKAN) {
+                        sg.fixupExternalSamplers(shaderModel, vs, info);
+                    }
+
                     glslEntry.stage = filament::driver::ShaderType::VERTEX;
                     glslEntry.shaderSize = vs.size();
-                    glslEntry.shader = (char*)malloc(glslEntry.shaderSize + 1);
+                    glslEntry.shader = (char*) malloc(glslEntry.shaderSize + 1);
                     strcpy(glslEntry.shader, vs.c_str());
                     glslDictionary.addText(glslEntry.shader);
                     glslEntries.push_back(glslEntry);
                 }
+
                 if (targetApi == TargetApi::VULKAN) {
                     assert(spirv.size() > 0);
                     spirvEntry.stage = filament::driver::ShaderType::VERTEX;
@@ -541,6 +548,7 @@ Package MaterialBuilder::build() noexcept {
                 // Fragment Shader
                 std::string fs = sg.createFragmentProgram(
                         shaderModel, targetApi, codeGenTargetApi, info, k, mInterpolation);
+<<<<<<< HEAD
                 if (mPostprocessorCallback != nullptr) {
                     bool ok = mPostprocessorCallback(fs, filament::driver::ShaderType::FRAGMENT,
                             shaderModel, &fs, pSpirv, pMsl);
@@ -550,15 +558,31 @@ Package MaterialBuilder::build() noexcept {
                         errorOccured = true;
                         break;
                     }
+=======
+
+                bool ok = postProcessor.process(fs, filament::driver::ShaderType::FRAGMENT,
+                        shaderModel, &fs, pSpirv);
+                if (!ok) {
+                    showErrorMessage(mMaterialName.c_str_safe(), k, targetApi,
+                            filament::driver::ShaderType::FRAGMENT, fs);
+                    errorOccured = true;
+                    break;
+>>>>>>> master
                 }
+
                 if (targetApi == TargetApi::OPENGL) {
+                    if (codeGenTargetApi == TargetApi::VULKAN) {
+                        sg.fixupExternalSamplers(shaderModel, fs, info);
+                    }
+
                     glslEntry.stage = filament::driver::ShaderType::FRAGMENT;
                     glslEntry.shaderSize = fs.size();
-                    glslEntry.shader = (char*)malloc(glslEntry.shaderSize + 1);
+                    glslEntry.shader = (char*) malloc(glslEntry.shaderSize + 1);
                     strcpy(glslEntry.shader, fs.c_str());
                     glslDictionary.addText(glslEntry.shader);
                     glslEntries.push_back(glslEntry);
                 }
+
                 if (targetApi == TargetApi::VULKAN) {
                     assert(spirv.size() > 0);
                     spirvEntry.stage = filament::driver::ShaderType::FRAGMENT;
@@ -623,15 +647,10 @@ Package MaterialBuilder::build() noexcept {
     return package;
 }
 
-MaterialBuilder& MaterialBuilder::postProcessor(PostProcessCallBack callback) {
-    mPostprocessorCallback = callback;
-    return *this;
-}
-
 const std::string MaterialBuilder::peek(filament::driver::ShaderType type,
-        filament::driver::ShaderModel& model) noexcept {
+        filament::driver::ShaderModel& model, const PropertyList& properties) noexcept {
 
-    ShaderGenerator sg(mProperties, mVariables,
+    ShaderGenerator sg(properties, mVariables,
             mMaterialCode, mMaterialLineOffset, mMaterialVertexCode, mMaterialVertexLineOffset);
 
     MaterialInfo info;

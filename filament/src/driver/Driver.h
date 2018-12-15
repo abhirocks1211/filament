@@ -198,7 +198,8 @@ public:
                 DepthFunc depthFunc                 : 3;        // 28
                 bool colorWrite                     : 1;        // 29
                 bool alphaToCoverage                : 1;        // 30
-                uint8_t padding                     : 2;        // 32
+                bool inverseFrontFaces              : 1;        // 31
+                uint8_t padding                     : 1;        // 32
             };
             uint32_t u = 0;
         };
@@ -273,6 +274,8 @@ utils::io::ostream& operator<<(utils::io::ostream& out, const filament::Driver::
 utils::io::ostream& operator<<(utils::io::ostream& out, const filament::Driver::FaceOffsets& type);
 utils::io::ostream& operator<<(utils::io::ostream& out, const filament::Driver::RasterState& rs);
 utils::io::ostream& operator<<(utils::io::ostream& out, const filament::Driver::TargetBufferInfo& tbi);
+utils::io::ostream& operator<<(utils::io::ostream& out, const filament::Driver::PolygonOffset& po);
+utils::io::ostream& operator<<(utils::io::ostream& out, const filament::Driver::PipelineState& ps);
 
 utils::io::ostream& operator<<(utils::io::ostream& out, filament::driver::ShaderModel model);
 utils::io::ostream& operator<<(utils::io::ostream& out, filament::driver::PrimitiveType type);

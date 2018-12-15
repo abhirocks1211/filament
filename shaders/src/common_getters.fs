@@ -43,6 +43,16 @@ float getTime() {
 }
 
 /** @public-api */
+HIGHP vec4 getUserTime() {
+    return frameUniforms.userTime;
+}
+
+/** @public-api **/
+HIGHP float getUserTimeMod(float m) {
+    return mod(mod(frameUniforms.userTime.x, m) + mod(frameUniforms.userTime.y, m), m);
+}
+
+/** @public-api */
 float getExposure() {
     return frameUniforms.exposure;
 }

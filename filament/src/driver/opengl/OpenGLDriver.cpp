@@ -24,7 +24,7 @@
 #include <utils/Systrace.h>
 
 #include "driver/DriverApi.h"
-#include "driver/CommandStream.h"
+#include "driver/CommandStreamDispatcher.h"
 #include "driver/opengl/OpenGLProgram.h"
 #include "driver/opengl/OpenGLBlitter.h"
 
@@ -41,7 +41,6 @@
 
 #define DEBUG_MARKER_NONE       0
 #define DEBUG_MARKER_OPENGL     1
-#define DEBUG_MARKER_SYSTRACE   2
 
 // set to the desired debug marker level
 #define DEBUG_MARKER_LEVEL      DEBUG_MARKER_NONE
@@ -49,9 +48,6 @@
 #if DEBUG_MARKER_LEVEL == DEBUG_MARKER_OPENGL
 #   define DEBUG_MARKER() \
         DebugMarker _debug_marker(*this, __PRETTY_FUNCTION__);
-#elif DEBUG_MARKER_LEVEL == DEBUG_MARKER_SYSTRACE
-#   define DEBUG_MARKER() \
-        SYSTRACE_CALL();
 #else
 #   define DEBUG_MARKER()
 #endif
@@ -166,10 +162,10 @@ OpenGLDriver::OpenGLDriver(OpenGLPlatform* platform) noexcept
     // Figure out if we have the extension we need
     GLint n;
     glGetIntegerv(GL_NUM_EXTENSIONS, &n);
-    std::set<StaticString> exts;
+    ExtentionSet exts;
     for (GLint i = 0; i < n; i++) {
         const char * const ext = (const char*)glGetStringi(GL_EXTENSIONS, (GLuint)i);
-        exts.emplace(ext, strlen(ext));
+        exts.insert(StaticString::make(ext, strlen(ext)));
         if (DEBUG_PRINT_EXTENSIONS) {
             slog.d << ext << io::endl;
         }
@@ -244,11 +240,12 @@ OpenGLDriver::~OpenGLDriver() noexcept {
 // Driver interface concrete implementation
 // ------------------------------------------------------------------------------------------------
 
-bool OpenGLDriver::hasExtension(std::set<StaticString> const& map, const char* ext) noexcept {
-    return map.find({ ext, (StaticString::size_type) strlen(ext) }) != map.end();
+UTILS_NOINLINE
+bool OpenGLDriver::hasExtension(ExtentionSet const& map, utils::StaticString ext) noexcept {
+    return map.find(ext) != map.end();
 }
 
-void OpenGLDriver::initExtensionsGLES(GLint major, GLint minor, std::set<StaticString> const& exts) {
+void OpenGLDriver::initExtensionsGLES(GLint major, GLint minor, ExtentionSet const& exts) {
     // figure out and initialize the extensions we need
     ext.texture_filter_anisotropic = hasExtension(exts, "GL_EXT_texture_filter_anisotropic");
     ext.texture_compression_etc2 = true;
@@ -260,7 +257,7 @@ void OpenGLDriver::initExtensionsGLES(GLint major, GLint minor, std::set<StaticS
     ext.EXT_multisampled_render_to_texture = hasExtension(exts, "GL_EXT_multisampled_render_to_texture");
 }
 
-void OpenGLDriver::initExtensionsGL(GLint major, GLint minor, std::set<StaticString> const& exts) {
+void OpenGLDriver::initExtensionsGL(GLint major, GLint minor, ExtentionSet const& exts) {
     ext.texture_filter_anisotropic = hasExtension(exts, "GL_EXT_texture_filter_anisotropic");
     ext.texture_compression_etc2 = hasExtension(exts, "GL_ARB_ES3_compatibility");
     ext.texture_compression_s3tc = hasExtension(exts, "GL_EXT_texture_compression_s3tc");
@@ -543,6 +540,13 @@ void OpenGLDriver::disable(GLenum cap) noexcept {
     }
 }
 
+void OpenGLDriver::frontFace(GLenum mode) noexcept {
+    // WARNING: don't call this without updating mRasterState
+    update_state(state.raster.frontFace, mode, [&]() {
+        glFrontFace(mode);
+    });
+}
+
 void OpenGLDriver::cullFace(GLenum mode) noexcept {
     // WARNING: don't call this without updating mRasterState
     update_state(state.raster.cullFace, mode, [&]() {
@@ -633,6 +637,8 @@ void OpenGLDriver::setRasterStateSlow(Driver::RasterState rs) noexcept {
             cullFace(GL_FRONT_AND_BACK);
             break;
     }
+
+    frontFace(rs.inverseFrontFaces ? GL_CW : GL_CCW);
 
     if (rs.culling != CullingMode::NONE) {
         enable(GL_CULL_FACE);
@@ -1445,8 +1451,16 @@ void OpenGLDriver::updateStreams(driver::DriverApi* driver) {
     if (UTILS_UNLIKELY(!mExternalStreams.empty())) {
         OpenGLBlitter::State state;
         for (GLTexture* t : mExternalStreams) {
-            assert(t && t->hwStream);
-            if (!static_cast<GLStream*>(t->hwStream)->isNativeStream()) {
+            assert(t);
+
+            GLStream* s = static_cast<GLStream*>(t->hwStream);
+            if (UTILS_UNLIKELY(s == nullptr)) {
+                // this can happen because we're called synchronously and the setExternalStream()
+                // call may bot have been processed yet.
+                continue;
+            }
+
+            if (!s->isNativeStream()) {
                 state.setup();
                 updateStream(t, driver);
             }
@@ -2005,9 +2019,6 @@ void OpenGLDriver::beginRenderPass(Driver::RenderTargetHandle rth,
             std::array<GLenum, 3> attachments; // NOLINT(cppcoreguidelines-pro-type-member-init)
             GLsizei attachmentCount = getAttachments(attachments, rt, discardFlags);
             if (attachmentCount) {
-#if DEBUG_MARKER_LEVEL == DEBUG_MARKER_SYSTRACE
-                SYSTRACE_NAME("glInvalidateFramebuffer");
-#endif
                 glInvalidateFramebuffer(GL_FRAMEBUFFER, attachmentCount, attachments.data());
                 CHECK_GL_ERROR(utils::slog.e)
             }
@@ -2056,9 +2067,6 @@ void OpenGLDriver::endRenderPass(int) {
         std::array<GLenum, 3> attachments; // NOLINT(cppcoreguidelines-pro-type-member-init)
         GLsizei attachmentCount = getAttachments(attachments, rt, discardFlags);
         if (attachmentCount) {
-#if DEBUG_MARKER_LEVEL == DEBUG_MARKER_SYSTRACE
-            SYSTRACE_NAME("glInvalidateFramebuffer");
-#endif
             glInvalidateFramebuffer(GL_FRAMEBUFFER, attachmentCount, attachments.data());
         }
 
@@ -2253,99 +2261,95 @@ void OpenGLDriver::setViewportScissor(
 #define DEBUG_NO_EXTERNAL_STREAM_COPY false
 
 void OpenGLDriver::updateStream(GLTexture* t, driver::DriverApi* driver) noexcept {
+    SYSTRACE_CALL();
+
     GLStream* s = static_cast<GLStream*>(t->hwStream);
-    if (UTILS_UNLIKELY(s == nullptr)) {
-        // this can happen because we're called synchronously and the setExternalStream() call
-        // may bot have been processed yet.
-        return;
-    }
+    assert(s);
+    assert(!s->isNativeStream());
 
-    if (UTILS_LIKELY(!s->isNativeStream())) {
-        // round-robin to the next texture name
-        if (UTILS_UNLIKELY(DEBUG_NO_EXTERNAL_STREAM_COPY ||
-                           bugs.disable_shared_context_draws || !mOpenGLBlitter)) {
-            driver->queueCommand([this, t, s]() {
-                // the stream may have been destroyed since we enqueued the command
-                // also make sure that this texture is still associated with the same stream
-                auto& streams = mExternalStreams;
-                if (UTILS_LIKELY(std::find(streams.begin(), streams.end(), t) != streams.end()) &&
-                    (t->hwStream == s)) {
-                    t->gl.texture_id = s->gl.externalTextureId;
-                }
-            });
-        } else {
-            s->user_thread.cur = uint8_t(
-                    (s->user_thread.cur + 1) % GLStream::ROUND_ROBIN_TEXTURE_COUNT);
-            GLuint writeTexture = s->user_thread.write[s->user_thread.cur];
-            GLuint readTexture = s->user_thread.read[s->user_thread.cur];
+    // round-robin to the next texture name
+    if (UTILS_UNLIKELY(DEBUG_NO_EXTERNAL_STREAM_COPY ||
+                       bugs.disable_shared_context_draws || !mOpenGLBlitter)) {
+        driver->queueCommand([this, t, s]() {
+            // the stream may have been destroyed since we enqueued the command
+            // also make sure that this texture is still associated with the same stream
+            auto& streams = mExternalStreams;
+            if (UTILS_LIKELY(std::find(streams.begin(), streams.end(), t) != streams.end()) &&
+                (t->hwStream == s)) {
+                t->gl.texture_id = s->gl.externalTextureId;
+            }
+        });
+    } else {
+        s->user_thread.cur = uint8_t(
+                (s->user_thread.cur + 1) % GLStream::ROUND_ROBIN_TEXTURE_COUNT);
+        GLuint writeTexture = s->user_thread.write[s->user_thread.cur];
+        GLuint readTexture = s->user_thread.read[s->user_thread.cur];
 
-            // Make sure we're using the proper size
-            GLStream::Info& info = s->user_thread.infos[s->user_thread.cur];
-            if (UTILS_UNLIKELY(info.width != s->width || info.height != s->height)) {
+        // Make sure we're using the proper size
+        GLStream::Info& info = s->user_thread.infos[s->user_thread.cur];
+        if (UTILS_UNLIKELY(info.width != s->width || info.height != s->height)) {
 
-                // nothing guarantees that this buffer is free (i.e. has been consumed by the
-                // GL thread), so we could potentially cause a glitch by reallocating the
-                // texture here. This should be very rare though.
-                // This could be fixed by always using a new temporary texture here, and
-                // replacing it in the queueCommand() below. imho, not worth it.
+            // nothing guarantees that this buffer is free (i.e. has been consumed by the
+            // GL thread), so we could potentially cause a glitch by reallocating the
+            // texture here. This should be very rare though.
+            // This could be fixed by always using a new temporary texture here, and
+            // replacing it in the queueCommand() below. imho, not worth it.
 
-                info.width = s->width;
-                info.height = s->height;
+            info.width = s->width;
+            info.height = s->height;
 
-                Platform::ExternalTexture* ets = s->user_thread.infos[s->user_thread.cur].ets;
-                mPlatform.reallocateExternalStorage(ets, info.width, info.height,
-                        TextureFormat::RGB8);
+            Platform::ExternalTexture* ets = s->user_thread.infos[s->user_thread.cur].ets;
+            mPlatform.reallocateExternalStorage(ets, info.width, info.height, TextureFormat::RGB8);
 
-                glActiveTexture(GL_TEXTURE0);
-                glBindTexture(GL_TEXTURE_2D, writeTexture);
-                glBindTexture(GL_TEXTURE_EXTERNAL_OES, readTexture);
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_2D, writeTexture);
+            glBindTexture(GL_TEXTURE_EXTERNAL_OES, readTexture);
 #ifdef GL_OES_EGL_image
-                glEGLImageTargetTexture2DOES(GL_TEXTURE_2D, (GLeglImageOES)ets->image);
-                glEGLImageTargetTexture2DOES(GL_TEXTURE_EXTERNAL_OES, (GLeglImageOES)ets->image);
+            glEGLImageTargetTexture2DOES(GL_TEXTURE_2D, (GLeglImageOES)ets->image);
+            glEGLImageTargetTexture2DOES(GL_TEXTURE_EXTERNAL_OES, (GLeglImageOES)ets->image);
 #endif
-            }
-
-            // copy the texture...
-#ifndef NDEBUG
-            if (t->gl.fence) {
-                // we're about to overwrite a buffer that hasn't been consumed
-                slog.d << "OpenGLDriver::updateStream(): about to overwrite buffer " <<
-                       int(s->user_thread.cur) << " of Texture at " << t << " of Stream at " << s
-                       << io::endl;
-            }
-#endif
-            mOpenGLBlitter->blit(s->gl.externalTextureId, writeTexture, s->width, s->height);
-
-            // We need a fence to guarantee that this copy has happened when we need the texture
-            // in OpenGLProgram::updateSamplers(), i.e. when we bind textures just before use.
-            GLsync fence = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
-            // Per https://www.khronos.org/opengl/wiki/Sync_Object, flush to make sure that the
-            // sync object is in the driver's command queue.
-            glFlush();
-
-            // Update the stream timestamp. It's not clear to me that this is correct; which
-            // timestamp do we really want? Here we use "now" because we have nothing else we
-            // can use.
-            s->user_thread.timestamp = std::chrono::steady_clock::now().time_since_epoch().count();
-
-            driver->queueCommand([this, t, s, fence, readTexture, writeTexture]() {
-                // the stream may have been destroyed since we enqueued the command
-                // also make sure that this texture is still associated with the same stream
-                auto& streams = mExternalStreams;
-                if (UTILS_LIKELY(std::find(streams.begin(), streams.end(), t) != streams.end()) &&
-                    (t->hwStream == s)) {
-                    if (UTILS_UNLIKELY(t->gl.fence)) {
-                        // if the texture still has a fence set, destroy it now, so it's not leaked.
-                        glDeleteSync(t->gl.fence);
-                    }
-                    t->gl.texture_id = readTexture;
-                    t->gl.fence = fence;
-                    s->gl.externalTexture2DId = writeTexture;
-                } else {
-                    glDeleteSync(fence);
-                }
-            });
         }
+
+        // copy the texture...
+#ifndef NDEBUG
+        if (t->gl.fence) {
+            // we're about to overwrite a buffer that hasn't been consumed
+            slog.d << "OpenGLDriver::updateStream(): about to overwrite buffer " <<
+                   int(s->user_thread.cur) << " of Texture at " << t << " of Stream at " << s
+                   << io::endl;
+        }
+#endif
+        mOpenGLBlitter->blit(s->gl.externalTextureId, writeTexture, s->width, s->height);
+
+        // We need a fence to guarantee that this copy has happened when we need the texture
+        // in OpenGLProgram::updateSamplers(), i.e. when we bind textures just before use.
+        GLsync fence = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
+        // Per https://www.khronos.org/opengl/wiki/Sync_Object, flush to make sure that the
+        // sync object is in the driver's command queue.
+        glFlush();
+
+        // Update the stream timestamp. It's not clear to me that this is correct; which
+        // timestamp do we really want? Here we use "now" because we have nothing else we
+        // can use.
+        s->user_thread.timestamp = std::chrono::steady_clock::now().time_since_epoch().count();
+
+        driver->queueCommand([this, t, s, fence, readTexture, writeTexture]() {
+            // the stream may have been destroyed since we enqueued the command
+            // also make sure that this texture is still associated with the same stream
+            auto& streams = mExternalStreams;
+            if (UTILS_LIKELY(std::find(streams.begin(), streams.end(), t) != streams.end()) &&
+                (t->hwStream == s)) {
+                if (UTILS_UNLIKELY(t->gl.fence)) {
+                    // if the texture still has a fence set, destroy it now, so it's not leaked.
+                    glDeleteSync(t->gl.fence);
+                }
+                t->gl.texture_id = readTexture;
+                t->gl.fence = fence;
+                s->gl.externalTexture2DId = writeTexture;
+            } else {
+                glDeleteSync(fence);
+            }
+        });
     }
 }
 

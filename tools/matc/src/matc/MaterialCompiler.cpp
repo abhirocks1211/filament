@@ -23,7 +23,6 @@
 #include <filamat/MaterialBuilder.h>
 
 #include <filamat/Enums.h>
-#include <filamat/sca/GLSLTools.h>
 
 #include "MaterialLexeme.h"
 #include "MaterialLexer.h"
@@ -43,8 +42,6 @@ static constexpr const char* CONFIG_KEY_FRAGMENT_SHADER = "fragment";
 static constexpr const char* CONFIG_KEY_TOOL = "tool";
 
 MaterialCompiler::MaterialCompiler() {
-    GLSLTools::init();
-
     mConfigProcessor[CONFIG_KEY_MATERIAL] = &MaterialCompiler::processMaterial;
     mConfigProcessor[CONFIG_KEY_VERTEX_SHADER] = &MaterialCompiler::processVertexShader;
     mConfigProcessor[CONFIG_KEY_FRAGMENT_SHADER] = &MaterialCompiler::processFragmentShader;
@@ -54,10 +51,6 @@ MaterialCompiler::MaterialCompiler() {
     mConfigProcessorJSON[CONFIG_KEY_VERTEX_SHADER] = &MaterialCompiler::processVertexShaderJSON;
     mConfigProcessorJSON[CONFIG_KEY_FRAGMENT_SHADER] = &MaterialCompiler::processFragmentShaderJSON;
     mConfigProcessorJSON[CONFIG_KEY_TOOL] = &MaterialCompiler::ignoreLexemeJSON;
-}
-
-MaterialCompiler::~MaterialCompiler() {
-    GLSLTools::terminate();
 }
 
 bool MaterialCompiler::processMaterial(const MaterialLexeme& jsonLexeme,
@@ -273,17 +266,6 @@ bool MaterialCompiler::run(const Config& config) {
             return reflectParameters(builder);
     }
 
-    Config::Optimization optimizationLevel = config.getOptimizationLevel();
-    // Drop the optimization level to preprocessor when the material uses external samplers
-    // samplerExternalOES in GLSL is currently not fully supported in SPIR-V/Vulkan and
-    // proper handling is lacking in glslang and spirv-cross
-    // TODO: remove when external samplers are fully supported in SPIR-V
-    if (builder.hasExternalSampler() && optimizationLevel != Config::Optimization::PREPROCESSOR) {
-        std::cerr << "Warning: external sampler detected, lowering optimizations "
-                     "to preprocessor only." << std::endl;
-        const_cast<Config&>(config).setOptimizationLevel(Config::Optimization::PREPROCESSOR);
-    }
-
     builder
         .platform(config.getPlatform())
         .targetApi(config.getTargetApi())
@@ -291,17 +273,10 @@ bool MaterialCompiler::run(const Config& config) {
         .printShaders(config.printShaders())
         .variantFilter(config.getVariantFilter() | builder.getVariantFilter());
 
-    // At this point the builder may be able to generate valid shaders if the user populated the
-    // properties section in the config file properly. If she hasn't, guess them.
-    GLSLTools glslTools;
-    if (!glslTools.process(builder)) {
-        std::cerr << "Could not compile material " << input->getName() << std::endl;
-        return false;
-    }
-
     // Write builder.build() to output.
     Package package = builder.build();
     if (!package.isValid()) {
+        std::cerr << "Could not compile material " << input->getName() << std::endl;
         return false;
     }
     return writePackage(package, config);

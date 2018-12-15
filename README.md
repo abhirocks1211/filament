@@ -27,7 +27,7 @@ badges above.
   real-time physically based rendering, the graphics capabilities and implementation of Filament.
   This document explains the math and reasoning behind most of our decisions. This document is a
   good introduction to PBR for graphics programmers.
-- [Materials](https://google.github.io/filament//Materials.md.html), the full reference
+- [Materials](https://google.github.io/filament/Materials.md.html), the full reference
   documentation for our material system. This document explains our different material models, how
   to use the material compiler `matc` and how to write custom materials.
 - [Material Properties](https://google.github.io/filament/Material%20Properties.pdf), a reference
@@ -37,22 +37,21 @@ badges above.
 
 Here are a few sample materials rendered with Filament:
 
+![Damaged Helmet](docs/images/samples/model_damaged_helmet.jpg)
+![Helmet](docs/images/samples/model_helmet.jpg)
 ![Brushed copper](docs/images/samples/brushed_copper_2.jpg)
 ![Chess set](docs/images/samples/chess1.jpg)
-![Environment lighting](docs/images/samples/spheres.jpg)
 ![Material 1](docs/images/samples/material_01.jpg)
 ![Material 2](docs/images/samples/material_02.jpg)
 ![Material 3](docs/images/samples/material_03.jpg)
-![Material 4](docs/images/samples/material_04.jpg)
 ![Material 6](docs/images/samples/material_06.jpg)
-![Material 7](docs/images/samples/material_07.jpg)
 ![Material 8](docs/images/samples/material_08.jpg)
 
 ## Features
 
 ### APIs
 
-- Native C++ API for Android, Linux, macOS and Windows
+- Native C++ API for Android, iOS, Linux, macOS and Windows
 - Java/JNI API for Android, Linux, macOS and Windows
 - JavaScript API
 
@@ -349,7 +348,7 @@ Create the msBuild project:
 ```
 
 Check out the output and make sure Clang for Windows frontend was found. You should see a line
-showing the following ouput.
+showing the following output.
 ```
 Clang:C:/Program Files/LLVM/msbuild-bin/cl.exe
 ```
@@ -409,7 +408,7 @@ ninja
 To confirm Filament was properly built, run the following command from the build directory:
 
 ```
-./samples/material_sandbox --ibl=../../samples/envs/office ../../assets/models/sphere/sphere.obj
+./samples/material_sandbox --ibl=../../samples/envs/pillars ../../assets/models/sphere/sphere.obj
 ```
 
 ### Android
@@ -443,7 +442,7 @@ Run `build.sh -h` for more information.
 ##### Linux toolchain
 
 ```
-$ $SDK/ndk-bundle/build/tools/make_standalone_toolchain.py --arch arm64 --api 24 \
+$ $SDK/ndk-bundle/build/tools/make_standalone_toolchain.py --arch arm64 --api 21 \
         --stl libc++ --force \
         --install-dir toolchains/Linux/aarch64-linux-android-4.9
 ```
@@ -451,7 +450,7 @@ $ $SDK/ndk-bundle/build/tools/make_standalone_toolchain.py --arch arm64 --api 24
 ##### Darwin toolchain
 
 ```
-$ $SDK/ndk-bundle/build/tools/make_standalone_toolchain.py --arch arm64 --api 24 \
+$ $SDK/ndk-bundle/build/tools/make_standalone_toolchain.py --arch arm64 --api 21 \
         --stl libc++ --force \
         --install-dir toolchains/Darwin/aarch64-linux-android-4.9
 ```
@@ -488,7 +487,7 @@ binaries should be found in `out/android-release/filament/lib/arm64-v8a`.
 ##### Linux toolchain
 
 ```
-$ $SDK/ndk-bundle/build/tools/make_standalone_toolchain.py --arch arm --api 24 \
+$ $SDK/ndk-bundle/build/tools/make_standalone_toolchain.py --arch arm --api 21 \
         --stl libc++ --force \
         --install-dir toolchains/Linux/arm-linux-androideabi-4.9
 ```
@@ -496,7 +495,7 @@ $ $SDK/ndk-bundle/build/tools/make_standalone_toolchain.py --arch arm --api 24 \
 ##### Darwin toolchain
 
 ```
-$ $SDK/ndk-bundle/build/tools/make_standalone_toolchain.py --arch arm --api 24 \
+$ $SDK/ndk-bundle/build/tools/make_standalone_toolchain.py --arch arm --api 21 \
         --stl libc++ --force \
         --install-dir toolchains/Darwin/arm-linux-androideabi-4.9
 ```
@@ -533,7 +532,7 @@ binaries should be found in `out/android-release/filament/lib/armeabi-v7a`.
 ##### Linux toolchain
 
 ```
-$ $SDK/ndk-bundle/build/tools/make_standalone_toolchain.py --arch x86_64 --api 24 \
+$ $SDK/ndk-bundle/build/tools/make_standalone_toolchain.py --arch x86_64 --api 21 \
         --stl libc++ --force \
         --install-dir toolchains/Linux/x86_64-linux-android-4.9
 ```
@@ -541,7 +540,7 @@ $ $SDK/ndk-bundle/build/tools/make_standalone_toolchain.py --arch x86_64 --api 2
 ##### Darwin toolchain
 
 ```
-$ $SDK/ndk-bundle/build/tools/make_standalone_toolchain.py --arch x86_64 --api 24 \
+$ $SDK/ndk-bundle/build/tools/make_standalone_toolchain.py --arch x86_64 --api 21 \
         --stl libc++ --force \
         --install-dir toolchains/Darwin/x86_64-linux-android-4.9
 ```
@@ -578,7 +577,7 @@ binaries should be found in `out/android-release/filament/lib/x86_64`.
 ##### Linux toolchain
 
 ```
-$ $SDK/ndk-bundle/build/tools/make_standalone_toolchain.py --arch x86 --api 24 \
+$ $SDK/ndk-bundle/build/tools/make_standalone_toolchain.py --arch x86 --api 21 \
         --stl libc++ --force \
         --install-dir toolchains/Linux/i686-linux-android-4.9
 ```
@@ -586,7 +585,7 @@ $ $SDK/ndk-bundle/build/tools/make_standalone_toolchain.py --arch x86 --api 24 \
 ##### Darwin toolchain
 
 ```
-$ $SDK/ndk-bundle/build/tools/make_standalone_toolchain.py --arch x86 --api 24 \
+$ $SDK/ndk-bundle/build/tools/make_standalone_toolchain.py --arch x86 --api 21 \
         --stl libc++ --force \
         --install-dir toolchains/Darwin/i686-linux-android-4.9
 ```

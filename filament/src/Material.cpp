@@ -95,9 +95,8 @@ Material* Material::Builder::build(Engine& engine) {
             case driver::ShaderModel::GL_CORE_41: slog.e << "desktop.\n"; break;
             case driver::ShaderModel::UNKNOWN: /* should never happen */ break;
         }
-        slog.e << "Need shader model 0x" << io::hex << (uint32_t) shaderModel
-                << " but compiled material contains 0x" << shaderModels.getValue()
-                << io::dec << io::endl;
+        slog.e << "Compiled material contains shader models 0x"
+                << io::hex << shaderModels.getValue() << io::dec << "." << io::endl;
         return nullptr;
     }
 
@@ -133,12 +132,23 @@ FMaterial::FMaterial(FEngine& engine, const Material::Builder& builder)
     parser->getInterpolation(&mInterpolation);
     parser->getVertexDomain(&mVertexDomain);
     parser->getRequiredAttributes(&mRequiredAttributes);
+
     if (mBlendingMode == BlendingMode::MASKED) {
         parser->getMaskThreshold(&mMaskThreshold);
     }
+
+    // The fade blending mode only affects shading. For proper sorting we need to
+    // treat this blending mode as a regular transparent blending operation.
+    if (UTILS_UNLIKELY(mBlendingMode == BlendingMode::FADE)) {
+        mRenderBlendingMode = BlendingMode::TRANSPARENT;
+    } else {
+        mRenderBlendingMode = mBlendingMode;
+    }
+
     if (mShading == Shading::UNLIT) {
         parser->hasShadowMultiplier(&mHasShadowMultiplier);
     }
+
     mIsVariantLit = mShading != Shading::UNLIT || mHasShadowMultiplier;
 
     // create raster state

@@ -120,13 +120,21 @@ add_executable(test_${TARGET} ${TEST_SRCS})
 target_link_libraries(test_${TARGET} PRIVATE gtest utils tsl math)
 
 # ==================================================================================================
-# Test benchmark
+# Benchmarks
 # ==================================================================================================
 
+add_library(benchmark_${TARGET}_callee SHARED benchmark/benchmark_callee.cpp)
+
+
 set(BENCHMARK_SRCS
+        benchmark/benchmark_allocators.cpp
+        benchmark/benchmark_binary_search.cpp
+        benchmark/benchmark_calls.cpp
+        benchmark/benchmark_JobSystem.cpp
         benchmark/benchmark_mutex.cpp
         benchmark/benchmark_memcpy.cpp)
 
+
 add_executable(benchmark_${TARGET} ${BENCHMARK_SRCS})
 
-target_link_libraries(benchmark_${TARGET} PRIVATE benchmark_main utils tsl math)
+target_link_libraries(benchmark_${TARGET} PRIVATE benchmark_main utils benchmark_${TARGET}_callee)

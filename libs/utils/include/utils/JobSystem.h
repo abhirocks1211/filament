@@ -70,7 +70,8 @@ public:
         uint16_t parent;                                        //  2 |  2
         std::atomic<uint16_t> runningJobCount = { 1 };          //  2 |  2
         mutable std::atomic<uint16_t> refCount = { 1 };         //  2 |  2
-                                                                //  6 |  2 (padding)
+        std::atomic_bool hasWaiter = { false };                 //  1 |  1
+                                                                //  5 |  1 (padding)
                                                                 // 64 | 64
     };
 
@@ -93,12 +94,11 @@ public:
 
     // If a parent is not specified when creating a job, that job will automatically take the
     // master job as a parent.
-    // The master job is reset when calling reset()
+    // The master job is reset when waited on.
     Job* setMasterJob(Job* job) noexcept { return mMasterJob = job; }
 
-    // Clears the master job
-    void reset() noexcept { mMasterJob = nullptr; }
 
+    Job* create(Job* parent, JobFunc func) noexcept;
 
     // NOTE: All methods below must be called from the same thread and that thread must be
     // owned by JobSystem's thread pool.
@@ -305,6 +305,7 @@ public:
 
     static void setThreadPriority(Priority priority) noexcept;
     static void setThreadAffinity(uint32_t mask) noexcept;
+    static void setThreadAffinityById(size_t id) noexcept;
 
     size_t getParallelSplitCount() const noexcept {
         return mParallelSplitCount;
@@ -333,7 +334,7 @@ private:
         JobSystem* js;
         std::thread thread;
         default_random_engine rndGen;
-        uint32_t mask;
+        uint32_t id;
     };
 
     static_assert(sizeof(ThreadState) % CACHELINE_SIZE == 0,
@@ -344,15 +345,14 @@ private:
     void incRef(Job const* job) noexcept;
     void decRef(Job const* job) noexcept;
 
-    Job* create(Job* parent, JobFunc func) noexcept;
     Job* allocateJob() noexcept;
-    JobSystem::ThreadState& getStateToStealFrom(JobSystem::ThreadState& state) noexcept;
+    JobSystem::ThreadState* getStateToStealFrom(JobSystem::ThreadState& state) noexcept;
     bool hasJobCompleted(Job const* job) noexcept;
 
     void requestExit() noexcept;
     bool exitRequested() const noexcept;
 
-    void loop(ThreadState* threadState) noexcept;
+    void loop(ThreadState* state) noexcept;
     bool execute(JobSystem::ThreadState& state) noexcept;
     void finish(Job* job) noexcept;
 
@@ -375,8 +375,12 @@ private:
     }
 
     // these have thread contention, keep them together
-    utils::Mutex mLock;
-    utils::Condition mCondition;
+    utils::Mutex mLooperLock;
+    utils::Condition mLooperCondition;
+
+    utils::Mutex mWaiterLock;
+    utils::Condition mWaiterCondition;
+
     std::atomic<uint32_t> mActiveJobs = { 0 };
     utils::Arena<utils::ThreadSafeObjectPoolAllocator<Job>, LockingPolicy::NoLock> mJobPool;
 

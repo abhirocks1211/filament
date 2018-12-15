@@ -25,11 +25,12 @@
 #include "GLSLPostProcessor.h"
 
 #include "eiff/ChunkContainer.h"
-#include "eiff/DictionaryTextChunk.h"
 #include "eiff/DictionarySpirvChunk.h"
-#include "eiff/MaterialTextChunk.h"
+#include "eiff/DictionaryTextChunk.h"
 #include "eiff/MaterialSpirvChunk.h"
+#include "eiff/MaterialTextChunk.h"
 #include "eiff/SimpleFieldChunk.h"
+#include "sca/GLSLTools.h"
 
 #include <vector>
 
@@ -37,23 +38,17 @@ using namespace filament::driver;
 
 namespace filamat {
 
-PostprocessMaterialBuilder& PostprocessMaterialBuilder::postProcessor(PostProcessCallBack callback) {
-    mPostprocessorCallback = callback;
-    return *this;
-}
-
 Package PostprocessMaterialBuilder::build() {
+    GLSLTools::init();
     prepare();
-    // Install postprocessor to optimize / compile to Spir-V if necessary.
-    // TODO: remove the postProcessor functionality, since it isn't being used by the outside world.
-    using namespace std::placeholders;
+
+    // Create a postprocessor to optimize / compile to Spir-V if necessary.
     GLSLPostProcessor postProcessor(mOptimization, mPrintShaders);
-    this->postProcessor(std::bind(&GLSLPostProcessor::process, postProcessor, _1, _2, _3, _4, _5, _6));
 
     // Create chunk tree.
     ChunkContainer container;
 
-    SimpleFieldChunk<uint32_t> version(ChunkType::PostProcessVersion,1);
+    SimpleFieldChunk<uint32_t> version(ChunkType::PostProcessVersion, 1);
     container.addChild(&version);
 
     std::vector<TextEntry> glslEntries;
@@ -70,6 +65,7 @@ Package PostprocessMaterialBuilder::build() {
     filament::SamplerBindingMap samplerBindingMap;
 
     bool errorOccured = false;
+
     for ( const auto& params : mCodeGenPermutations) {
         // Create Sampler binding map specific to this API.
         assert(params.targetApi != TargetApi::ALL);
@@ -108,14 +104,12 @@ Package PostprocessMaterialBuilder::build() {
                     shaderModel, targetApi, codeGenTargetApi,
                     filament::PostProcessStage(k), firstSampler);
 
-            if (mPostprocessorCallback != nullptr) {
-                bool ok = mPostprocessorCallback(vs, filament::driver::ShaderType::VERTEX,
-                        shaderModel, &vs, pSpirv, pMsl);
-                if (!ok) {
-                    // An error occured while postProcessing, aborting.
-                    errorOccured = true;
-                    break;
-                }
+            bool ok = postProcessor.process(vs, filament::driver::ShaderType::VERTEX, shaderModel,
+                    &vs, pSpirv, pMsl);
+            if (!ok) {
+                // An error occured while postProcessing, aborting.
+                errorOccured = true;
+                break;
             }
 
             if (targetApi == TargetApi::OPENGL) {
@@ -126,6 +120,7 @@ Package PostprocessMaterialBuilder::build() {
                 glslDictionary.addText(glslEntry.shader);
                 glslEntries.push_back(glslEntry);
             }
+
             if (targetApi == TargetApi::VULKAN) {
                 spirvEntry.stage = filament::driver::ShaderType::VERTEX;
                 spirvEntry.dictionaryIndex = spirvDictionary.addBlob(spirv);
@@ -149,23 +144,24 @@ Package PostprocessMaterialBuilder::build() {
             std::string fs = ShaderPostProcessGenerator::createPostProcessFragmentProgram(
                     shaderModel, targetApi, codeGenTargetApi,
                     filament::PostProcessStage(k), firstSampler);
-            if (mPostprocessorCallback != nullptr) {
-                bool ok = mPostprocessorCallback(fs, filament::driver::ShaderType::FRAGMENT,
-                        shaderModel, &fs, pSpirv, pMsl);
-                if (!ok) {
-                    // An error occured while postProcessing, aborting.
-                    errorOccured = true;
-                    break;
-                }
+
+            ok = postProcessor.process(fs, filament::driver::ShaderType::FRAGMENT, shaderModel, &fs,
+                    pSpirv, pMsl);
+            if (!ok) {
+                // An error occured while postProcessing, aborting.
+                errorOccured = true;
+                break;
             }
+
             if (targetApi == TargetApi::OPENGL) {
                 glslEntry.stage = filament::driver::ShaderType::FRAGMENT;
                 glslEntry.shaderSize = fs.size();
-                glslEntry.shader = (char*)malloc(glslEntry.shaderSize + 1);
+                glslEntry.shader = (char*) malloc(glslEntry.shaderSize + 1);
                 strcpy(glslEntry.shader, fs.c_str());
                 glslDictionary.addText(glslEntry.shader);
                 glslEntries.push_back(glslEntry);
             }
+
             if (targetApi == TargetApi::VULKAN) {
                 spirvEntry.stage = filament::driver::ShaderType::FRAGMENT;
                 spirvEntry.dictionaryIndex = spirvDictionary.addBlob(spirv);

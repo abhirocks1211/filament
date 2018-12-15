@@ -2,9 +2,10 @@
 set -e
 
 # NDK API level
-API_LEVEL=24
+API_LEVEL=21
 # Host tools required by Android, WebGL, and iOS builds
-HOST_TOOLS="matc cmgen filamesh mipgen resgen"
+MOBILE_HOST_TOOLS="matc resgen cmgen"
+WEB_HOST_TOOLS="${MOBILE_HOST_TOOLS} mipgen filamesh"
 IOS_TOOLCHAIN_URL="https://opensource.apple.com/source/clang/clang-800.0.38/src/cmake/platforms/iOS.cmake"
 
 function print_help {
@@ -27,7 +28,8 @@ function print_help {
     echo "        Do not compile desktop Java projects"
     echo "    -m"
     echo "        Compile with make instead of ninja."
-    echo "    -p [desktop|android|ios|webgl|all]"
+    echo "    -p platform1,platform2,..."
+    echo "        Where platformN is [desktop|android|ios|webgl|all]."
     echo "        Platform(s) to build, defaults to desktop."
     echo "        Building for Android or iOS will automatically generate / download"
     echo "        the toolchains if needed and perform a partial desktop build."
@@ -52,12 +54,19 @@ function print_help {
     echo "Examples:"
     echo "    Desktop release build:"
     echo "        \$ ./$SELF_NAME release"
+    echo ""
     echo "    Desktop debug and release builds:"
     echo "        \$ ./$SELF_NAME debug release"
+    echo ""
     echo "    Clean, desktop debug build and create archive of build artifacts:"
     echo "        \$ ./$SELF_NAME -c -a debug"
+    echo ""
     echo "    Android release build type:"
     echo "        \$ ./$SELF_NAME -p android release"
+    echo ""
+    echo "    Desktop and Android release builds, with installation:"
+    echo "        \$ ./$SELF_NAME -p desktop,android -i release"
+    echo ""
     echo "    Desktop matc target, release build:"
     echo "        \$ ./$SELF_NAME release matc"
     echo ""
@@ -71,6 +80,7 @@ ISSUE_CLEAN=false
 ISSUE_DEBUG_BUILD=false
 ISSUE_RELEASE_BUILD=false
 
+# Default: build desktop only
 ISSUE_ANDROID_BUILD=false
 ISSUE_IOS_BUILD=false
 ISSUE_DESKTOP_BUILD=true
@@ -254,7 +264,7 @@ function build_webgl {
     OLD_INSTALL_COMMAND=${INSTALL_COMMAND}; INSTALL_COMMAND=
     OLD_ISSUE_DEBUG_BUILD=${ISSUE_DEBUG_BUILD}; ISSUE_DEBUG_BUILD=false
     OLD_ISSUE_RELEASE_BUILD=${ISSUE_RELEASE_BUILD}; ISSUE_RELEASE_BUILD=true
-    build_desktop "${HOST_TOOLS}"
+    build_desktop "${WEB_HOST_TOOLS}"
     INSTALL_COMMAND=${OLD_INSTALL_COMMAND}
     ISSUE_DEBUG_BUILD=${OLD_ISSUE_DEBUG_BUILD}
     ISSUE_RELEASE_BUILD=${OLD_ISSUE_RELEASE_BUILD}
@@ -329,7 +339,7 @@ function build_android {
     # Supress intermediate desktop tools install
     OLD_INSTALL_COMMAND=${INSTALL_COMMAND}
     INSTALL_COMMAND=
-    build_desktop "${HOST_TOOLS}"
+    build_desktop "${MOBILE_HOST_TOOLS}"
     INSTALL_COMMAND=${OLD_INSTALL_COMMAND}
 
     build_android_arch "aarch64" "aarch64-linux-android" "arm64"
@@ -441,7 +451,7 @@ function build_ios {
     # Supress intermediate desktop tools install
     OLD_INSTALL_COMMAND=${INSTALL_COMMAND}
     INSTALL_COMMAND=
-    build_desktop "${HOST_TOOLS}"
+    build_desktop "${MOBILE_HOST_TOOLS}"
     INSTALL_COMMAND=${OLD_INSTALL_COMMAND}
 
     ensure_ios_toolchain
@@ -550,38 +560,31 @@ while getopts ":hacfijmp:tuvs" opt; do
             BUILD_COMMAND="make"
             ;;
         p)
-            case $OPTARG in
-                desktop)
-                    ISSUE_ANDROID_BUILD=false
-                    ISSUE_IOS_BUILD=false
-                    ISSUE_DESKTOP_BUILD=true
-                    ISSUE_WEBGL_BUILD=false
-                ;;
-                android)
-                    ISSUE_ANDROID_BUILD=true
-                    ISSUE_IOS_BUILD=false
-                    ISSUE_DESKTOP_BUILD=false
-                    ISSUE_WEBGL_BUILD=false
-                ;;
-                ios)
-                    ISSUE_ANDROID_BUILD=false
-                    ISSUE_IOS_BUILD=true
-                    ISSUE_DESKTOP_BUILD=false
-                    ISSUE_WEBGL_BUILD=false
-                ;;
-                webgl)
-                    ISSUE_ANDROID_BUILD=false
-                    ISSUE_IOS_BUILD=false
-                    ISSUE_DESKTOP_BUILD=false
-                    ISSUE_WEBGL_BUILD=true
-                ;;
-                all)
-                    ISSUE_ANDROID_BUILD=true
-                    ISSUE_IOS_BUILD=true
-                    ISSUE_DESKTOP_BUILD=true
-                    ISSUE_WEBGL_BUILD=false
-                ;;
-            esac
+            ISSUE_DESKTOP_BUILD=false
+            platforms=$(echo "$OPTARG" | tr ',' '\n')
+            for platform in $platforms
+            do
+                case $platform in
+                    desktop)
+                        ISSUE_DESKTOP_BUILD=true
+                    ;;
+                    android)
+                        ISSUE_ANDROID_BUILD=true
+                    ;;
+                    ios)
+                        ISSUE_IOS_BUILD=true
+                    ;;
+                    webgl)
+                        ISSUE_WEBGL_BUILD=true
+                    ;;
+                    all)
+                        ISSUE_ANDROID_BUILD=true
+                        ISSUE_IOS_BUILD=true
+                        ISSUE_DESKTOP_BUILD=true
+                        ISSUE_WEBGL_BUILD=false
+                    ;;
+                esac
+            done
             ;;
         t)
             GENERATE_TOOLCHAINS=true

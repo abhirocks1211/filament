@@ -35,17 +35,6 @@
 
 namespace filamat {
 
-// Shader postprocessor, called after generation of a shader but before writing it to the package.
-// Must return false if an error occured while postProcessing the shader and true if everything was
-// ok.
-using PostProcessCallBack = std::function<bool(
-        const std::string& /* inputShader */,
-        filament::driver::ShaderType,
-        filament::driver::ShaderModel,
-        std::string* /* outputGlsl */,
-        std::vector<uint32_t>* /* outputSpirv */,
-        std::string* /* outputMsl */ )>;
-
 struct MaterialInfo;
 
 class UTILS_PUBLIC MaterialBuilderBase {
@@ -79,7 +68,7 @@ protected:
     using ShaderModel = filament::driver::ShaderModel;
     Platform mPlatform = Platform::DESKTOP;
     TargetApi mTargetApi = TargetApi::OPENGL;
-    Optimization mOptimization = Optimization::NONE;
+    Optimization mOptimization = Optimization::PERFORMANCE;
     bool mPrintShaders = false;
     utils::bitset32 mShaderModels;
     struct CodeGenParams {
@@ -109,10 +98,6 @@ public:
     using SamplerPrecision = filament::driver::Precision;
     using CullingMode = filament::driver::CullingMode;
 
-    // Each shader generated while building the package content can be post-processed via this
-    // callback.
-    MaterialBuilder& postProcessor(PostProcessCallBack callback);
-
     // set name of this material
     MaterialBuilder& name(const char* name) noexcept;
 
@@ -121,9 +106,6 @@ public:
 
     // set the interpolation mode
     MaterialBuilder& interpolation(Interpolation interpolation) noexcept;
-
-    // declares that this property is modified by the material
-    MaterialBuilder& set(Property p) noexcept;
 
     // add a parameter (i.e.: a uniform) to this material
     MaterialBuilder& parameter(UniformType type, const char* name) noexcept;
@@ -196,7 +178,7 @@ public:
     // (used to generate code) and final output representations (spirv and/or text).
     MaterialBuilder& targetApi(TargetApi targetApi) noexcept;
 
-    // specifies the level of optimization to apply to the shaders (default is NONE)
+    // specifies the level of optimization to apply to the shaders (default is PERFORMANCE)
     MaterialBuilder& optimization(Optimization optimization) noexcept;
 
     // if true, will output the generated GLSL shader code to stdout
@@ -232,17 +214,17 @@ public:
         bool isSampler;
     };
 
+    using PropertyList = bool[filament::MATERIAL_PROPERTIES_COUNT];
+    using VariableList = utils::CString[filament::MATERIAL_VARIABLES_COUNT];
+
     // Preview the first shader that would generated in the MaterialPackage.
     // This is used to run Static Code Analysis before generating a package.
     // Outputs the chosen shader model in the model parameter
     const std::string peek(filament::driver::ShaderType type,
-            filament::driver::ShaderModel& model) noexcept;
+            filament::driver::ShaderModel& model, const PropertyList& properties) noexcept;
 
     // Returns true if any of the parameter samplers is of type samplerExternal
     bool hasExternalSampler() const noexcept;
-
-    using PropertyList = bool[filament::MATERIAL_PROPERTIES_COUNT];
-    using VariableList = utils::CString[filament::MATERIAL_VARIABLES_COUNT];
 
     static constexpr size_t MAX_PARAMETERS_COUNT = 32;
     using ParameterList = Parameter[MAX_PARAMETERS_COUNT];
@@ -253,14 +235,14 @@ public:
     // returns a list of at least getParameterCount() parameters
     const ParameterList& getParameters() const noexcept { return mParameters; }
 
-    TargetApi getTargetApi() const { return mTargetApi; }
-
-    Platform getPlatform() const { return mPlatform; }
-
     uint8_t getVariantFilter() const { return mVariantFilter; }
 
 private:
     void prepareToBuild(MaterialInfo& info) noexcept;
+
+    // Return true if:
+    // The shader is syntactically and semantically valid
+    bool runStaticCodeAnalysis() noexcept;
 
     bool isLit() const noexcept { return mShading != filament::Shading::UNLIT; }
 
@@ -295,8 +277,6 @@ private:
     bool mDepthTest = true;
     bool mDepthWrite = true;
     bool mDepthWriteSet = false;
-
-    PostProcessCallBack mPostprocessorCallback = nullptr;
 };
 
 } // namespace filamat

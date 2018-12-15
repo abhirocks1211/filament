@@ -16,7 +16,6 @@
 
 #include "GLSLPostProcessor.h"
 
-#include <iostream>
 #include <sstream>
 #include <vector>
 
@@ -28,7 +27,9 @@
 #include <spirv_msl.hpp>
 
 #include "sca/builtinResource.h"
-#include "filamat/sca/GLSLTools.h"
+#include "sca/GLSLTools.h"
+
+#include <utils/Log.h>
 
 using namespace glslang;
 using namespace spirv_cross;
@@ -55,7 +56,7 @@ static uint32_t shaderVersionFromModel(filament::driver::ShaderModel model) {
 }
 
 static void errorHandler(const std::string& str) {
-    std::cerr << str << std::endl;
+    utils::slog.e << str << utils::io::endl;
 }
 
 static std::string stringifySpvOptimizerMessage(spv_message_level_t level, const char* source,
@@ -148,7 +149,7 @@ bool GLSLPostProcessor::process(const std::string& inputShader,
     if (targetApi == TargetApi::OPENGL && mOptimization == MaterialBuilder::Optimization::NONE) {
         *outputGlsl = inputShader;
         if (mPrintShaders) {
-            std::cout << *outputGlsl << std::endl;
+            utils::slog.i << *outputGlsl << utils::io::endl;
         }
         return true;
     }
@@ -177,7 +178,7 @@ bool GLSLPostProcessor::process(const std::string& inputShader,
     EShMessages msg = GLSLTools::glslangFlagsFromTargetApi(targetApi);
     bool ok = tShader.parse(&DefaultTBuiltInResource, mLangVersion, false, msg);
     if (!ok) {
-        std::cerr << tShader.getInfoLog() << std::endl;
+        utils::slog.e << tShader.getInfoLog() << utils::io::endl;
         return false;
     }
 
@@ -186,7 +187,7 @@ bool GLSLPostProcessor::process(const std::string& inputShader,
     // SPIR-V types
     bool linkOk = program.link(msg);
     if (!linkOk) {
-        std::cerr << tShader.getInfoLog() << std::endl;
+        utils::slog.e << tShader.getInfoLog() << utils::io::endl;
         return false;
     }
 
@@ -198,8 +199,8 @@ bool GLSLPostProcessor::process(const std::string& inputShader,
                     SpvToMsl(mSpirvOutput, mMslOutput);
                 }
             } else {
-                std::cerr << "GLSL post-processor invoked with optimization level NONE"
-                        << std::endl;
+                utils::slog.e << "GLSL post-processor invoked with optimization level NONE"
+                        << utils::io::endl;
             }
             break;
         case MaterialBuilder::Optimization::PREPROCESSOR:
@@ -214,14 +215,14 @@ bool GLSLPostProcessor::process(const std::string& inputShader,
     if (mGlslOutput) {
         *mGlslOutput = shrinkString(*mGlslOutput);
         if (mPrintShaders) {
-            std::cout << *mGlslOutput << std::endl;
+            utils::slog.i << *mGlslOutput << utils::io::endl;
         }
     }
     return true;
 }
 
 void GLSLPostProcessor::preprocessOptimization(glslang::TShader& tShader,
-        const filament::driver::ShaderModel shaderModel) const {
+        filament::driver::ShaderModel shaderModel) const {
     using TargetApi = MaterialBuilder::TargetApi;
 
     std::string glsl;
@@ -234,7 +235,7 @@ void GLSLPostProcessor::preprocessOptimization(glslang::TShader& tShader,
             msg, &glsl, forbidIncluder);
 
     if (!ok) {
-        std::cerr << tShader.getInfoLog() << std::endl;
+        utils::slog.e << tShader.getInfoLog() << utils::io::endl;
     }
 
     if (mSpirvOutput) {
@@ -249,7 +250,7 @@ void GLSLPostProcessor::preprocessOptimization(glslang::TShader& tShader,
         // SPIR-V types
         bool linkOk = program.link(msg);
         if (!ok || !linkOk) {
-            std::cerr << spirvShader.getInfoLog() << std::endl;
+            utils::slog.e << spirvShader.getInfoLog() << utils::io::endl;
         } else {
             GlslangToSpv(*program.getIntermediate(mShLang), *mSpirvOutput);
         }
@@ -265,7 +266,7 @@ void GLSLPostProcessor::preprocessOptimization(glslang::TShader& tShader,
 }
 
 void GLSLPostProcessor::fullOptimization(const TShader& tShader,
-        const filament::driver::ShaderModel shaderModel) const {
+        filament::driver::ShaderModel shaderModel) const {
     SpirvBlob spirv;
 
     // Compile GLSL to to SPIR-V
@@ -275,7 +276,8 @@ void GLSLPostProcessor::fullOptimization(const TShader& tShader,
     Optimizer optimizer(SPV_ENV_UNIVERSAL_1_3);
     optimizer.SetMessageConsumer([](spv_message_level_t level,
             const char* source, const spv_position_t& position, const char* message) {
-        std::cerr << stringifySpvOptimizerMessage(level, source, position, message) << std::endl;
+        utils::slog.e << stringifySpvOptimizerMessage(level, source, position, message)
+                << utils::io::endl;
     });
 
     if (mOptimization == MaterialBuilder::Optimization::SIZE) {
@@ -285,7 +287,7 @@ void GLSLPostProcessor::fullOptimization(const TShader& tShader,
     }
 
     if (!optimizer.Run(spirv.data(), spirv.size(), &spirv)) {
-        std::cerr << "SPIR-V optimizer pass failed" << std::endl;
+        utils::slog.e << "SPIR-V optimizer pass failed" << utils::io::endl;
         return;
     }
 

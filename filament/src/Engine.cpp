@@ -137,7 +137,7 @@ FEngine::FEngine(Backend backend, Platform* platform, void* sharedGLContext) :
         mPostProcessSib(PostProcessSib::getSib()),
         mCommandBufferQueue(CONFIG_MIN_COMMAND_BUFFERS_SIZE, CONFIG_COMMAND_BUFFERS_SIZE),
         mPerRenderPassAllocator("per-renderpass allocator", CONFIG_PER_RENDER_PASS_ARENA_SIZE),
-        mEpoch(std::chrono::steady_clock::now()),
+        mEngineEpoch(std::chrono::steady_clock::now()),
         mDriverBarrier(1)
 {
     SYSTRACE_ENABLE();
@@ -390,16 +390,15 @@ int FEngine::loop() {
     JobSystem::setThreadName("FEngine::loop");
     JobSystem::setThreadPriority(JobSystem::Priority::DISPLAY);
 
+    // We use the highest affinity bit, assuming this is a Big core in a  big.little
+    // configuration. This is also a core not used by the JobSystem.
+    // Either way the main reason to do this is to avoid this thread jumping from core to core
+    // and loose its caches in the process.
+    uint32_t id = std::thread::hardware_concurrency() - 1;
+
     while (true) {
-
-        // FIXME: we should do this based on the CPUs we actually have
-        uint32_t affinityMask = (std::thread::hardware_concurrency() >= 6) ? 0xF0 : 0;
-
-        if (affinityMask) {
-            // looks like thread affinity needs to be reset regularly (on Android)
-            JobSystem::setThreadAffinity(affinityMask);
-        }
-
+        // looks like thread affinity needs to be reset regularly (on Android)
+        JobSystem::setThreadAffinityById(id);
         if (!execute()) {
             break;
         }
@@ -730,32 +729,6 @@ bool FEngine::execute() {
 
     return true;
 }
-
-// ---------------------------------------------------------------------------------------------
-
-EnginePerformanceTest::~EnginePerformanceTest() noexcept = default;
-
-class FEnginePerformanceTest : public EnginePerformanceTest {
-public:
-    void activateOmegaThirteen() noexcept { }
-};
-
-FILAMENT_UPCAST(EnginePerformanceTest)
-
-void EnginePerformanceTest::activateOmegaThirteen() noexcept {
-    upcast(this)->activateOmegaThirteen();
-}
-
-void EnginePerformanceTest::activateBigBang() noexcept {
-}
-
-static void destroyUniverse(void *) {
-}
-
-EnginePerformanceTest::PFN EnginePerformanceTest::getDestroyUniverseApi() {
-    return &destroyUniverse;
-}
-
 
 } // namespace details
 

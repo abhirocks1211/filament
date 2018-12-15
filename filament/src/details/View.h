@@ -62,7 +62,7 @@ public:
     void terminate(FEngine& engine);
 
     void prepare(FEngine& engine, driver::DriverApi& driver, ArenaScope& arena,
-            Viewport const& viewport) noexcept;
+            Viewport const& viewport, math::float4 const& userTime) noexcept;
 
     void setScene(FScene* scene) { mScene = scene; }
     FScene const* getScene() const noexcept { return mScene; }
@@ -96,8 +96,12 @@ public:
     }
     bool isSkyboxVisible() const noexcept;
 
-    void setCulling(bool culling) noexcept { mCulling = culling; }
-    bool isCullingEnabled() const noexcept { return mCulling; }
+    void setFrustumCullingEnabled(bool culling) noexcept { mCulling = culling; }
+    bool isFrustumCullingEnabled() const noexcept { return mCulling; }
+
+    void setFrontFaceWindingInverted(bool inverted) noexcept { mFrontFaceWindingInverted = inverted; }
+    bool isFrontFaceWindingInverted() const noexcept { return mFrontFaceWindingInverted; }
+
 
     void setVisibleLayers(uint8_t select, uint8_t values) noexcept;
     uint8_t getVisibleLayers() const noexcept {
@@ -126,17 +130,9 @@ public:
     bool hasDynamicLighting() const noexcept { return mHasDynamicLighting; }
     bool hasShadowing() const noexcept { return mHasShadowing & mDirectionalShadowMap.hasVisibleShadows(); }
 
-    void prepareVisibleRenderables(utils::JobSystem& js, FScene::RenderableSoa& renderableData) const noexcept;
-
-    void prepareVisibleShadowCasters(utils::JobSystem& js, FScene::RenderableSoa& renderableData,
-                                     Frustum const& lightFrustum) const noexcept;
-
     void updatePrimitivesLod(
             FEngine& engine, const CameraInfo& camera,
             FScene::RenderableSoa& renderableData, Range visible) noexcept;
-
-    static void cullRenderables(utils::JobSystem& js, FScene::RenderableSoa& renderableData,
-                                Frustum const& frustum, size_t bit) noexcept;
 
     void setShadowsEnabled(bool enabled) noexcept { mShadowingEnabled = enabled; }
 
@@ -180,6 +176,14 @@ public:
         return mDynamicResolution;
     }
 
+    void setRenderQuality(RenderQuality const& renderQuality) noexcept {
+        mRenderQuality = renderQuality;
+    }
+
+    RenderQuality getRenderQuality() const noexcept {
+        return mRenderQuality;
+    }
+
     void setDynamicLightingOptions(float zLightNear, float zLightFar) noexcept;
 
     void setPostProcessingEnabled(bool enabled) noexcept {
@@ -216,8 +220,18 @@ public:
 private:
     static constexpr size_t MAX_FRAMETIME_HISTORY = 32u;
 
-    void prepareVisibleLights(
-            FLightManager& lcm, utils::JobSystem& js, FScene::LightSoa& lightData) const;
+    void prepareVisibleRenderables(utils::JobSystem& js,
+            Frustum const& frustum, FScene::RenderableSoa& renderableData) const noexcept;
+
+    static void prepareVisibleShadowCasters(utils::JobSystem& js,
+            Frustum const& lightFrustum, FScene::RenderableSoa& renderableData) noexcept;
+
+    static void prepareVisibleLights(
+            FLightManager const& lcm, utils::JobSystem& js, Frustum const& frustum,
+            FScene::LightSoa& lightData) noexcept;
+
+    static void cullRenderables(utils::JobSystem& js,
+            FScene::RenderableSoa& renderableData, Frustum const& frustum, size_t bit) noexcept;
 
     void computeVisibilityMasks(
             uint8_t visibleLayers, uint8_t const* layers,
@@ -235,7 +249,6 @@ private:
     static FScene::RenderableSoa::iterator partition(
             FScene::RenderableSoa::iterator begin, FScene::RenderableSoa::iterator end, uint8_t mask) noexcept;
 
-
     // these are accessed in the render loop, keep together
     Handle<HwSamplerBuffer> mPerViewSbh;
     Handle<HwUniformBuffer> mPerViewUbh;
@@ -245,7 +258,6 @@ private:
     Handle<HwSamplerBuffer> getUsh() const noexcept { return mPerViewSbh; }
     Handle<HwUniformBuffer> getUbh() const noexcept { return mPerViewUbh; }
     Handle<HwUniformBuffer> getLightUbh() const noexcept { return mLightUbh; }
-
 
     FScene* mScene = nullptr;
     FCamera* mCullingCamera = nullptr;
@@ -259,6 +271,7 @@ private:
     Viewport mViewport;
     LinearColorA mClearColor;
     bool mCulling = true;
+    bool mFrontFaceWindingInverted = false;
     bool mClearTargetColor = true;
     bool mClearTargetDepth = true;
     bool mClearTargetStencil = false;
@@ -278,6 +291,8 @@ private:
     math::float2 mScale = 1.0f;
     float mDynamicWorkloadScale = 1.0f;
     bool mIsDynamicResolutionSupported = false;
+
+    RenderQuality mRenderQuality;
 
     mutable UniformBuffer mPerViewUb;
     mutable SamplerBuffer mPerViewSb;

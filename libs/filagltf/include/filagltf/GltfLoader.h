@@ -17,14 +17,39 @@
 #ifndef TNT_GLTFLOADER_H
 #define TNT_GLTFLOADER_H
 
+#include <math/mat4.h>
+
+namespace filament {
+    class Engine;
+    class VertexBuffer;
+    class IndexBuffer;
+    class Material;
+    class MaterialInstance;
+    class Renderable;
+    class VertexVuffer;
+}
+
+#include <filagltf/GltfAsset.h>
+#include <functional>
 #include <string>
+#include <tiny_gltf.h>
 
 class GltfLoader {
 public:
-    GltfLoader();
+    using mat4f = math::mat4f;
+    using loadCallback = std::function<void(std::string)>;
+
+    GltfLoader(filament::Engine& engine);
     ~GltfLoader();
 
-    void Load(const std::string &filename);
+    std::vector<utils::Entity> Load(const std::string &filename);
+
+private:
+
+    filament::Engine& mEngine;
+
+    filament::VertexBuffer* getVertexBufferForPrimitive(const tinygltf::Model &model,
+            const tinygltf::Primitive &primitive) const;
 };
 
 

@@ -9,11 +9,13 @@ set(PUBLIC_HDR_DIR include)
 # ==================================================================================================
 set(PUBLIC_HDRS
         include/filagltf/GltfLoader.h
-        )
+        include/filagltf/GltfAsset.h
+)
 
 set(SRCS
         src/GltfLoader.cpp
-        )
+        src/GltfAsset.cpp
+)
 
 # ==================================================================================================
 # Include and target definitions
@@ -24,4 +26,4 @@ add_library(${TARGET} STATIC ${PUBLIC_HDRS} ${SRCS})
 
 target_include_directories(${TARGET} PUBLIC ${PUBLIC_HDR_DIR})
 
-target_link_libraries(${TARGET} PUBLIC tinygltf)
+target_link_libraries(${TARGET} PUBLIC tinygltf filament)

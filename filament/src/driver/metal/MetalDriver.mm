@@ -208,12 +208,9 @@ void MetalDriver::createFence(Driver::FenceHandle, int dummy) {
 
 void MetalDriver::createSwapChain(Driver::SwapChainHandle sch, void* nativeWindow, uint64_t flags) {
     auto *swapChain = construct_handle<MetalSwapChain>(mHandleMap, sch);
-
     // Obtain the CAMetalLayer-backed view.
-    // todo: move this into Platform.
-    NSView *nsview = (NSView *) nativeWindow;
-    nsview = [nsview viewWithTag:255];
-    swapChain->layer = (CAMetalLayer *) nsview.layer;
+    swapChain->layer = (CAMetalLayer *) nativeWindow;
+    swapChain->layer.device = pImpl->mDevice;
 
     // Create the depth buffer.
     // todo: This is a hack for now, and assumes createSwapChain is only called once.

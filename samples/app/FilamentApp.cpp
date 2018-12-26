@@ -423,15 +423,13 @@ FilamentApp::Window::Window(FilamentApp* filamentApp,
     // rather than the one created by SDL.
     mFilamentApp->mEngine = Engine::create(config.backend);
 
-    // HACK: We don't use SDL's 2D rendering functionality, but by invoking it we cause
-    // SDL to create a Metal backing layer, which allows us to run Vulkan apps via MoltenVK.
-    #if defined(FILAMENT_DRIVER_SUPPORTS_VULKAN) && defined(__APPLE__)
-    constexpr int METAL_DRIVER = 2;
-    mSdlRenderer = SDL_CreateRenderer(mWindow, METAL_DRIVER, SDL_RENDERER_ACCELERATED);
-    #endif
-
     void* nativeWindow = ::getNativeWindow(mWindow);
+#if defined(FILAMENT_DRIVER_SUPPORTS_VULKAN) && defined(__APPLE__)
+    void * metalLayer = setUpMetalLayer(nativeWindow);
+    mSwapChain = mFilamentApp->mEngine->createSwapChain(metalLayer);
+#else
     mSwapChain = mFilamentApp->mEngine->createSwapChain(nativeWindow);
+#endif
     mRenderer = mFilamentApp->mEngine->createRenderer();
 
     // create cameras
@@ -553,7 +551,13 @@ void FilamentApp::Window::fixupMouseCoordinatesForHdpi(ssize_t& x, ssize_t& y) c
 
 void FilamentApp::Window::resize() {
     mFilamentApp->mEngine->destroy(mSwapChain);
+#if defined(FILAMENT_DRIVER_SUPPORTS_VULKAN) && defined(__APPLE__)
+    void* nativeWindow = ::getNativeWindow(mWindow);
+    void* metalLayer = setUpMetalLayer(nativeWindow);
+    mSwapChain = mFilamentApp->mEngine->createSwapChain(metalLayer);
+#else
     mSwapChain = mFilamentApp->mEngine->createSwapChain(::getNativeWindow(mWindow));
+#endif
     configureCamerasForWindow();
 }
 

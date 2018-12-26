@@ -19,6 +19,7 @@
 #include <utils/Panic.h>
 
 #include <Cocoa/Cocoa.h>
+#include <QuartzCore/QuartzCore.h>
 
 #include <SDL_syswm.h>
 
@@ -29,4 +30,16 @@ void* getNativeWindow(SDL_Window* sdlWindow) {
     NSWindow* win = wmi.info.cocoa.window;
     NSView* view = [win contentView];
     return view;
+}
+
+void* setUpMetalLayer(void* nativeView) {
+    NSView* view = (NSView*) nativeView;
+    [view setWantsLayer:YES];
+    CAMetalLayer* metalLayer = [CAMetalLayer layer];
+    metalLayer.bounds = view.bounds;
+    metalLayer.drawableSize = view.bounds.size;
+    metalLayer.displaySyncEnabled = YES;
+    metalLayer.opaque = YES;
+    [view setLayer:metalLayer];
+    return (void*) metalLayer;
 }

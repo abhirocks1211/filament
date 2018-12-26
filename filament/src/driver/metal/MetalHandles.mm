@@ -53,8 +53,29 @@ static inline MTLStorageMode getMetalStorageMode(TextureFormat format) {
             return MTLStorageModeManaged;
 
     }
-
 }
+
+MetalSwapChain::MetalSwapChain(id<MTLDevice> device, CAMetalLayer* nativeWindow)
+        : layer(nativeWindow) {
+    layer.device = device;
+
+    // Create a depth buffer for the swap chain.
+    CGSize size = layer.drawableSize;
+    MTLTextureDescriptor* depthTextureDesc =
+            [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatDepth32Float
+                                                               width:(NSUInteger)(size.width)
+                                                              height:(NSUInteger)(size.height)
+                                                           mipmapped:NO];
+    depthTextureDesc.usage = MTLTextureUsageRenderTarget;
+    depthTextureDesc.resourceOptions = MTLResourceStorageModePrivate;
+    depthTexture = [device newTextureWithDescriptor:depthTextureDesc];
+    surfaceHeight = (NSUInteger)(size.height);
+}
+
+MetalSwapChain::~MetalSwapChain() {
+    [depthTexture release];
+}
+
 MetalVertexBuffer::MetalVertexBuffer(id<MTLDevice> device, uint8_t bufferCount, uint8_t attributeCount,
             uint32_t vertexCount, Driver::AttributeArray const& attributes)
     : HwVertexBuffer(bufferCount, attributeCount, vertexCount, attributes) {

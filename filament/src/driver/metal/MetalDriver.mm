@@ -68,12 +68,10 @@ struct MetalDriverImpl {
     MetalSamplerBuffer* mSamplerBindings[NUM_SAMPLER_BINDINGS] = {};
 
     // Surface-related properties.
-    CAMetalLayer* mCurrentSurface = nullptr;
+    MetalSwapChain* mCurrentSurface = nullptr;
     id<CAMetalDrawable> mCurrentDrawable = nullptr;
     MTLPixelFormat mCurrentSurfacePixelFormat = MTLPixelFormatInvalid;
     MTLPixelFormat mCurrentDepthPixelFormat = MTLPixelFormatInvalid;
-    id<MTLTexture> mDepthTexture = nullptr;
-    NSUInteger mSurfaceHeight = 0;
 };
 
 Driver* MetalDriver::create(MetalPlatform* const platform) {
@@ -207,26 +205,7 @@ void MetalDriver::createFence(Driver::FenceHandle, int dummy) {
 }
 
 void MetalDriver::createSwapChain(Driver::SwapChainHandle sch, void* nativeWindow, uint64_t flags) {
-    auto *swapChain = construct_handle<MetalSwapChain>(mHandleMap, sch);
-    // Obtain the CAMetalLayer-backed view.
-    swapChain->layer = (CAMetalLayer *) nativeWindow;
-    swapChain->layer.device = pImpl->mDevice;
-
-    // Create the depth buffer.
-    // todo: This is a hack for now, and assumes createSwapChain is only called once.
-    CGSize size = swapChain->layer.bounds.size;
-    CGFloat scale = swapChain->layer.contentsScale;
-    auto width = static_cast<NSUInteger>(size.width * scale);
-    auto height = static_cast<NSUInteger>(size.height * scale);
-    MTLTextureDescriptor* depthTextureDesc =
-            [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatDepth32Float
-                                                               width:width
-                                                              height:height
-                                                           mipmapped:NO];
-    depthTextureDesc.usage = MTLTextureUsageRenderTarget;
-    depthTextureDesc.resourceOptions = MTLResourceStorageModePrivate;
-    pImpl->mDepthTexture = [pImpl->mDevice newTextureWithDescriptor:depthTextureDesc];
-    pImpl->mSurfaceHeight = height;
+    construct_handle<MetalSwapChain>(mHandleMap, sch, pImpl->mDevice, (CAMetalLayer*) nativeWindow);
 }
 
 void MetalDriver::createStreamFromTextureId(Driver::StreamHandle, intptr_t externalTextureId,
@@ -343,7 +322,6 @@ void MetalDriver::destroyStream(Driver::StreamHandle sh) {
 
 void MetalDriver::terminate() {
     [pImpl->mCommandQueue release];
-    [pImpl->mDepthTexture release];
     [pImpl->mDriverPool drain];
 }
 
@@ -457,7 +435,7 @@ void MetalDriver::beginRenderPass(Driver::RenderTargetHandle rth,
     if (renderTarget->isDefaultRenderTarget) {
         // Lazily acquire the next drawable, if we haven't already acquired it for this frame.
         if (!pImpl->mCurrentDrawable) {
-            pImpl->mCurrentDrawable = [pImpl->mCurrentSurface nextDrawable];
+            pImpl->mCurrentDrawable = [pImpl->mCurrentSurface->layer nextDrawable];
         }
         if (pImpl->mCurrentDrawable == nil) {
             utils::slog.e << "Could not obtain drawable." << utils::io::endl;
@@ -479,8 +457,8 @@ void MetalDriver::beginRenderPass(Driver::RenderTargetHandle rth,
     // Depth
 
     if (renderTarget->isDefaultRenderTarget) {
-        descriptor.depthAttachment.texture = pImpl->mDepthTexture;
-        pImpl->mCurrentDepthPixelFormat = pImpl->mDepthTexture.pixelFormat;
+        descriptor.depthAttachment.texture = pImpl->mCurrentSurface->depthTexture;
+        pImpl->mCurrentDepthPixelFormat = pImpl->mCurrentSurface->depthTexture.pixelFormat;
     } else {
         descriptor.depthAttachment.texture = renderTarget->depth;
         if (renderTarget->depth) {
@@ -558,7 +536,7 @@ void MetalDriver::makeCurrent(Driver::SwapChainHandle schDraw, Driver::SwapChain
                                   "Metal driver does not support distinct draw/read swap chains.");
     auto* swapChain = handle_cast<MetalSwapChain>(mHandleMap, schDraw);
 
-    pImpl->mCurrentSurface = swapChain->layer;
+    pImpl->mCurrentSurface = swapChain;
 }
 
 void MetalDriver::commit(Driver::SwapChainHandle sch) {
@@ -573,7 +551,8 @@ void MetalDriver::viewport(ssize_t left, ssize_t bottom, size_t width, size_t he
     // Flip the viewport, because Metal's screen space is vertically flipped that of Filament's.
     pImpl->mViewportState.updateState(MTLViewport {
         .originX = static_cast<double>(left),
-        .originY = pImpl->mSurfaceHeight - static_cast<double>(bottom) - static_cast<double>(height),
+        .originY = pImpl->mCurrentSurface->surfaceHeight - static_cast<double>(bottom) -
+                static_cast<double>(height),
         .height = static_cast<double>(height),
         .width = static_cast<double>(width),
         .znear = 0.0,

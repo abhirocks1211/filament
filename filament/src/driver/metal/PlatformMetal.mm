@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "PlatformCocoaMetal.h"
+#include "PlatformMetal.h"
 #include "MetalDriver.h"
 
 #include <Cocoa/Cocoa.h>
@@ -29,7 +29,7 @@ namespace filament {
 
 using namespace driver;
 
-Driver* PlatformCocoaMetal::createDriver(void* sharedContext) noexcept {
+Driver* PlatformMetal::createDriver(void* sharedContext) noexcept {
     return metal::MetalDriver::create(this);
 }
 

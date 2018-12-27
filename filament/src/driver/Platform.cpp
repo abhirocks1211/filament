@@ -37,7 +37,7 @@
     #if defined (FILAMENT_DRIVER_SUPPORTS_VULKAN)
         #include "driver/vulkan/PlatformVkCocoa.h"
     #endif
-    #include "driver/metal/PlatformCocoaMetal.h"
+    #include "driver/metal/PlatformMetal.h"
 #elif defined(__linux__)
     #ifndef USE_EXTERNAL_GLES3
         #include "driver/opengl/PlatformGLX.h"
@@ -109,7 +109,7 @@ Platform* Platform::create(Backend* backend) noexcept {
         #endif
     }
     if (*backend == Backend::METAL) {
-        return new PlatformCocoaMetal();
+        return new PlatformMetal();
     }
     #if defined(USE_EXTERNAL_GLES3)
         return nullptr;

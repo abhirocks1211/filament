@@ -123,6 +123,7 @@ struct MetalRenderTarget : private HwRenderTarget {
 
     MetalRenderTarget(uint32_t width, uint32_t height) : HwRenderTarget(width, height) {}
     MetalRenderTarget() : HwRenderTarget(0, 0), isDefaultRenderTarget(true) {}
+    ~MetalRenderTarget();
 
     bool isDefaultRenderTarget = false;
     id<MTLTexture> color = nil;

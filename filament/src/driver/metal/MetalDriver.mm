@@ -172,19 +172,15 @@ void MetalDriver::createRenderTarget(Driver::RenderTargetHandle rth,
 
     if (color.handle) {
         auto colorTexture = handle_cast<MetalTexture>(mHandleMap, color.handle);
-        renderTarget->color = colorTexture->texture;
+        renderTarget->color = [colorTexture->texture retain];
     } else if (targetBufferFlags & TargetBufferFlags::COLOR) {
-        utils::slog.d << "Need color.";
-        assert(false);
+        ASSERT_POSTCONDITION( false, "A color buffer is required for a render target.");
     }
 
     if (depth.handle) {
         auto depthTexture = handle_cast<MetalTexture>(mHandleMap, depth.handle);
-        renderTarget->depth = depthTexture->texture;
+        renderTarget->depth = [depthTexture->texture retain];
     } else if (targetBufferFlags & TargetBufferFlags::DEPTH) {
-        // Create a depth texture.
-        // TODO: ownership is not clear here. Should we force Filament to always create a depth
-        // texture ahead of time?
         MTLTextureDescriptor* depthTextureDesc =
                 [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatDepth32Float
                                                                    width:width
@@ -305,8 +301,7 @@ void MetalDriver::destroyTexture(Driver::TextureHandle th) {
 
 void MetalDriver::destroyRenderTarget(Driver::RenderTargetHandle rth) {
     if (rth) {
-        // todo: see comment inside of createRenderTarget for why this is difficult at the moment.
-        // destruct_handle<MetalRenderTarget>(mHandleMap, rth);
+        destruct_handle<MetalRenderTarget>(mHandleMap, rth);
     }
 }
 

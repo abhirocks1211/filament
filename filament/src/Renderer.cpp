@@ -347,7 +347,7 @@ bool FRenderer::beginFrame(FSwapChain* swapChain) {
 
     if (!mFrameSkipper.beginFrame()) {
         mFrameInfoManager.cancelFrame();
-        driver.endFrame(mFrameId);
+        driver.endFrame(mFrameId, true);
         engine.flush();
         return false;
     }
@@ -383,7 +383,7 @@ void FRenderer::endFrame() {
     }
     mFrameSkipper.endFrame();
 
-    driver.endFrame(mFrameId);
+    driver.endFrame(mFrameId, false);
 
     if (mSwapChain) {
         mSwapChain->commit(driver);

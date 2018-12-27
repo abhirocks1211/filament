@@ -211,8 +211,8 @@ DECL_DRIVER_API_2(beginFrame,
 DECL_DRIVER_API_1(setPresentationTime,
         int64_t, monotonic_clock_ns)
 
-DECL_DRIVER_API_1(endFrame,
-        uint32_t, frameId)
+DECL_DRIVER_API_2(endFrame,
+        uint32_t, frameId, bool, canceled)
 
 // hint to the driver that we're done with all render targets up to this point. i.e. the driver
 // can start rendering. e.g. correspond to glFlush() for a GLES driver.

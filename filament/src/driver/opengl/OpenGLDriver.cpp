@@ -2613,7 +2613,7 @@ void OpenGLDriver::setPresentationTime(int64_t monotonic_clock_ns) {
     mPlatform.setPresentationTime(monotonic_clock_ns);
 }
 
-void OpenGLDriver::endFrame(uint32_t frameId) {
+void OpenGLDriver::endFrame(uint32_t frameId, bool canceled) {
     //SYSTRACE_NAME("glFinish");
     //glFinish();
     insertEventMarker("endFrame");

@@ -40,8 +40,12 @@ struct MetalDriverImpl {
     id<MTLDevice> mDevice = nullptr;
     id<MTLCommandQueue> mCommandQueue = nullptr;
 
+    // A pool for autoreleased objects throughout the lifetime of the Metal driver.
     NSAutoreleasePool* mDriverPool = nil;
-    NSAutoreleasePool* mPool = nil;
+
+    // A pool for autoreleased objects allocated during the execution of a frame.
+    // The pool is created in beginFrame() and drained in commit().
+    NSAutoreleasePool* mFramePool = nil;
 
     // Single use, re-created each frame.
     id<MTLCommandBuffer> mCurrentCommandBuffer = nullptr;
@@ -83,7 +87,6 @@ MetalDriver::MetalDriver(driver::MetalPlatform* platform) noexcept
         : DriverBase(new ConcreteDispatcher<MetalDriver>(this)),
         mPlatform(*platform),
         pImpl(new MetalDriverImpl) {
-
     pImpl->mDriverPool = [[NSAutoreleasePool alloc] init];
     pImpl->mDevice = MTLCreateSystemDefaultDevice();
     pImpl->mCommandQueue = [pImpl->mDevice newCommandQueue];
@@ -106,7 +109,7 @@ void MetalDriver::debugCommand(const char *methodName) {
 #endif
 
 void MetalDriver::beginFrame(int64_t monotonic_clock_ns, uint32_t frameId) {
-    pImpl->mPool = [[NSAutoreleasePool alloc] init];
+    pImpl->mFramePool = [[NSAutoreleasePool alloc] init];
     pImpl->mCurrentCommandBuffer = [pImpl->mCommandQueue commandBuffer];
 }
 
@@ -114,8 +117,12 @@ void MetalDriver::setPresentationTime(int64_t monotonic_clock_ns) {
 
 }
 
-void MetalDriver::endFrame(uint32_t frameId) {
-
+void MetalDriver::endFrame(uint32_t frameId, bool canceled) {
+    // If the frame was canceled, commit() won't be called- so we should drain the frame's
+    // autorelease pool here.
+    if (canceled) {
+        [pImpl->mFramePool drain];
+    }
 }
 
 void MetalDriver::flush(int dummy) {
@@ -538,7 +545,9 @@ void MetalDriver::commit(Driver::SwapChainHandle sch) {
     [pImpl->mCurrentCommandBuffer presentDrawable:pImpl->mCurrentDrawable];
     [pImpl->mCurrentCommandBuffer commit];
     pImpl->mCurrentDrawable = nil;
-    [pImpl->mPool drain];
+
+    // Release resources created during frame execution- like commandBuffer and currentDrawable.
+    [pImpl->mFramePool drain];
 }
 
 void MetalDriver::viewport(ssize_t left, ssize_t bottom, size_t width, size_t height) {

@@ -17,14 +17,6 @@
 #include "PlatformMetal.h"
 #include "MetalDriver.h"
 
-#include <Cocoa/Cocoa.h>
-#import <Metal/Metal.h>
-#import <QuartzCore/CAMetalLayer.h>
-
-#include <bluevk/BlueVK.h>
-#include <filament/SwapChain.h>
-#include <utils/Panic.h>
-
 namespace filament {
 
 using namespace driver;

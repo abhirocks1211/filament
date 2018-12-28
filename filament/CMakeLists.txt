@@ -251,8 +251,8 @@ else()
     set(MATC_TARGET desktop)
 endif()
 
-# Include SPIRV when building default materials on platforms that support Vulkan.
-if (FILAMENT_SUPPORTS_VULKAN)
+# Generate shader code for all platforms when Vulkan or Metal is supported.
+if (FILAMENT_SUPPORTS_VULKAN OR FILAMENT_SUPPORTS_METAL)
     set(MATC_BASE_FLAGS -a all)
 else()
     set(MATC_BASE_FLAGS -a opengl)

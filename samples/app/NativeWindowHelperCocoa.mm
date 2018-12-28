@@ -32,7 +32,7 @@ void* getNativeWindow(SDL_Window* sdlWindow) {
     return view;
 }
 
-void* setUpMetalLayer(void* nativeView) {
+void setUpMetalLayer(void* nativeView) {
     NSView* view = (NSView*) nativeView;
     [view setWantsLayer:YES];
     CAMetalLayer* metalLayer = [CAMetalLayer layer];
@@ -41,5 +41,4 @@ void* setUpMetalLayer(void* nativeView) {
     metalLayer.displaySyncEnabled = YES;
     metalLayer.opaque = YES;
     [view setLayer:metalLayer];
-    return (void*) metalLayer;
 }

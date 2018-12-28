@@ -425,11 +425,9 @@ FilamentApp::Window::Window(FilamentApp* filamentApp,
 
     void* nativeWindow = ::getNativeWindow(mWindow);
 #if defined(FILAMENT_DRIVER_SUPPORTS_VULKAN) && defined(__APPLE__)
-    void * metalLayer = setUpMetalLayer(nativeWindow);
-    mSwapChain = mFilamentApp->mEngine->createSwapChain(metalLayer);
-#else
-    mSwapChain = mFilamentApp->mEngine->createSwapChain(nativeWindow);
+    setUpMetalLayer(nativeWindow);
 #endif
+    mSwapChain = mFilamentApp->mEngine->createSwapChain(nativeWindow);
     mRenderer = mFilamentApp->mEngine->createRenderer();
 
     // create cameras
@@ -551,13 +549,7 @@ void FilamentApp::Window::fixupMouseCoordinatesForHdpi(ssize_t& x, ssize_t& y) c
 
 void FilamentApp::Window::resize() {
     mFilamentApp->mEngine->destroy(mSwapChain);
-#if defined(FILAMENT_DRIVER_SUPPORTS_VULKAN) && defined(__APPLE__)
-    void* nativeWindow = ::getNativeWindow(mWindow);
-    void* metalLayer = setUpMetalLayer(nativeWindow);
-    mSwapChain = mFilamentApp->mEngine->createSwapChain(metalLayer);
-#else
     mSwapChain = mFilamentApp->mEngine->createSwapChain(::getNativeWindow(mWindow));
-#endif
     configureCamerasForWindow();
 }
 

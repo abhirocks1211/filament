@@ -61,7 +61,7 @@ static const Config config {
     .iblDirectory = IBL_FOLDER,
     .scale = 1,
     .splitView = false,
-    .backend = Backend::METAL,
+    .backend = Backend::VULKAN,
 };
 
 int main(int argc, char** argv) {

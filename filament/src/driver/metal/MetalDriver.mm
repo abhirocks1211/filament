@@ -208,7 +208,8 @@ void MetalDriver::createFence(Driver::FenceHandle, int dummy) {
 }
 
 void MetalDriver::createSwapChain(Driver::SwapChainHandle sch, void* nativeWindow, uint64_t flags) {
-    construct_handle<MetalSwapChain>(mHandleMap, sch, pImpl->mDevice, (CAMetalLayer*) nativeWindow);
+    NSView* view = (NSView*)nativeWindow;
+    construct_handle<MetalSwapChain>(mHandleMap, sch, pImpl->mDevice, (CAMetalLayer*) view.layer);
 }
 
 void MetalDriver::createStreamFromTextureId(Driver::StreamHandle, intptr_t externalTextureId,

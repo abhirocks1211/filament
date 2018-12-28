@@ -37,7 +37,7 @@ void setUpMetalLayer(void* nativeView) {
     [view setWantsLayer:YES];
     CAMetalLayer* metalLayer = [CAMetalLayer layer];
     metalLayer.bounds = view.bounds;
-    metalLayer.drawableSize = view.bounds.size;
+    metalLayer.drawableSize = [view convertSizeToBacking:view.bounds.size];
     metalLayer.displaySyncEnabled = YES;
     metalLayer.opaque = YES;
     [view setLayer:metalLayer];

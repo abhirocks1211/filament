@@ -51,9 +51,6 @@ set(SRCS
         src/driver/opengl/GLUtils.cpp
         src/driver/opengl/OpenGLDriver.cpp
         src/driver/opengl/OpenGLProgram.cpp
-        src/driver/metal/MetalDriver.mm
-        src/driver/metal/MetalBinder.mm
-        src/driver/metal/MetalHandles.mm
         src/driver/CommandStream.cpp
         src/driver/CommandBufferQueue.cpp
         src/driver/CircularBuffer.cpp
@@ -178,7 +175,6 @@ elseif (IOS)
     list(APPEND SRCS src/driver/opengl/PlatformCocoaTouchGL.mm)
 elseif (APPLE)
     list(APPEND SRCS src/driver/opengl/PlatformCocoaGL.mm)
-    list(APPEND SRCS src/driver/metal/PlatformMetal.mm)
 elseif (WEBGL)
     list(APPEND SRCS src/driver/opengl/PlatformWebGL.cpp)
 elseif (LINUX)
@@ -194,6 +190,19 @@ endif()
 # ==================================================================================================
 # "2" corresponds to SYSTRACE_TAG_FILEMENT (See: utils/Systrace.h)
 add_definitions(-DSYSTRACE_TAG=2 )
+
+# ==================================================================================================
+# Metal Sources
+# ==================================================================================================
+
+if (FILAMENT_SUPPORTS_METAL)
+    list(APPEND SRCS
+            src/driver/metal/MetalDriver.mm
+            src/driver/metal/MetalBinder.mm
+            src/driver/metal/MetalHandles.mm
+            src/driver/metal/PlatformMetal.mm
+    )
+endif()
 
 # ==================================================================================================
 # Vulkan Sources

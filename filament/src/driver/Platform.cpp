@@ -109,7 +109,11 @@ Platform* Platform::create(Backend* backend) noexcept {
         #endif
     }
     if (*backend == Backend::METAL) {
+#if defined(FILAMENT_SUPPORTS_METAL)
         return new PlatformMetal();
+#else
+        return nullptr;
+#endif
     }
     #if defined(USE_EXTERNAL_GLES3)
         return nullptr;

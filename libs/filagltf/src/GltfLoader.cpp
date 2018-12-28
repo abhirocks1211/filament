@@ -27,11 +27,15 @@
 #include <filament/IndexBuffer.h>
 #include <filament/RenderableManager.h>
 
+//#include "generated/resources/resources.h"
+
 using namespace filament;
 using namespace tinygltf;
 using namespace math;
 
-GltfLoader::GltfLoader(filament::Engine& engine) : mEngine(engine){}
+GltfLoader::GltfLoader(filament::Engine& engine, filament::Material *defaultMaterial) :
+    mEngine(engine), mDefaultColorMaterial(defaultMaterial){}
+
 GltfLoader::~GltfLoader(){}
 
 VertexBuffer::AttributeType intToAttributeType(int componentType, int type) {
@@ -43,21 +47,21 @@ VertexBuffer::AttributeType intToAttributeType(int componentType, int type) {
                 case TINYGLTF_TYPE_VEC4 : return VertexBuffer::AttributeType::BYTE4;
                 default: return VertexBuffer::AttributeType::BYTE;
             }
-        case TINYGLTF_PARAMETER_TYPE_UNSIGNED_BYTE : return VertexBuffer::AttributeType::UBYTE;
+        case TINYGLTF_PARAMETER_TYPE_UNSIGNED_BYTE :
             switch (type) {
                 case TINYGLTF_TYPE_VEC2 : return VertexBuffer::AttributeType::UBYTE2;
                 case TINYGLTF_TYPE_VEC3 : return VertexBuffer::AttributeType::UBYTE3;
                 case TINYGLTF_TYPE_VEC4 : return VertexBuffer::AttributeType::UBYTE4;
                 default: return VertexBuffer::AttributeType::UBYTE;
             }
-        case TINYGLTF_PARAMETER_TYPE_SHORT : return VertexBuffer::AttributeType::SHORT;
+        case TINYGLTF_PARAMETER_TYPE_SHORT :
             switch (type) {
                 case TINYGLTF_TYPE_VEC2 : return VertexBuffer::AttributeType::SHORT2;
                 case TINYGLTF_TYPE_VEC3 : return VertexBuffer::AttributeType::SHORT3;
                 case TINYGLTF_TYPE_VEC4 : return VertexBuffer::AttributeType::SHORT4;
                 default: return VertexBuffer::AttributeType::SHORT;
             }
-        case TINYGLTF_PARAMETER_TYPE_UNSIGNED_SHORT : return VertexBuffer::AttributeType::USHORT;
+        case TINYGLTF_PARAMETER_TYPE_UNSIGNED_SHORT :
             switch (type) {
                 case TINYGLTF_TYPE_VEC2 : return VertexBuffer::AttributeType::USHORT2;
                 case TINYGLTF_TYPE_VEC3 : return VertexBuffer::AttributeType::USHORT3;
@@ -136,7 +140,7 @@ static void processNodes(const Model& model, int rootIndex, std::vector<utils::E
     processNode(model, rootIndex, renderables, mat4f());
 }
 
-std::vector<utils::Entity> GltfLoader::Load(const std::string& filename){
+std::vector<utils::Entity> GltfLoader::Load(const std::string& filename) {
     Model model;
     TinyGLTF loader;
     std::string err;
@@ -155,15 +159,14 @@ std::vector<utils::Entity> GltfLoader::Load(const std::string& filename){
         printf("Failed to parse glTF\n");
     }
 
-
-    // Turn meshes into renderables
-
     std::vector<utils::Entity> renderables = {};
+    // Turn meshes into vertex buffers
+
+    std::vector<utils::Entity> vertexBuffers = {};
     for (Mesh mesh : model.meshes) {
         for (Primitive primitive : mesh.primitives) {
-            VertexBuffer *vb = getVertexBufferForPrimitive(model, primitive);
-            RenderableManager::Builder builder(1);
-            builder.boundingBox()
+            utils::Entity renderable = getVertexBufferForPrimitive(model, primitive);
+            renderables.emplace_back(renderable);
         }
     }
 
@@ -193,13 +196,12 @@ std::vector<utils::Entity> GltfLoader::Load(const std::string& filename){
 
     }
 
-
     return renderables;
 }
 
 
 
-VertexBuffer* GltfLoader::getVertexBufferForPrimitive(const Model &model, const Primitive &primitive) const {
+utils::Entity GltfLoader::getVertexBufferForPrimitive(const Model &model, const Primitive &primitive) const {
     VertexBuffer::Builder vbb = VertexBuffer::Builder();
 
     //TODO: instead of making empty buffers, map indices to numbers [0, number of bufferViews used by primitive)
@@ -246,12 +248,12 @@ VertexBuffer* GltfLoader::getVertexBufferForPrimitive(const Model &model, const 
     Accessor indexAccessor = model.accessors[primitive.indices];
     BufferView indexBufferView = model.bufferViews[indexAccessor.bufferView];
     Buffer indexBuffer = model.buffers[indexBufferView.buffer];
-    IndexBuffer *ibb = IndexBuffer::Builder()
+    IndexBuffer *ib = IndexBuffer::Builder()
             .indexCount(indexAccessor.count)
             .build(mEngine);
     void *indexData = malloc(indexBufferView.byteLength);
     memcpy(indexData, &indexBuffer.data.at(0) + indexBufferView.byteOffset, indexBufferView.byteLength);
-    ibb->setBuffer(mEngine,
+    ib->setBuffer(mEngine,
             IndexBuffer::BufferDescriptor(indexData, indexBufferView.byteLength, nullptr, nullptr));
 
     vbb.vertexCount(vertexCount);
@@ -268,9 +270,15 @@ VertexBuffer* GltfLoader::getVertexBufferForPrimitive(const Model &model, const 
 
         vb->setBufferAt(mEngine, bufferViewIndex,
                         VertexBuffer::BufferDescriptor(data, bufferView.byteLength, nullptr, nullptr));
-
-
     }
 
-    return vb;
+
+    utils::Entity renderable = utils::EntityManager::get().create();
+
+    RenderableManager::Builder builder(1);
+    builder.boundingBox({{ -2, -2, -2 }, { 2, 2, 2 }});
+    builder.geometry(0, RenderableManager::PrimitiveType::TRIANGLES, vb, ib);
+    builder.build(mEngine, renderable);
+//    builder.bboundingBox()
+    return renderable;
 }

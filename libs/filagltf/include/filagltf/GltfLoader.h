@@ -39,7 +39,7 @@ public:
     using mat4f = math::mat4f;
     using loadCallback = std::function<void(std::string)>;
 
-    GltfLoader(filament::Engine& engine);
+    GltfLoader(filament::Engine& engine, filament::Material *defaultMaterial);
     ~GltfLoader();
 
     std::vector<utils::Entity> Load(const std::string &filename);
@@ -47,8 +47,9 @@ public:
 private:
 
     filament::Engine& mEngine;
+    filament::Material* mDefaultColorMaterial = nullptr;
 
-    filament::VertexBuffer* getVertexBufferForPrimitive(const tinygltf::Model &model,
+    utils::Entity getVertexBufferForPrimitive(const tinygltf::Model &model,
             const tinygltf::Primitive &primitive) const;
 };
 

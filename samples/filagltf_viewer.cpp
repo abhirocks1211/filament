@@ -30,6 +30,8 @@
 #include <filament/Texture.h>
 #include <filament/IndirectLight.h>
 
+#include "generated/resources/resources.h"
+
 #include <utils/Path.h>
 #include <utils/EntityManager.h>
 
@@ -119,7 +121,16 @@ static void cleanup(Engine* engine, View* view, Scene* scene) {
 }
 
 static void setup(Engine* engine, View* view, Scene* scene) {
-    GltfLoader loader = GltfLoader(*engine);
+    Material *defaultMaterial = Material::Builder()
+            .package(RESOURCES_AIDEFAULTMAT_DATA, RESOURCES_AIDEFAULTMAT_SIZE)
+            .build(*engine);
+
+    defaultMaterial->setDefaultParameter("baseColor",   RgbType::LINEAR, float3{0.8});
+    defaultMaterial->setDefaultParameter("metallic",    0.0f);
+    defaultMaterial->setDefaultParameter("roughness",   0.4f);
+    defaultMaterial->setDefaultParameter("reflectance", 0.5f);
+
+    GltfLoader loader = GltfLoader(*engine, defaultMaterial);
 
     for (auto& filename : g_filenames) {
         loader.Load(filename);

@@ -209,6 +209,8 @@ void MetalDriver::createFence(Driver::FenceHandle, int dummy) {
 
 void MetalDriver::createSwapChain(Driver::SwapChainHandle sch, void* nativeWindow, uint64_t flags) {
     NSView* view = (NSView*)nativeWindow;
+    CAMetalLayer* metalLayer = (CAMetalLayer*) view.layer;
+    metalLayer.drawableSize = [view convertSizeToBacking:view.bounds.size];
     construct_handle<MetalSwapChain>(mHandleMap, sch, pImpl->mDevice, (CAMetalLayer*) view.layer);
 }
 

@@ -32,6 +32,8 @@ namespace metal {
 
 struct MetalDriverImpl;
 
+struct MetalProgram;
+
 class MetalDriver final : public DriverBase {
     MetalDriver(driver::MetalPlatform* const platform) noexcept;
     virtual ~MetalDriver() noexcept;
@@ -138,6 +140,8 @@ private:
         handleMap.erase(handle.getId());
     }
 
+    void enumerateSamplerBuffers(const filament::driver::metal::MetalProgram *program,
+            const std::function<void(const SamplerBuffer::Sampler*, uint8_t)>& f);
 };
 
 } // namespace metal

@@ -709,39 +709,25 @@ void MetalDriver::draw(Driver::PipelineState ps, Driver::RenderPrimitiveHandle r
         }
     }
 
-    uint8_t offset = 0;
-    for (uint8_t bufferIdx = 0; bufferIdx < NUM_SAMPLER_BINDINGS; bufferIdx++) {
-        MetalSamplerBuffer* metalSb = pImpl->mSamplerBindings[bufferIdx];
-        if (!metalSb) {
-            continue;
+    // Enumerate all the sampler buffers and check if a texture or sampler needs to be rebound.
+    // If so, mark them dirty- we'll rebind all textures / samplers in a single call below.
+    enumerateSamplerBuffers(program, [this](const SamplerBuffer::Sampler* sampler,
+            uint8_t binding) {
+        const uint8_t offset = 0;   // Metal texture and samplers start at 0.
+        const auto metalTexture = handle_const_cast<MetalTexture>(mHandleMap, sampler->t);
+        auto& textureSlot = pImpl->mBoundTextures[binding - offset];
+        if (textureSlot != metalTexture->texture) {
+            textureSlot = metalTexture->texture;
+            pImpl->mTexturesDirty = true;
         }
-        SamplerBuffer* sb = metalSb->sb.get();
-        for (uint8_t samplerIdx = 0; samplerIdx < sb->getSize(); samplerIdx++) {
-            const SamplerBuffer::Sampler* sampler = sb->getBuffer() + samplerIdx;
-            if (!sampler->t) {
-                continue;
-            }
-            uint8_t binding, group;
-            if (program->samplerBindings.getSamplerBinding(bufferIdx, samplerIdx, &binding,
-                    &group)) {
 
-                const auto metalTexture = handle_const_cast<MetalTexture>(mHandleMap, sampler->t);
-                auto& textureSlot = pImpl->mBoundTextures[binding - offset];
-                if (textureSlot != metalTexture->texture) {
-                    textureSlot = metalTexture->texture;
-                    pImpl->mTexturesDirty = true;
-                }
-
-                id<MTLSamplerState> samplerState =
-                        pImpl->mSamplerStateCache.getOrCreateState(sampler->s);
-                auto& samplerSlot = pImpl->mBoundSamplers[binding - offset];
-                if (samplerSlot != samplerState) {
-                    samplerSlot = samplerState;
-                    pImpl->mSamplersDirty = true;
-                }
-            }
+        id<MTLSamplerState> samplerState = pImpl->mSamplerStateCache.getOrCreateState(sampler->s);
+        auto& samplerSlot = pImpl->mBoundSamplers[binding - offset];
+        if (samplerSlot != samplerState) {
+            samplerSlot = samplerState;
+            pImpl->mSamplersDirty = true;
         }
-    }
+    });
 
     // Similar to uniforms, we can't tell which stage will use the textures / samplers, so bind
     // to both the vertex and fragment stages.
@@ -779,6 +765,29 @@ void MetalDriver::draw(Driver::PipelineState ps, Driver::RenderPrimitiveHandle r
                                                indexType:getIndexType(indexBuffer->elementSize)
                                              indexBuffer:indexBuffer->buffer
                                        indexBufferOffset:0];
+}
+
+void MetalDriver::enumerateSamplerBuffers(const MetalProgram *program,
+        const std::function<void(const SamplerBuffer::Sampler*, uint8_t)>& f) {
+    for (uint8_t bufferIdx = 0; bufferIdx < NUM_SAMPLER_BINDINGS; bufferIdx++) {
+        MetalSamplerBuffer* metalSb = pImpl->mSamplerBindings[bufferIdx];
+        if (!metalSb) {
+            continue;
+        }
+        SamplerBuffer* sb = metalSb->sb.get();
+        for (uint8_t samplerIdx = 0; samplerIdx < sb->getSize(); samplerIdx++) {
+            const SamplerBuffer::Sampler* sampler = sb->getBuffer() + samplerIdx;
+            if (!sampler->t) {
+                continue;
+            }
+            uint8_t binding, group;
+            if (program->samplerBindings.getSamplerBinding(bufferIdx, samplerIdx, &binding,
+                    &group)) {
+
+                f(sampler, binding);
+            }
+        }
+    }
 }
 
 } // namespace metal

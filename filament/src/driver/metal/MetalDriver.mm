@@ -478,6 +478,9 @@ void MetalDriver::beginRenderPass(Driver::RenderTargetHandle rth,
     pImpl->mCurrentCommandEncoder =
             [pImpl->mCurrentCommandBuffer renderCommandEncoderWithDescriptor:descriptor];
 
+    // Filament's default winding is counter clockwise.
+    [pImpl->mCurrentCommandEncoder setFrontFacingWinding:MTLWindingCounterClockwise];
+
     viewport(params.left, params.bottom, params.width, params.height);
 
     // Metal requires a new command encoder for each render pass, and they cannot be reused.

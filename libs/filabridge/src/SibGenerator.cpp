@@ -16,6 +16,8 @@
 
 #include "private/filament/SibGenerator.h"
 
+#include <filament/EngineEnums.h>
+
 #include "private/filament/SamplerInterfaceBlock.h"
 
 namespace filament {

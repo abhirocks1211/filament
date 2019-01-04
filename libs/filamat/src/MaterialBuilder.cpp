@@ -21,10 +21,8 @@
 #include <utils/Panic.h>
 #include <utils/Log.h>
 
-#include <filament/driver/DriverEnums.h>
-#include <private/filament/SamplerInterfaceBlock.h>
-#include <private/filament/SibGenerator.h>
 #include <private/filament/UniformInterfaceBlock.h>
+#include <private/filament/SamplerInterfaceBlock.h>
 
 #include <private/filament/Variant.h>
 
@@ -295,6 +293,7 @@ void MaterialBuilder::prepareToBuild(MaterialInfo& info) noexcept {
     info.blendingMode = mBlendingMode;
     info.shading = mShading;
     info.hasShadowMultiplier = mShadowMultiplier;
+    info.samplerBindings.populate(&info.sib, mMaterialName.c_str());
 }
 
 bool MaterialBuilder::runStaticCodeAnalysis() noexcept {
@@ -454,12 +453,6 @@ Package MaterialBuilder::build() noexcept {
     container.addChild(&hasCustomDepth);
 
     for (const auto& params : mCodeGenPermutations) {
-        // Create Sampler binding map specific to this API.
-        assert(params.targetApi != TargetApi::ALL);
-        auto backend = static_cast<filament::driver::Backend>(params.targetApi);
-        uint8_t samplerBindingStart = filament::getSamplerBindingStart(backend);
-        info.samplerBindings.populate(samplerBindingStart, &info.sib, mMaterialName.c_str());
-
         const ShaderModel shaderModel = ShaderModel(params.shaderModel);
         const TargetApi targetApi = params.targetApi;
         const TargetApi codeGenTargetApi = params.codeGenTargetApi;
@@ -645,12 +638,6 @@ const std::string MaterialBuilder::peek(filament::driver::ShaderType type,
     prepareToBuild(info);
 
     for (const auto& params : mCodeGenPermutations) {
-        // Create Sampler binding map specific to this API.
-        assert(params.targetApi != TargetApi::ALL);
-        auto backend = static_cast<filament::driver::Backend>(params.targetApi);
-        uint8_t samplerBindingStart = filament::getSamplerBindingStart(backend);
-        info.samplerBindings.populate(samplerBindingStart, &info.sib, mMaterialName.c_str());
-
         model = ShaderModel(params.shaderModel);
         const TargetApi targetApi = params.targetApi;
         const TargetApi codeGenTargetApi = params.codeGenTargetApi;

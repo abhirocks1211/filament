@@ -338,8 +338,6 @@ private:
     UniformInterfaceBlock mPostProcessUib;
     SamplerInterfaceBlock mPostProcessSib;
 
-    SamplerBindingMap mPostProcessSamplerBindingMap;
-
     std::thread mDriverThread;
     CommandBufferQueue mCommandBufferQueue;
     DriverApi mCommandStream;

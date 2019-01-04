@@ -548,6 +548,9 @@ void VulkanDriver::generateMipmaps(Driver::TextureHandle th) {
 }
 
 void VulkanDriver::updateUniformBuffer(Driver::UniformBufferHandle ubh, BufferDescriptor&& data) {
+    if (data.size == 0) {
+        return;
+    }
     auto* buffer = handle_cast<VulkanUniformBuffer>(mHandleMap, ubh);
     buffer->loadFromCpu(data.buffer, (uint32_t) data.size);
     scheduleDestroy(std::move(data));

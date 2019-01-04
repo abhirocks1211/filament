@@ -128,7 +128,7 @@ static std::string shrinkString(const std::string& s) {
     return r;
 }
 
-bool SpvToMsl(const SpirvBlob* spirv, std::string* outMsl) {
+void SpvToMsl(const SpirvBlob* spirv, std::string* outMsl) {
     CompilerMSL mslCompiler(*spirv);
     mslCompiler.set_common_options(CompilerGLSL::Options {
         .vertex.fixup_clipspace = true

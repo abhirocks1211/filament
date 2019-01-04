@@ -718,7 +718,7 @@ void MetalDriver::draw(Driver::PipelineState ps, Driver::RenderPrimitiveHandle r
     // If so, mark them dirty- we'll rebind all textures / samplers in a single call below.
     enumerateSamplerBuffers(program, [this](const SamplerBuffer::Sampler* sampler,
             uint8_t binding) {
-        const uint8_t offset = NUM_UBUFFER_BINDINGS;
+        const uint8_t offset = 0;   // Metal texture and samplers start at 0.
         const auto metalTexture = handle_const_cast<MetalTexture>(mHandleMap, sampler->t);
         auto& textureSlot = pImpl->mBoundTextures[binding - offset];
         if (textureSlot != metalTexture->texture) {
@@ -739,7 +739,7 @@ void MetalDriver::draw(Driver::PipelineState ps, Driver::RenderPrimitiveHandle r
 
     NSRange range {
         .length = NUM_SAMPLER_BINDINGS,
-        .location = SAMPLER_BINDINGS_START
+        .location = 0
     };
     if (pImpl->mTexturesDirty) {
         [pImpl->mCurrentCommandEncoder setFragmentTextures:pImpl->mBoundTextures

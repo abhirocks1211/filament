@@ -18,6 +18,8 @@
 
 #include <filamat/Package.h>
 
+#include <private/filament/SibGenerator.h>
+
 #include "shaders/ShaderGenerator.h"
 
 #include "GLSLPostProcessor.h"
@@ -61,12 +63,18 @@ Package PostprocessMaterialBuilder::build() {
     // Populate a SamplerBindingMap for the sole purpose of finding where the post-process bindings
     // live within the global namespace of samplers.
     filament::SamplerBindingMap samplerBindingMap;
-    samplerBindingMap.populate();
-    const uint8_t firstSampler =
-            samplerBindingMap.getBlockOffset(filament::BindingPoints::POST_PROCESS);
+
     bool errorOccured = false;
 
-    for (const auto& params : mCodeGenPermutations) {
+    for ( const auto& params : mCodeGenPermutations) {
+        // Create Sampler binding map specific to this API.
+        assert(params.targetApi != TargetApi::ALL);
+        auto backend = static_cast<filament::driver::Backend>(params.targetApi);
+        uint8_t samplerBindingStart = filament::getSamplerBindingStart(backend);
+        samplerBindingMap.populate(samplerBindingStart);
+        const uint8_t firstSampler =
+                samplerBindingMap.getBlockOffset(filament::BindingPoints::POST_PROCESS);
+
         const ShaderModel shaderModel = ShaderModel(params.shaderModel);
         const TargetApi targetApi = params.targetApi;
         const TargetApi codeGenTargetApi = params.codeGenTargetApi;

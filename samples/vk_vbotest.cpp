@@ -52,6 +52,8 @@ int main(int argc, char** argv) {
     App app;
     auto setup = [&app, &vbo](Engine* engine, View* view, Scene* scene) {
 
+        view->setPostProcessingEnabled(false);
+
         // Populate vertex buffer.
         app.vb = VertexBuffer::Builder().vertexCount(3).bufferCount(1)
                 .attribute(VertexAttribute::POSITION, 0, VertexBuffer::AttributeType::FLOAT2, 0, 8)

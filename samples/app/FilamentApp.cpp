@@ -425,13 +425,20 @@ FilamentApp::Window::Window(FilamentApp* filamentApp,
     mBackend = config.backend;
 
     void* nativeWindow = ::getNativeWindow(mWindow);
+    void* nativeSwapChain = nativeWindow;
 #if defined(FILAMENT_DRIVER_SUPPORTS_VULKAN) && defined(__APPLE__)
-    // We request a Metal layer for rendering via MoltenVK.
-    if (config.backend == filament::Engine::Backend::VULKAN) {
-        setUpMetalLayer(nativeWindow);
+    // We request a Metal layer for rendering via MoltenVK / Metal.
+    void* metalLayer;
+    if (config.backend == filament::Engine::Backend::VULKAN ||
+        config.backend == filament::Engine::Backend::METAL) {
+        metalLayer = setUpMetalLayer(nativeWindow);
+    }
+    if (config.backend == filament::Engine::Backend::METAL) {
+        // The swap chain on Metal is a CAMetalLayer.
+        nativeSwapChain = metalLayer;
     }
 #endif
-    mSwapChain = mFilamentApp->mEngine->createSwapChain(nativeWindow);
+    mSwapChain = mFilamentApp->mEngine->createSwapChain(nativeSwapChain);
     mRenderer = mFilamentApp->mEngine->createRenderer();
 
     // create cameras
@@ -493,6 +500,9 @@ FilamentApp::Window::~Window() {
     }
     mFilamentApp->mEngine->destroy(mRenderer);
     mFilamentApp->mEngine->destroy(mSwapChain);
+    if (mSdlRenderer) {
+        SDL_DestroyRenderer(mSdlRenderer);
+    }
     SDL_DestroyWindow(mWindow);
 }
 
@@ -551,12 +561,19 @@ void FilamentApp::Window::fixupMouseCoordinatesForHdpi(ssize_t& x, ssize_t& y) c
 void FilamentApp::Window::resize() {
     mFilamentApp->mEngine->destroy(mSwapChain);
     void* nativeWindow = ::getNativeWindow(mWindow);
-    mSwapChain = mFilamentApp->mEngine->createSwapChain(nativeWindow);
+    void* nativeSwapChain = nativeWindow;
 #if defined(FILAMENT_DRIVER_SUPPORTS_VULKAN) && defined(__APPLE__)
-    if (mBackend == filament::Engine::Backend::VULKAN) {
-        resizeMetalLayer(nativeWindow);
+    void* metalLayer;
+    if (mBackend == filament::Engine::Backend::VULKAN ||
+        mBackend == filament::Engine::Backend::METAL) {
+        metalLayer = resizeMetalLayer(nativeWindow);
+    }
+    if (mBackend == filament::Engine::Backend::METAL) {
+        // The swap chain on Metal is a CAMetalLayer.
+        nativeSwapChain = metalLayer;
     }
 #endif
+    mSwapChain = mFilamentApp->mEngine->createSwapChain(nativeSwapChain);
     configureCamerasForWindow();
 }
 

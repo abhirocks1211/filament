@@ -46,7 +46,7 @@ int main(int argc, char** argv) {
     Config config;
     config.title = "hellopbr";
     config.backend = Backend::VULKAN;
-    config.iblDirectory = FilamentApp::getRootPath() + IBL_FOLDER;
+    config.iblDirectory = IBL_FOLDER;
 
     App app;
     auto setup = [config, &app](Engine* engine, View* view, Scene* scene) {

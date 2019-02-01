@@ -36,6 +36,7 @@
 #include <utils/Panic.h>
 
 #include <sstream>
+#include <filament/driver/DriverEnums.h>
 
 using namespace utils;
 using namespace filaflat;

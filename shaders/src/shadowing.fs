@@ -65,14 +65,14 @@ float sampleDepth(const lowp sampler2DShadow map, vec2 base, vec2 dudv, float de
     depth += dot(dudv, rpdb);
  #endif
 #endif
-    return texture(map, vec3(base + dudv, depth));
+    return texture(map, vec3(float2(base.x, base.y) + dudv, depth));
 }
 
 #if SHADOW_SAMPLING_METHOD == SHADOW_SAMPLING_HARD
 float ShadowSample_Hard(const lowp sampler2DShadow map, const vec2 size, const vec3 position) {
     vec2 rpdb = computeReceiverPlaneDepthBias(position);
     float depth = samplingBias(position.z, rpdb, vec2(1.0) / size);
-    return texture(map, vec3(position.xy, depth));
+    return texture(map, vec3(float2(position.x, position.y), depth));
 }
 #endif
 

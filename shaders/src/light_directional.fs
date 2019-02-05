@@ -42,7 +42,7 @@ void evaluateDirectionalLight(const PixelParams pixel, inout vec3 color) {
     if (light.NoL <= 0.0) return;
 #endif
 
-    // color.rgb += surfaceShading(pixel, light, visibility);
+    color.rgb += surfaceShading(pixel, light, visibility);
 #if defined(HAS_SHADOWING)
     color.rgb = vec3(shadow(light_shadowMap, getLightSpacePosition()));
 #endif

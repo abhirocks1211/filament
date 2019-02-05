@@ -16,11 +16,11 @@
 #define SHADOW_RECEIVER_PLANE_DEPTH_BIAS_MIN_SAMPLING_METHOD    SHADOW_SAMPLING_PCF_MEDIUM
 
 #ifdef TARGET_MOBILE
-  #define SHADOW_SAMPLING_METHOD            SHADOW_SAMPLING_PCF_LOW
+  #define SHADOW_SAMPLING_METHOD            SHADOW_SAMPLING_HARD
   #define SHADOW_SAMPLING_ERROR             SHADOW_SAMPLING_ERROR_DISABLED
   #define SHADOW_RECEIVER_PLANE_DEPTH_BIAS  SHADOW_RECEIVER_PLANE_DEPTH_BIAS_DISABLED
 #else
-  #define SHADOW_SAMPLING_METHOD            SHADOW_SAMPLING_PCF_LOW
+  #define SHADOW_SAMPLING_METHOD            SHADOW_SAMPLING_HARD
   #define SHADOW_SAMPLING_ERROR             SHADOW_SAMPLING_ERROR_DISABLED
   #define SHADOW_RECEIVER_PLANE_DEPTH_BIAS  SHADOW_RECEIVER_PLANE_DEPTH_BIAS_DISABLED
 #endif
@@ -74,8 +74,9 @@ float sampleDepth(const lowp sampler2DShadow map, vec2 base, vec2 dudv, float de
 
 #if SHADOW_SAMPLING_METHOD == SHADOW_SAMPLING_HARD
 float ShadowSample_Hard(const lowp sampler2DShadow map, const vec2 size, const vec3 position) {
-    vec2 rpdb = computeReceiverPlaneDepthBias(position);
-    float depth = samplingBias(position.z, rpdb, vec2(1.0) / size);
+    // vec2 rpdb = computeReceiverPlaneDepthBias(position);
+    // float depth = samplingBias(position.z, rpdb, vec2(1.0) / size);
+    float depth = position.z;
 #if defined(TARGET_METAL_ENVIRONMENT)
     return texture(map, vec3(float2(position.x, 1.0 - position.y), depth));
 #else

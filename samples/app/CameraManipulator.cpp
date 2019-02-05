@@ -113,17 +113,11 @@ void CameraManipulator::rotate(const double2& delta, double rotate_speed) {
 
 void CameraManipulator::updateCameraTransform() {
     if (mCamera) {
-        /*
         mat4 rotate_z  = mat4::rotate(mRotation.z, double3(0, 0, 1));
         mat4 rotate_x  = mat4::rotate(mRotation.x, double3(1, 0, 0));
         mat4 rotate_y  = mat4::rotate(mRotation.y, double3(0, 1, 0));
         mat4 translate = mat4::translate(mTranslation);
         mat4 view = translate * (rotate_y * rotate_x * rotate_z);
-         */
-        mat4 view (-0.94, 0.00, -0.34, 0.00,
-                   -0.30, 0.49,  0.82, 0.00,
-                    0.17, 0.87, -0.82, 0.00,
-                    0.33, 1.75, -4.92, 1.00);
         mCamera->setModelMatrix(mat4f(view));
         if (mCameraChanged) {
             mCameraChanged(mCamera);

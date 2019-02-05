@@ -49,7 +49,7 @@ void evaluateDirectionalLight(const PixelParams pixel, inout vec3 color) {
     float depth = position.z;
 
 #if defined(TARGET_METAL_ENVIRONMENT)
-    color.rgb = vec3(texture(light_shadowMap, float2(base.x, base.y)).r);
+    color.rgb = vec3(texture(light_shadowMap, float2(base.x, 1.0 - base.y)).r);
 #else
     color.rgb = vec3(texture(light_shadowMap, float2(base.x, base.y)).r);
 #endif

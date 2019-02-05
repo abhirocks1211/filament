@@ -59,27 +59,33 @@ float samplingBias(float depth, const vec2 rpdb, const vec2 texelSize) {
     return depth;
 }
 
-float sampleDepth(const lowp sampler2D map, vec2 base, vec2 dudv, float depth, vec2 rpdb) {
+float sampleDepth(const lowp sampler2DShadow map, vec2 base, vec2 dudv, float depth, vec2 rpdb) {
 #if SHADOW_RECEIVER_PLANE_DEPTH_BIAS == SHADOW_RECEIVER_PLANE_DEPTH_BIAS_ENABLED
  #if SHADOW_SAMPLING_METHOD >= SHADOW_RECEIVER_PLANE_DEPTH_BIAS_MIN_SAMPLING_METHOD
     depth += dot(dudv, rpdb);
  #endif
 #endif
-    return 0.0;
-    // return texture(map, vec3(float2(base.x, base.y) + dudv, depth));
+#if defined(TARGET_METAL_ENVIRONMENT)
+    return texture(map, vec3(float2(base.x, 1.0 - base.y) + dudv, depth));
+#else
+    return texture(map, vec3(float2(base.x, base.y) + dudv, depth));
+#endif
 }
 
 #if SHADOW_SAMPLING_METHOD == SHADOW_SAMPLING_HARD
-float ShadowSample_Hard(const lowp sampler2D map, const vec2 size, const vec3 position) {
+float ShadowSample_Hard(const lowp sampler2DShadow map, const vec2 size, const vec3 position) {
     vec2 rpdb = computeReceiverPlaneDepthBias(position);
     float depth = samplingBias(position.z, rpdb, vec2(1.0) / size);
-    return 0.0;
-    // return texture(map, vec3(float2(position.x, position.y), depth));
+#if defined(TARGET_METAL_ENVIRONMENT)
+    return texture(map, vec3(float2(position.x, 1.0 - position.y), depth));
+#else
+    return texture(map, vec3(float2(position.x, position.y), depth));
+#endif
 }
 #endif
 
 #if SHADOW_SAMPLING_METHOD == SHADOW_SAMPLING_PCF_LOW
-float ShadowSample_PCF_Low(const lowp sampler2D map, const vec2 size, vec3 position) {
+float ShadowSample_PCF_Low(const lowp sampler2DShadow map, const vec2 size, vec3 position) {
     //  Castaño, 2013, "Shadow Mapping Summary Part 1"
     vec2 texelSize = vec2(1.0) / size;
 
@@ -116,7 +122,7 @@ float ShadowSample_PCF_Low(const lowp sampler2D map, const vec2 size, vec3 posit
 #endif
 
 #if SHADOW_SAMPLING_METHOD == SHADOW_SAMPLING_PCF_MEDIUM
-float ShadowSample_PCF_Medium(const lowp sampler2D map, const vec2 size, vec3 position) {
+float ShadowSample_PCF_Medium(const lowp sampler2DShadow map, const vec2 size, vec3 position) {
     //  Castaño, 2013, "Shadow Mapping Summary Part 1"
     vec2 texelSize = vec2(1.0) / size;
 
@@ -159,7 +165,7 @@ float ShadowSample_PCF_Medium(const lowp sampler2D map, const vec2 size, vec3 po
 #endif
 
 #if SHADOW_SAMPLING_METHOD == SHADOW_SAMPLING_PCF_HIGH
-float ShadowSample_PCF_High(const lowp sampler2D map, const vec2 size, vec3 position) {
+float ShadowSample_PCF_High(const lowp sampler2DShadow map, const vec2 size, vec3 position) {
     //  Castaño, 2013, "Shadow Mapping Summary Part 1"
     vec2 texelSize = vec2(1.0) / size;
 
@@ -234,7 +240,7 @@ float ShadowSample_PCF_High(const lowp sampler2D map, const vec2 size, vec3 posi
  * space. The output is a filtered visibility factor that can be used to multiply
  * the light intensity.
  */
-float shadow(const lowp sampler2D shadowMap, const vec3 shadowPosition) {
+float shadow(const lowp sampler2DShadow shadowMap, const vec3 shadowPosition) {
     vec2 size = vec2(textureSize(shadowMap, 0));
 #if SHADOW_SAMPLING_METHOD == SHADOW_SAMPLING_HARD
     return ShadowSample_Hard(shadowMap, size, shadowPosition);

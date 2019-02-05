@@ -291,14 +291,11 @@ std::ostream& CodeGenerator::generateSamplers(
             // are not supported, in which case we revert to texture2d
             type = SamplerType::SAMPLER_2D;
         }
-        char const* typeName = getSamplerTypeName(type, info.format, info.multisample);
+        char const* const typeName = getSamplerTypeName(type, info.format, info.multisample);
         char const* const precision = getPrecisionQualifier(info.precision, Precision::DEFAULT);
         if (mCodeGenTargetApi == TargetApi::VULKAN) {
             const uint32_t bindingIndex = (uint32_t) firstBinding + info.offset;
             out << "layout(binding = " << bindingIndex << ") ";
-        }
-        if (instanceName == "light" && info.name == "shadowMap") {
-            typeName = "sampler2D";
         }
         out << "uniform " << precision << " " << typeName << " " <<
                 instanceName << "_" << info.name.c_str();

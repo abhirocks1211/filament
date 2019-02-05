@@ -29,6 +29,7 @@
 #include <filament/LightManager.h>
 #include <filament/RenderableManager.h>
 #include <filament/TransformManager.h>
+#include <filament/View.h>
 
 #include <math/norm.h>
 #include <utils/Log.h>
@@ -192,6 +193,8 @@ static void setup(Engine* engine, View* view, Scene* scene) {
     for (auto& filename : g_filenames) {
         g_meshSet->addFromFile(filename, g_materialLibrary);
     }
+
+    view->setDepthPrepass(View::DepthPrepass::DISABLED);
 
     // set the transform on the root node only
     auto& tcm = engine->getTransformManager();

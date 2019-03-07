@@ -650,8 +650,10 @@ void UTILS_UNUSED OpenGLDriver::bindTexture(GLuint unit, GLuint target, GLuint t
 }
 
 void OpenGLDriver::bindSampler(GLuint unit, GLuint sampler) noexcept {
+    using namespace utils;
     assert(unit < MAX_TEXTURE_UNITS);
     update_state(state.textures.units[unit].sampler, sampler, [&]() {
+        slog.d << "prideout BindSampler unit=" << unit << " sampler=" << sampler << io::endl;
         glBindSampler(unit, sampler);
     });
 }

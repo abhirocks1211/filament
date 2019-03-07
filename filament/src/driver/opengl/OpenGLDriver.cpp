@@ -486,6 +486,7 @@ void OpenGLDriver::bindTexture(GLuint unit, GLuint target, GLuint texId, size_t 
     update_state(state.textures.units[unit].targets[targetIndex].texture_id, texId, [&]() {
         activeTexture(unit);
         glBindTexture(target, texId);
+        slog.d << "prideout BindTexture unit=" << unit << " texture=" << texId << io::endl;
     }, (target == GL_TEXTURE_EXTERNAL_OES) && bugs.texture_external_needs_rebind);
 }
 
@@ -949,6 +950,7 @@ void OpenGLDriver::textureStorage(OpenGLDriver::GLTexture* t,
     switch (t->gl.target) {
         case GL_TEXTURE_2D:
         case GL_TEXTURE_CUBE_MAP:
+            slog.d << "prideout TexStorage texture=" << t->gl.target << " internalFormat=" << io::hex << t->gl.internalFormat << io::dec << io::endl;
             glTexStorage2D(t->gl.target, GLsizei(t->levels), t->gl.internalFormat,
                     GLsizei(width), GLsizei(height));
             break;
@@ -2641,6 +2643,12 @@ GLuint OpenGLDriver::getSamplerSlow(driver::SamplerParams params) const noexcept
     glSamplerParameteri(s, GL_TEXTURE_WRAP_R,       getWrapMode(params.wrapR));
     glSamplerParameteri(s, GL_TEXTURE_COMPARE_MODE, getTextureCompareMode(params.compareMode));
     glSamplerParameteri(s, GL_TEXTURE_COMPARE_FUNC, getTextureCompareFunc(params.compareFunc));
+    if (params.compareMode == filament::driver::SamplerCompareMode::NONE) {
+        slog.d << "prideout GenSamplers sampler=" << s << " mode=GL_NONE" << io::endl;
+    } else {
+        slog.d << "prideout GenSamplers sampler=" << s << " mode=GL_COMPARE_REF_TO_TEXTURE" << io::endl;
+    }
+
 // TODO: Why does this fail with WebGL 2.0? The run-time check should suffice.
 #if defined(GL_EXT_texture_filter_anisotropic) && !defined(__EMSCRIPTEN__)
     if (ext.texture_filter_anisotropic) {
@@ -2930,8 +2938,11 @@ void OpenGLDriver::draw(
 
     polygonOffset(state.polygonOffset.slope, state.polygonOffset.constant);
 
+    slog.d << "prideout DrawElements program=[" << p->name.c_str() << "]" << io::endl;
     glDrawRangeElements(GLenum(rp->type), rp->minIndex, rp->maxIndex, rp->count,
             rp->gl.indicesType, reinterpret_cast<const void*>(rp->offset));
+
+    if (glGetError() != GL_NO_ERROR) exit(1);
 
     CHECK_GL_ERROR(utils::slog.e)
 }

@@ -249,6 +249,7 @@ MeshReader::Mesh MeshReader::loadMeshFromBuffer(filament::Engine* engine,
 
     RenderableManager::Builder builder(header->parts);
     builder.boundingBox(header->aabb);
+    builder.castShadows(true);
     const auto defaultmi = materials.at(DEFAULT_MATERIAL);
     for (size_t i = 0; i < header->parts; i++) {
         builder.geometry(i, RenderableManager::PrimitiveType::TRIANGLES,

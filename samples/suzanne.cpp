@@ -74,7 +74,7 @@ static Texture* loadNormalMap(Engine* engine, const uint8_t* normals, size_t nby
 int main(int argc, char** argv) {
     Config config;
     config.title = "suzanne";
-    config.backend = Engine::Backend::VULKAN;
+    // config.backend = Engine::Backend::VULKAN;
     config.iblDirectory = FilamentApp::getRootPath() + IBL_FOLDER;
 
     App app;
@@ -110,12 +110,19 @@ int main(int argc, char** argv) {
         ibl->setIntensity(100000);
         ibl->setRotation(mat3f::rotation(0.5f, float3{ 0, 1, 0 }));
 
+        auto light = utils::EntityManager::get().create();
+        LightManager::Builder(LightManager::Type::SUN)
+                .castShadows(true)
+                .build(*engine, light);
+        scene->addEntity(light);
+
         // Add geometry into the scene.
         app.mesh = filamesh::MeshReader::loadMeshFromBuffer(engine, RESOURCES_SUZANNE_DATA, nullptr,
                 nullptr, app.materialInstance);
         auto ti = tcm.getInstance(app.mesh.renderable);
         app.transform = mat4f{ mat3f(1), float3(0, 0, -4) } * tcm.getWorldTransform(ti);
-        rcm.setCastShadows(rcm.getInstance(app.mesh.renderable), false);
+        rcm.setCastShadows(rcm.getInstance(app.mesh.renderable), true);
+        rcm.setReceiveShadows(rcm.getInstance(app.mesh.renderable), true);
         scene->addEntity(app.mesh.renderable);
         tcm.setTransform(ti, app.transform);
     };

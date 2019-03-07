@@ -83,12 +83,8 @@ struct HwRenderPrimitive : public HwBase {
 };
 
 struct HwProgram : public HwBase {
-#ifndef NDEBUG
     explicit HwProgram(utils::CString name) noexcept : name(std::move(name)) { }
     utils::CString name;
-#else
-    explicit HwProgram(const utils::CString&) noexcept { }
-#endif
 };
 
 struct HwSamplerGroup : public HwBase {

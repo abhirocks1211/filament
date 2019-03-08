@@ -1039,6 +1039,14 @@ void OpenGLDriver::createTextureR(Driver::TextureHandle th, SamplerType target, 
         }
 
         textureStorage(t, w, h, depth);
+
+        // The sampler comparison mode must be consistent with texture's comparison mode. Some
+        // OpenGL implementations will error out when this is not the case (e.g. WebGL 2.0 with
+        // recent versions of Chrome). For now we are not bothing to shadow this state in GLTexture
+        // because we never mutate it.
+        if (usage & driver::COMPARE_ENABLED) {
+            glTexParameteri(t->gl.target, GL_TEXTURE_COMPARE_MODE, GL_COMPARE_REF_TO_TEXTURE);
+        }
     }
 
     CHECK_GL_ERROR(utils::slog.e)

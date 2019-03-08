@@ -449,6 +449,7 @@ enum TextureUsage : uint8_t {
     DEPTH_ATTACHMENT    = 0x2,
     STENCIL_ATTACHMENT  = 0x4,
     UPLOADABLE          = 0x8,
+    COMPARE_ENABLED     = 0x10,
     DEFAULT = UPLOADABLE
 };
 

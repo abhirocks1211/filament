@@ -37,6 +37,7 @@ static inline MTLTextureUsage getMetalTextureUsage(TextureUsage usage) {
 
         case TextureUsage::DEPTH_ATTACHMENT:
         case TextureUsage::STENCIL_ATTACHMENT:
+        default:
             return MTLTextureUsageShaderRead | MTLTextureUsageRenderTarget;
     }
 }

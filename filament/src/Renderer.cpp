@@ -162,7 +162,7 @@ void FRenderer::renderJob(ArenaScope& arena, FView& view) {
     engine.getDriverApi().debugThreading();
 
     filament::Viewport const& vp = view.getViewport();
-    const bool hasPostProcess = view.hasPostProcessPass();
+    const bool hasPostProcess = false; //view.hasPostProcessPass();
     float2 scale = view.updateScale(mFrameInfoManager.getLastFrameTime());
     bool useFXAA = view.getAntiAliasing() == View::AntiAliasing::FXAA;
     bool dithering = view.getDithering() == View::Dithering::TEMPORAL;
@@ -219,7 +219,7 @@ void FRenderer::renderJob(ArenaScope& arena, FView& view) {
     //        historically this has been true, but it's definitely wrong.
     //        This hack is needed because viewRenderTarget(output) doesn't have a depth-buffer,
     //        so when skipping post-process (which draws directly into it), we can't rely on it.
-    const bool colorPassNeedsDepthBuffer = hasPostProcess;
+    const bool colorPassNeedsDepthBuffer = true; // hasPostProcess;
 
     const Handle<HwRenderTarget> viewRenderTarget = getRenderTarget();
     FrameGraphResource output = fg.importResource("viewRenderTarget",
@@ -257,8 +257,7 @@ void FRenderer::renderJob(ArenaScope& arena, FView& view) {
                             ColorPassData const& data, DriverApi& driver) {
                 auto out = resources.getRenderTarget(data.color);
                 ColorPass::renderColorPass(engine, js, jobFroxelize, out.target, view,
-                        static_cast<filament::Viewport const&>(out.params.viewport),
-                        commands);
+                        static_cast<filament::Viewport const&>(out.params.viewport), commands);
             });
 
     FrameGraphResource input = colorPass.getData().color;
@@ -282,6 +281,11 @@ void FRenderer::renderJob(ArenaScope& arena, FView& view) {
             input = ppm.dynamicScaling(fg, input, ldrFormat);
         }
     }
+
+    if (colorPassNeedsDepthBuffer && input == colorPass.getData().color) {
+        input = ppm.dynamicScaling(fg, input, ldrFormat);
+    }
+
 
     fg.present(input);
 

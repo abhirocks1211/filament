@@ -1147,6 +1147,35 @@ void OpenGLDriver::framebufferTexture(Driver::TargetBufferInfo& binfo,
     CHECK_GL_FRAMEBUFFER_STATUS(utils::slog.e)
 }
 
+void OpenGLDriver::resolve(GLRenderTarget const* rt, TargetBufferFlags discardFlags) noexcept {
+    if (rt->gl.needResolve) {
+        rt->gl.needResolve = 0;
+
+        const TargetBufferFlags resolve = TargetBufferFlags(rt->gl.resolve & ~discardFlags);
+
+        GLbitfield mask = 0;
+        if (resolve & TargetBufferFlags::COLOR) {
+            mask |= GL_COLOR_BUFFER_BIT;
+        }
+        if (resolve & TargetBufferFlags::DEPTH) {
+            mask |= GL_DEPTH_BUFFER_BIT;
+        }
+        if (resolve & TargetBufferFlags::STENCIL) {
+            mask |= GL_STENCIL_BUFFER_BIT;
+        }
+
+        if (UTILS_UNLIKELY(mask)) {
+            bindFramebuffer(GL_READ_FRAMEBUFFER, rt->gl.fbo);
+            bindFramebuffer(GL_DRAW_FRAMEBUFFER, rt->gl.fbo_draw);
+            disable(GL_SCISSOR_TEST);
+            glBlitFramebuffer(0, 0, rt->width, rt->height, 0, 0, rt->width, rt->height, mask,
+                    GL_NEAREST);
+            enable(GL_SCISSOR_TEST);
+            CHECK_GL_ERROR(utils::slog.e)
+        }
+    }
+}
+
 void OpenGLDriver::renderBufferStorage(GLuint rbo, GLenum internalformat, uint32_t width,
         uint32_t height, uint8_t samples) const noexcept {
     glBindRenderbuffer(GL_RENDERBUFFER, rbo);
@@ -1218,6 +1247,7 @@ void OpenGLDriver::createRenderTargetR(Driver::RenderTargetHandle rth,
 
     GLRenderTarget* rt = construct<GLRenderTarget>(rth, width, height);
     glGenFramebuffers(1, &rt->gl.fbo);
+    rt->gl.needResolve = 0;
 
     /*
      * The GLES 3.0 spec states:
@@ -2132,6 +2162,12 @@ void OpenGLDriver::beginRenderPass(Driver::RenderTargetHandle rth,
     const TargetBufferFlags discardFlags = (TargetBufferFlags) params.flags.discardStart;
 
     GLRenderTarget* rt = handle_cast<GLRenderTarget*>(rth);
+
+    if (rt->gl.samples > 1 && rt->gl.fbo_draw) {
+        // since we're binding this multi-sampled render target, we're going to need a resolve
+        rt->gl.needResolve = 1;
+    }
+
     if (UTILS_UNLIKELY(state.draw_fbo != rt->gl.fbo)) {
         bindFramebuffer(GL_FRAMEBUFFER, rt->gl.fbo);
 
@@ -2180,30 +2216,10 @@ void OpenGLDriver::endRenderPass(int) {
     DEBUG_MARKER()
     assert(mRenderPassTarget);
 
-    GLRenderTarget* const rt = handle_cast<GLRenderTarget*>(mRenderPassTarget);
-
     const TargetBufferFlags discardFlags = TargetBufferFlags(mRenderPassParams.flags.discardEnd);
-    const TargetBufferFlags resolve = TargetBufferFlags(rt->gl.resolve & ~discardFlags);
 
-    GLbitfield mask = 0;
-    if (resolve & TargetBufferFlags::COLOR) {
-        mask |= GL_COLOR_BUFFER_BIT;
-    }
-    if (resolve  & TargetBufferFlags::DEPTH) {
-        mask |= GL_DEPTH_BUFFER_BIT;
-    }
-    if (resolve  & TargetBufferFlags::STENCIL) {
-        mask |= GL_STENCIL_BUFFER_BIT;
-    }
-
-    if (UTILS_UNLIKELY(mask)) {
-        bindFramebuffer(GL_READ_FRAMEBUFFER, rt->gl.fbo);
-        bindFramebuffer(GL_DRAW_FRAMEBUFFER, rt->gl.fbo_draw);
-        disable(GL_SCISSOR_TEST);
-        glBlitFramebuffer(0, 0, rt->width, rt->height, 0, 0, rt->width, rt->height, mask, GL_NEAREST);
-        enable(GL_SCISSOR_TEST);
-        CHECK_GL_ERROR(utils::slog.e)
-    }
+    GLRenderTarget* const rt = handle_cast<GLRenderTarget*>(mRenderPassTarget);
+    resolve(rt, discardFlags);
 
     // glInvalidateFramebuffer appeared on GLES 3.0 and GL4.3, for simplicity we just
     // ignore it on GL (rather than having to do a runtime check).
@@ -2875,6 +2891,9 @@ void OpenGLDriver::blit(TargetBufferFlags buffers,
     if (mask) {
         GLRenderTarget const* s = handle_cast<GLRenderTarget const*>(src);
         GLRenderTarget const* d = handle_cast<GLRenderTarget const*>(dst);
+
+        resolve(s);
+
         bindFramebuffer(GL_READ_FRAMEBUFFER, s->gl.fbo);
         bindFramebuffer(GL_DRAW_FRAMEBUFFER, d->gl.fbo);
         disable(GL_SCISSOR_TEST);

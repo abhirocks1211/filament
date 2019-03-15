@@ -267,8 +267,9 @@ void FRenderer::renderJob(ArenaScope& arena, FView& view) {
      * Post Processing...
      */
 
+    const TextureFormat ldrFormat = getLdrFormat();
+
     if (hasPostProcess) {
-        const TextureFormat ldrFormat = getLdrFormat();
         const bool translucent = mSwapChain->isTransparent();
 
         ppm.setDithering(dithering);

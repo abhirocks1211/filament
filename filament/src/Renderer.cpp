@@ -280,25 +280,61 @@ void FRenderer::renderJob(ArenaScope& arena, FView& view) {
     pass.generateSortedCommands(commandType);
 
 
+    auto colorPassBegin = std::partition_point(commands.begin(), commands.end(),
+            [](Command const& command){
+        return (command.key & RenderPass::PASS_MASK) == uint64_t(RenderPass::Pass::DEPTH);
+    });
+
+
+    struct DepthPassData {
+        FrameGraphResource depth;
+    };
+
+    auto& depthPass = fg.addPass<DepthPassData>("Depth pass",
+            [&svp, msaa, clearFlags]
+                    (FrameGraph::Builder& builder, DepthPassData& data) {
+
+                data.depth = builder.createTexture("depth buffer",
+                        { .width = svp.width, .height = svp.height,
+                                .format = TextureFormat::DEPTH24,
+                                .samples = msaa
+                        });
+
+                FrameGraphRenderTarget::Descriptor desc{
+                        .samples = msaa,
+                        .attachments.depth = data.depth
+                };
+
+                auto attachments = builder.useRenderTarget("depthRenderTarget", desc,
+                        clearFlags & DEPTH_AND_STENCIL);
+                data.depth = attachments.depth;
+            },
+            [&pass, colorPassBegin]
+                    (FrameGraphPassResources const& resources,
+                            DepthPassData const& data, DriverApi& driver) {
+                auto out = resources.getRenderTarget(data.depth);
+
+                Slice<Command> const& commands = pass.getCommands();
+                pass.execute("Depth Pass", out.target, out.params,
+                        commands.begin(), colorPassBegin);
+            });
+
+    FrameGraphResource depth = depthPass.getData().depth;
+
+
     struct ColorPassData {
         FrameGraphResource color;
         FrameGraphResource depth;
     };
 
     auto& colorPass = fg.addPass<ColorPassData>("Color pass",
-            [&svp, hdrFormat, colorPassNeedsDepthBuffer, msaa, clearFlags]
+            [&svp, depth, hdrFormat, msaa, clearFlags]
             (FrameGraph::Builder& builder, ColorPassData& data) {
 
                 data.color = builder.createTexture("color buffer",
                         { .width = svp.width, .height = svp.height, .format = hdrFormat, .samples = msaa });
 
-                if (colorPassNeedsDepthBuffer) {
-                    data.depth = builder.createTexture("depth buffer",
-                            { .width = svp.width, .height = svp.height,
-                              .format = TextureFormat::DEPTH24,
-                              .samples = msaa
-                            });
-                }
+                data.depth = depth;
 
                 FrameGraphRenderTarget::Descriptor desc{
                         .samples = msaa,
@@ -306,11 +342,12 @@ void FRenderer::renderJob(ArenaScope& arena, FView& view) {
                         .attachments.depth = data.depth
                 };
 
-                auto attachments = builder.useRenderTarget("colorRenderTarget", desc, clearFlags);
+                auto attachments = builder.useRenderTarget("colorRenderTarget", desc,
+                        TargetBufferFlags(clearFlags & TargetBufferFlags::COLOR));
                 data.color = attachments.color;
                 data.depth = attachments.depth;
             },
-            [&pass, jobFroxelize, &js, &view]
+            [&pass, colorPassBegin, jobFroxelize, &js, &view]
                     (FrameGraphPassResources const& resources,
                             ColorPassData const& data, DriverApi& driver) {
                 auto out = resources.getRenderTarget(data.color);
@@ -324,12 +361,12 @@ void FRenderer::renderJob(ArenaScope& arena, FView& view) {
 
                 Slice<Command> const& commands = pass.getCommands();
                 pass.execute("Color Pass", out.target, out.params,
-                        commands.begin(), commands.end());
+                        colorPassBegin, commands.end());
             });
 
     jobFroxelize = nullptr;
     FrameGraphResource input = colorPass.getData().color;
-    UTILS_UNUSED FrameGraphResource depth = colorPass.getData().depth;
+    depth = colorPass.getData().depth;
 
     /*
      * Post Processing...

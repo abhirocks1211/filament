@@ -195,7 +195,7 @@ class MainActivity : Activity() {
         // Specify that our color is in sRGB so the conversion to linear
         // is done automatically for us. If you already have a linear color
         // you can pass it directly, or use Colors.RgbType.LINEAR
-        materialInstance.setParameter("baseColor", Colors.RgbType.SRGB, 0.71f, 0.0f, 0.0f)
+        materialInstance.setParameter("baseColor", Colors.RgbType.SRGB, 1.0f, 1.0f, 1.0f)
     }
 
     private fun loadImageBasedLight() {

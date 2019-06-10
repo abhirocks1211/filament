@@ -46,6 +46,12 @@ host machine:
 
 ![Material Builder](../../docs/images/samples/sample_image_based_lighting.jpg)
 
+### `lucy-bloom`
+
+Demonstrates how to load glTF models and render to an offscreen buffer:
+
+![Lucy Bloom](../../docs/images/samples/sample_lucy_bloom.jpg)
+
 ## Prerequisites
 
 Before you start, make sure to read [Filament's README](../../README.md). You need to be able to

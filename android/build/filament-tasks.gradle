@@ -33,6 +33,7 @@ List<File> getBinaries(String name, File toolsPath) {
 ext.matcFullPath = getBinaries('matc', filamentToolsPath)
 ext.cmgenFullPath = getBinaries('cmgen', filamentToolsPath)
 ext.filameshFullPath = getBinaries('filamesh', filamentToolsPath)
+ext.resgenFullPath = getBinaries('resgen', filamentToolsPath)
 
 class LogOutputStream extends ByteArrayOutputStream {
     private final Logger logger;
@@ -222,8 +223,60 @@ class MeshCompiler extends DefaultTask {
     }
 }
 
+class ResourceCompiler extends DefaultTask {
+    File resgenPath
+
+    @SuppressWarnings("GroovyUnusedDeclaration")
+    @InputFile
+    File inputFile
+
+    @OutputDirectory
+    File outputDir
+
+    ResourceCompiler() {
+        resgenPath = OperatingSystem.current().isWindows() ?
+                project.ext.resgenFullPath[0] : project.ext.resgenFullPath[1]
+    }
+
+    @SuppressWarnings("GroovyUnusedDeclaration")
+    @TaskAction
+    void execute(IncrementalTaskInputs inputs) {
+        if (!inputs.incremental) {
+            project.delete(project.fileTree(outputDir).matching { include '*.?' })
+        }
+
+        inputs.outOfDate { InputFileDetails outOfDate ->
+            def file = outOfDate.file
+
+            def out = new LogOutputStream(logger, LogLevel.LIFECYCLE)
+            def err = new LogOutputStream(logger, LogLevel.ERROR)
+
+            def header = ("Compiling resource " + file + "\n").getBytes()
+            out.write(header)
+            out.flush()
+
+            project.exec {
+                standardOutput out
+                errorOutput err
+                executable "${resgenPath}"
+                args('-c', '-x', outputDir, file)
+            }
+        }
+
+        inputs.removed { InputFileDetails removed ->
+            getOutputFile(removed.file).delete()
+        }
+    }
+
+    File getOutputFile(final File file) {
+        return new File(outputDir, file.name[0..file.name.lastIndexOf('.')] + 'c')
+    }
+}
+
 task compileMaterials(type: MaterialCompiler)
 
 task generateIbl(type: IblGenerator)
 
 task compileMesh(type: MeshCompiler)
+
+task compileResource(type: ResourceCompiler)

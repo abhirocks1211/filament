@@ -16,11 +16,23 @@
 
 package com.google.android.filament.gltfio;
 
+import com.google.android.filament.Entity;
+
 public class FilamentAsset {
     private long mNativeObject;
 
     FilamentAsset(long nativeObject) {
         mNativeObject = nativeObject;
+    }
+
+    @Entity int getRoot() {
+        return nGetRoot(mNativeObject);
+    }
+
+    @Entity int[] getEntities() {
+        int[] result = new int[nGetEntityCount(mNativeObject)];
+        nGetEntities(mNativeObject, result);
+        return result;
     }
 
     long getNativeObject() {
@@ -30,4 +42,8 @@ public class FilamentAsset {
     public void clearNativeObject() {
         mNativeObject = 0;
     }
+
+    private static native int nGetRoot(long nativeAsset);
+    private static native int nGetEntityCount(long nativeAsset);
+    private static native void nGetEntities(long nativeAsset, int[] result);
 }

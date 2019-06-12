@@ -14,16 +14,23 @@
  * limitations under the License.
  */
 
-package com.google.android.filament.gltfio;
+#include <jni.h>
 
-public class MaterialGenerator {
-    private final long mNativeObject;
+#include <gltfio/MaterialProvider.h>
 
-    MaterialGenerator() {
-        mNativeObject = 0;
-    }
+using namespace filament;
+using namespace gltfio;
 
-    public long getNativeObject() {
-        return mNativeObject;
-    }
+extern "C" JNIEXPORT jlong JNICALL
+Java_com_google_android_filament_gltfio_MaterialProvider_nCreateMaterialProvider(JNIEnv*, jclass,
+        jlong nativeEngine) {
+    Engine* engine = (Engine*) nativeEngine;
+    return (jlong) createUbershaderLoader(engine);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_google_android_filament_gltfio_MaterialProvider_nDestroyMaterialProvider(JNIEnv*, jclass,
+        jlong nativeProvider) {
+    auto provider = (MaterialProvider*) nativeProvider;
+    delete provider;
 }

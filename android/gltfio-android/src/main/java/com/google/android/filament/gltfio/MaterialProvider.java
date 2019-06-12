@@ -16,15 +16,11 @@
 
 package com.google.android.filament.gltfio;
 
-import android.support.annotation.NonNull;
-import android.support.annotation.Nullable;
-
 import com.google.android.filament.Engine;
 
 import java.lang.reflect.Method;
-import java.nio.Buffer;
 
-public class AssetLoader {
+public class MaterialProvider {
     private long mNativeObject;
 
     private static Method sEngineGetNativeObject;
@@ -39,38 +35,24 @@ public class AssetLoader {
         }
     }
 
-    AssetLoader(@NonNull Engine engine, @NonNull MaterialProvider generator) {
+    MaterialProvider(Engine engine) {
         try {
             long nativeEngine = (long) sEngineGetNativeObject.invoke(engine);
-            mNativeObject = nCreateAssetLoader(nativeEngine, generator.getNativeObject());
+            mNativeObject = nCreateMaterialProvider(nativeEngine);
         } catch (Exception e) {
             // Ignored
         }
     }
 
     public void destroy() {
-        nDestroyAssetLoader(mNativeObject);
+        nDestroyMaterialProvider(mNativeObject);
         mNativeObject = 0;
     }
 
-    @Nullable
-    public FilamentAsset createAssetFromBinary(@NonNull Buffer buffer) {
-        long nativeAsset = nCreateAssetFromBinary(mNativeObject, buffer, buffer.remaining());
-        return new FilamentAsset(nativeAsset);
+    long getNativeObject() {
+        return mNativeObject;
     }
 
-    public void enableDiagnostics(boolean enable) {
-        nEnableDiagnostics(mNativeObject, enable);
-    }
-
-    public void destroyAsset(@Nullable FilamentAsset asset) {
-        nDestroyAsset(mNativeObject, asset.getNativeObject());
-        asset.clearNativeObject();
-    }
-
-    private static native long nCreateAssetLoader(long nativeEngine, long nativeGenerator);
-    private static native void nDestroyAssetLoader(long nativeLoader);
-    private static native long nCreateAssetFromBinary(long nativeLoader, Buffer buffer, int remaining);
-    private static native void nEnableDiagnostics(long nativeLoader, boolean enable);
-    private static native void nDestroyAsset(long nativeLoader, long nativeAsset);
+    private static native long nCreateMaterialProvider(long nativeEngine);
+    private static native void nDestroyMaterialProvider(long nativeProvider);
 }

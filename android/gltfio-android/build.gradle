@@ -69,36 +69,36 @@ android {
 
     // Filament comes with native code, the following declarations
     // can be used to generate architecture specific APKs
-    flavorDimensions 'cpuArch'
-    productFlavors {
-        arm8 {
-            dimension 'cpuArch'
-            ndk {
-                abiFilters 'arm64-v8a'
-            }
-        }
-        arm7 {
-            dimension 'cpuArch'
-            ndk {
-                abiFilters 'armeabi-v7a'
-            }
-        }
-        x86_64 {
-            dimension 'cpuArch'
-            ndk {
-                abiFilters 'x86_64'
-            }
-        }
-        x86 {
-            dimension 'cpuArch'
-            ndk {
-                abiFilters 'x86'
-            }
-        }
-        universal {
-            dimension 'cpuArch'
-        }
-    }
+    // flavorDimensions 'cpuArch'
+    // productFlavors {
+    //     arm8 {
+    //         dimension 'cpuArch'
+    //         ndk {
+    //             abiFilters 'arm64-v8a'
+    //         }
+    //     }
+    //     arm7 {
+    //         dimension 'cpuArch'
+    //         ndk {
+    //             abiFilters 'armeabi-v7a'
+    //         }
+    //     }
+    //     x86_64 {
+    //         dimension 'cpuArch'
+    //         ndk {
+    //             abiFilters 'x86_64'
+    //         }
+    //     }
+    //     x86 {
+    //         dimension 'cpuArch'
+    //         ndk {
+    //             abiFilters 'x86'
+    //         }
+    //     }
+    //     universal {
+    //         dimension 'cpuArch'
+    //     }
+    // }
 
     externalNativeBuild {
         cmake {

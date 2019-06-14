@@ -105,4 +105,5 @@ dependencies {
 
     // Depend on Filament
     implementation 'com.google.android.filament:filament-android'
+    implementation 'com.google.android.filament:gltfio-android'
 }

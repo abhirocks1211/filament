@@ -35,7 +35,7 @@ public class MaterialProvider {
         }
     }
 
-    MaterialProvider(Engine engine) {
+    public MaterialProvider(Engine engine) {
         try {
             long nativeEngine = (long) sEngineGetNativeObject.invoke(engine);
             mNativeObject = nCreateMaterialProvider(nativeEngine);

@@ -39,7 +39,7 @@ public class AssetLoader {
         }
     }
 
-    AssetLoader(@NonNull Engine engine, @NonNull MaterialProvider generator) {
+    public AssetLoader(@NonNull Engine engine, @NonNull MaterialProvider generator) {
         try {
             long nativeEngine = (long) sEngineGetNativeObject.invoke(engine);
             mNativeObject = nCreateAssetLoader(nativeEngine, generator.getNativeObject());

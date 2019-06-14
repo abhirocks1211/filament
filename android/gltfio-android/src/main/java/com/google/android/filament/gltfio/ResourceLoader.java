@@ -29,7 +29,7 @@ public class ResourceLoader {
 
     private static Method sEngineGetNativeObject;
 
-    ResourceLoader(@NonNull Engine engine) {
+    public ResourceLoader(@NonNull Engine engine) {
         try {
             long nativeEngine = (long) sEngineGetNativeObject.invoke(engine);
             mNativeObject = nCreateResourceLoader(nativeEngine);

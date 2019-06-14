@@ -27,6 +27,9 @@ import android.view.animation.LinearInterpolator
 import com.google.android.filament.*
 import com.google.android.filament.android.UiHelper
 
+import com.google.android.filament.gltfio.AssetLoader
+import com.google.android.filament.gltfio.MaterialProvider
+
 import java.nio.ByteBuffer
 import java.nio.channels.Channels
 import kotlin.math.PI
@@ -61,6 +64,8 @@ class MainActivity : Activity() {
     private lateinit var view: View
     // Should be pretty obvious :)
     private lateinit var camera: Camera
+
+    private lateinit var assetLoader: AssetLoader
 
     private lateinit var material: Material
     private lateinit var materialInstance: MaterialInstance
@@ -113,6 +118,8 @@ class MainActivity : Activity() {
         scene = engine.createScene()
         view = engine.createView()
         camera = engine.createCamera()
+
+        assetLoader = AssetLoader(engine, MaterialProvider(engine));
     }
 
     private fun setupView() {

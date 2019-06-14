@@ -28,6 +28,7 @@ import com.google.android.filament.*
 import com.google.android.filament.android.UiHelper
 
 import com.google.android.filament.gltfio.AssetLoader
+import com.google.android.filament.gltfio.FilamentAsset
 import com.google.android.filament.gltfio.MaterialProvider
 
 import java.nio.ByteBuffer
@@ -118,8 +119,6 @@ class MainActivity : Activity() {
         scene = engine.createScene()
         view = engine.createView()
         camera = engine.createCamera()
-
-        assetLoader = AssetLoader(engine, MaterialProvider(engine));
     }
 
     private fun setupView() {
@@ -159,6 +158,27 @@ class MainActivity : Activity() {
 
         // Load the mesh in the filamesh format (see filamesh tool)
         mesh = loadMesh(assets, "models/shader_ball.filamesh", materials, engine)
+
+        assetLoader = AssetLoader(engine, MaterialProvider(engine))
+
+        val filamentAsset: FilamentAsset? = assets.open("models/lucy.glb").use { input ->
+            val bytes = ByteArray(input.available())
+            input.read(bytes)
+            android.util.Log.w("lucy-bloom", "Starting...")
+            assetLoader.createAssetFromBinary(ByteBuffer.wrap(bytes))
+        }
+
+        if (filamentAsset == null) {
+            android.util.Log.w("lucy-bloom", "Unable to load glTF asset.")
+        } else {
+            android.util.Log.i("lucy-bloom", "Successfully loaded glTF asset.")
+        }
+
+//        val input = assets.open("models/lucy.glb")
+//        val bytes = ByteArray(input.available())
+//        input.read(bytes)
+//        val filamentAsset = assetLoader.createAssetFromBinary(ByteBuffer.wrap(bytes))
+
 
         // Move the mesh down
         // Filament uses column-major matrices

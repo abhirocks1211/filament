@@ -17,30 +17,35 @@
 package com.google.android.filament.gltfio;
 
 import android.support.annotation.NonNull;
-import android.support.annotation.Nullable;
+import android.util.Log;
 
 import com.google.android.filament.Engine;
 
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.nio.Buffer;
 
 public class ResourceLoader {
-    private long mNativeObject;
+    private final long mNativeObject;
 
     private static Method sEngineGetNativeObject;
 
-    public ResourceLoader(@NonNull Engine engine) {
+    static {
         try {
-            long nativeEngine = (long) sEngineGetNativeObject.invoke(engine);
-            mNativeObject = nCreateResourceLoader(nativeEngine);
-        } catch (Exception e) {
-            // Ignored
+            sEngineGetNativeObject = Engine.class.getDeclaredMethod("getNativeObject");
+            sEngineGetNativeObject.setAccessible(true);
+        } catch (NoSuchMethodException e) {
+            // Cannot happen
         }
     }
 
-    public void destroy() {
+    public ResourceLoader(@NonNull Engine engine) throws IllegalAccessException, InvocationTargetException {
+        long nativeEngine = (long) sEngineGetNativeObject.invoke(engine);
+        mNativeObject = nCreateResourceLoader(nativeEngine);
+    }
+
+    public void finalize() {
         nDestroyResourceLoader(mNativeObject);
-        mNativeObject = 0;
     }
 
     public void addResourceData(@NonNull String url, @NonNull Buffer buffer) {
@@ -53,7 +58,7 @@ public class ResourceLoader {
 
     private static native long nCreateResourceLoader(long nativeEngine);
     private static native void nDestroyResourceLoader(long nativeLoader);
-    private static native long nAddResourceData(long nativeLoader, String url, Buffer buffer,
+    private static native void nAddResourceData(long nativeLoader, String url, Buffer buffer,
             int remaining);
     private static native void nLoadResources(long nativeLoader, long nativeAsset);
 }

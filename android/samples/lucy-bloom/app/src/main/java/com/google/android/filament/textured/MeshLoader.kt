@@ -260,5 +260,8 @@ private fun createRenderable(
         } ?: builder.material(i, materials["DefaultMaterial"]!!)
     }
 
-    return EntityManager.get().create().apply { builder.build(engine, this) }
+    val entity = EntityManager.get().create()
+    builder.build(engine, entity)
+    Log.w("lucy-bloom", "filamesh entity is $entity")
+    return entity
 }

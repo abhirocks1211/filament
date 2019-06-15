@@ -42,7 +42,9 @@ add_library(gltfio_resources STATIC IMPORTED)
 set_target_properties(gltfio_resources PROPERTIES IMPORTED_LOCATION
         ${FILAMENT_DIR}/lib/${ANDROID_ABI}/libgltfio_resources.a)
 
-include_directories(${FILAMENT_DIR}/include)
+include_directories(${FILAMENT_DIR}/include
+        ..
+        ../../libs/utils/include)
 
 set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -fno-stack-protector")
 set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -fno-exceptions -fno-unwind-tables -fno-asynchronous-unwind-tables -fno-rtti")
@@ -60,7 +62,8 @@ add_library(gltfio-jni SHARED
         src/main/cpp/FilamentAsset.cpp
         src/main/cpp/MaterialProvider.cpp
         src/main/cpp/ResourceLoader.cpp
-        src/main/cpp/AutoBuffer.h
+        ../common/CallbackUtils.cpp
+        ../common/NioUtils.cpp
 )
 
 # The ordering in the following list is important because CMake does not have dependency information.

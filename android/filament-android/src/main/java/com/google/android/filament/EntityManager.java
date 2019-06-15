@@ -39,6 +39,10 @@ public class EntityManager {
         return nCreate(mNativeObject);
     }
 
+    public long getNativeObject() {
+        return mNativeObject;
+    }
+
     public void destroy(@Entity int entity) {
         nDestroy(mNativeObject, entity);
     }

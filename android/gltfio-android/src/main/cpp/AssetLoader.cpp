@@ -23,17 +23,34 @@
 #include <gltfio/AssetLoader.h>
 #include <gltfio/MaterialProvider.h>
 
-#include "AutoBuffer.h"
+#include "common/NioUtils.h"
 
 using namespace filament;
 using namespace gltfio;
+using namespace utils;
+
+extern void registerCallbackUtils(JNIEnv*);
+extern void registerNioUtils(JNIEnv*);
+
+jint JNI_OnLoad(JavaVM* vm, void* reserved) {
+    JNIEnv* env;
+    if (vm->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_6) != JNI_OK) {
+        return -1;
+    }
+
+    registerCallbackUtils(env);
+    registerNioUtils(env);
+
+    return JNI_VERSION_1_6;
+}
 
 extern "C" JNIEXPORT jlong JNICALL
 Java_com_google_android_filament_gltfio_AssetLoader_nCreateAssetLoader(JNIEnv*, jclass,
-        jlong nativeEngine, jlong nativeProvider) {
+        jlong nativeEngine, jlong nativeProvider, jlong nativeEntities) {
     Engine* engine = (Engine*) nativeEngine;
     MaterialProvider* materials = (MaterialProvider*) nativeProvider;
-    return (jlong) AssetLoader::create({engine, materials});
+    EntityManager* entities = (EntityManager*) nativeEntities;
+    return (jlong) AssetLoader::create({engine, materials, nullptr, entities});
 }
 
 extern "C" JNIEXPORT void JNICALL
@@ -48,7 +65,8 @@ Java_com_google_android_filament_gltfio_AssetLoader_nCreateAssetFromBinary(JNIEn
         jlong nativeLoader, jobject javaBuffer, jint remaining) {
     AssetLoader* loader = (AssetLoader*) nativeLoader;
     AutoBuffer buffer(env, javaBuffer, remaining);
-    return (jlong) loader->createAssetFromBinary(buffer.data, buffer.size);
+    return (jlong) loader->createAssetFromBinary((const uint8_t *) buffer.getData(),
+            buffer.getSize());
 }
 
 extern "C" JNIEXPORT void JNICALL

@@ -25,18 +25,18 @@ public class FilamentAsset {
         mNativeObject = nativeObject;
     }
 
-    @Entity int getRoot() {
+    long getNativeObject() {
+        return mNativeObject;
+    }
+
+    public @Entity int getRoot() {
         return nGetRoot(mNativeObject);
     }
 
-    @Entity int[] getEntities() {
+    public @Entity int[] getEntities() {
         int[] result = new int[nGetEntityCount(mNativeObject)];
         nGetEntities(mNativeObject, result);
         return result;
-    }
-
-    long getNativeObject() {
-        return mNativeObject;
     }
 
     public void clearNativeObject() {

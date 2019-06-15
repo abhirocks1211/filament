@@ -30,6 +30,7 @@ import com.google.android.filament.android.UiHelper
 import com.google.android.filament.gltfio.AssetLoader
 import com.google.android.filament.gltfio.FilamentAsset
 import com.google.android.filament.gltfio.MaterialProvider
+import com.google.android.filament.gltfio.ResourceLoader
 
 import java.nio.ByteBuffer
 import java.nio.channels.Channels
@@ -159,26 +160,27 @@ class MainActivity : Activity() {
         // Load the mesh in the filamesh format (see filamesh tool)
         mesh = loadMesh(assets, "models/shader_ball.filamesh", materials, engine)
 
-        assetLoader = AssetLoader(engine, MaterialProvider(engine))
+        assetLoader = AssetLoader(engine, MaterialProvider(engine), EntityManager.get())
 
         val filamentAsset: FilamentAsset? = assets.open("models/lucy.glb").use { input ->
             val bytes = ByteArray(input.available())
             input.read(bytes)
-            android.util.Log.w("lucy-bloom", "Starting...")
             assetLoader.createAssetFromBinary(ByteBuffer.wrap(bytes))
         }
 
         if (filamentAsset == null) {
             android.util.Log.w("lucy-bloom", "Unable to load glTF asset.")
         } else {
-            android.util.Log.i("lucy-bloom", "Successfully loaded glTF asset.")
+            // Since this is a GLB file, the ResourceLoader does not need any additional files.
+            ResourceLoader(engine).loadResources(filamentAsset)
+
+            val entities = filamentAsset.getEntities()
+            android.util.Log.w("lucy-bloom", "prideout num entities = ${entities.size}")
+//            scene.addEntities(entities)
         }
 
-//        val input = assets.open("models/lucy.glb")
-//        val bytes = ByteArray(input.available())
-//        input.read(bytes)
-//        val filamentAsset = assetLoader.createAssetFromBinary(ByteBuffer.wrap(bytes))
-
+//        assetLoader.destroyAsset(filamentAsset)
+//        assetLoader.destroy()
 
         // Move the mesh down
         // Filament uses column-major matrices

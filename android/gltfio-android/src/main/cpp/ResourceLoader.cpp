@@ -20,10 +20,18 @@
 
 #include <gltfio/ResourceLoader.h>
 
-#include "AutoBuffer.h"
+#include <utils/Log.h>
+
+#include "common/NioUtils.h"
 
 using namespace filament;
 using namespace gltfio;
+using namespace utils;
+
+static void destroy(void* data, size_t size, void *userData) {
+    AutoBuffer* buffer = (AutoBuffer*) userData;
+    delete buffer;
+}
 
 extern "C" JNIEXPORT jlong JNICALL
 Java_com_google_android_filament_gltfio_ResourceLoader_nCreateResourceLoader(JNIEnv*, jclass,
@@ -46,8 +54,8 @@ Java_com_google_android_filament_gltfio_ResourceLoader_nAddResourceData(JNIEnv* 
     AutoBuffer* buffer = new AutoBuffer(env, javaBuffer, remaining);
     const char* curl = env->GetStringUTFChars(url, nullptr);
     loader->addResourceData(curl,
-            ResourceLoader::BufferDescriptor(buffer->data, buffer->size, &AutoBuffer::destroy,
-            buffer));
+            ResourceLoader::BufferDescriptor(buffer->getData(), buffer->getSize(), &destroy,
+                    buffer));
 }
 
 extern "C" JNIEXPORT void JNICALL
